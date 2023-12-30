@@ -48,17 +48,17 @@ impl Default for Command {
 pub struct CheckCmd {
     #[arg(long, default_value_t = MaxConcurrentFileLimit::default(), value_parser = MaxConcurrentFileLimit::parser())]
     pub max_concurrent_files: MaxConcurrentFileLimit,
+
+    #[arg(long, default_value_t = MaxProblems::default(), value_parser = MaxProblems::parser())]
+    pub max_problems: MaxProblems,
 }
 
 #[derive(Clone, Debug)]
-pub struct MaxConcurrentFileLimit(pub usize);
+pub struct MaxConcurrentFileLimit(pub u32);
 
 impl MaxConcurrentFileLimit {
     fn parser() -> impl TypedValueParser {
-        StringValueParser::new().try_map(|s| {
-            let max: usize = s.parse()?;
-            Ok::<_, anyhow::Error>(Self(max))
-        })
+        StringValueParser::new().try_map(|s| Ok::<_, anyhow::Error>(Self(s.parse()?)))
     }
 }
 
