@@ -13,18 +13,18 @@ use crate::cli::IgnoreKind;
 use crate::error::Error;
 
 #[derive(Debug)]
-pub struct Manifest {
+pub struct Context {
     pub project_root: Utf8PathBuf,
-    pub data: ManifestData,
+    pub manifest: Manifest,
 }
 
-impl Manifest {
+impl Context {
     const FILE_NAME: &str = "vex.toml";
     const DEFAULT_MANIFEST: &str = indoc! {r#"
         ignore = [ "/.git", "/target", ".gitignore" ]
     "#};
     pub fn init(project_root: Utf8PathBuf) -> anyhow::Result<()> {
-        match Manifest::acquire_file() {
+        match Context::acquire_file() {
             Ok((found_root, _)) => return Err(Error::AlreadyInited { found_root }.into()),
             Err(e)
                 if e.downcast_ref::<Error>()
@@ -48,7 +48,10 @@ impl Manifest {
     pub fn acquire() -> anyhow::Result<Self> {
         let (project_root, raw_data) = Self::acquire_file()?;
         let data = toml_edit::de::from_str(&raw_data)?;
-        Ok(Manifest { project_root, data })
+        Ok(Context {
+            project_root,
+            manifest: data,
+        })
     }
 
     pub fn ignore(kind: IgnoreKind, to_ignore: Vec<String>) -> anyhow::Result<()> {
@@ -151,16 +154,16 @@ impl Manifest {
     }
 }
 
-impl Deref for Manifest {
-    type Target = ManifestData;
+impl Deref for Context {
+    type Target = Manifest;
 
     fn deref(&self) -> &Self::Target {
-        &self.data
+        &self.manifest
     }
 }
 
 #[derive(Debug, Deserialise, Serialise, PartialEq)]
-pub struct ManifestData {
+pub struct Manifest {
     pub associations: Option<HashMap<String, String>>,
 
     pub queries_dir: Option<QueriesDir>,
@@ -172,7 +175,7 @@ pub struct ManifestData {
     pub allows: Option<Vec<FilePattern>>,
 }
 
-impl Default for ManifestData {
+impl Default for Manifest {
     fn default() -> Self {
         Self {
             associations: None,
@@ -263,8 +266,8 @@ mod test {
 
     #[test]
     fn init() {
-        let init_manifest: ManifestData =
-            toml_edit::de::from_str(Manifest::DEFAULT_MANIFEST).expect("default manifest invalid");
-        assert_eq!(ManifestData::default(), init_manifest);
+        let init_manifest: Manifest =
+            toml_edit::de::from_str(Context::DEFAULT_MANIFEST).expect("default manifest invalid");
+        assert_eq!(Manifest::default(), init_manifest);
     }
 }

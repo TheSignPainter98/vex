@@ -1,6 +1,6 @@
 mod cli;
+mod context;
 mod error;
-mod manifest;
 mod source_file;
 mod supported_language;
 mod vexes;
@@ -11,8 +11,8 @@ use async_recursion::async_recursion;
 use camino::Utf8PathBuf;
 use clap::Parser as _;
 use cli::{CheckCmd, IgnoreCmd, IgnoreKind};
+use context::Context;
 use error::Error;
-use manifest::Manifest;
 use strum::IntoEnumIterator;
 use supported_language::SupportedLanguage;
 use tokio::{
@@ -23,7 +23,7 @@ use tokio::{
 
 use crate::{
     cli::{Args, Command},
-    manifest::CompiledFilePattern,
+    context::CompiledFilePattern,
     vexes::Vexes,
 };
 
@@ -45,7 +45,7 @@ fn list_languages() -> anyhow::Result<()> {
 }
 
 async fn list_lints() -> anyhow::Result<()> {
-    let manifest = Manifest::acquire()?;
+    let manifest = Context::acquire()?;
     let vexes = Vexes::new(&manifest);
     vexes.vexes().await?.iter().for_each(|(lang, set)| {
         println!("{}:", lang.name());
@@ -55,12 +55,12 @@ async fn list_lints() -> anyhow::Result<()> {
 }
 
 async fn check(cmd_args: CheckCmd) -> anyhow::Result<()> {
-    let manifest = Arc::new(Manifest::acquire()?);
-    let vexes = Vexes::new(&manifest);
+    let context = Arc::new(Context::acquire()?);
+    let vexes = Vexes::new(&context);
 
     #[async_recursion]
     async fn walkdir(
-        manifest: Arc<Manifest>,
+        manifest: Arc<Context>,
         path: Utf8PathBuf,
         ignores: Arc<Vec<CompiledFilePattern>>,
         allows: Arc<Vec<CompiledFilePattern>>,
@@ -117,29 +117,29 @@ async fn check(cmd_args: CheckCmd) -> anyhow::Result<()> {
     }
     let (tx, mut rx) = mpsc::channel(1024);
     tokio::spawn({
-        let manifest2 = manifest.clone();
-        let root = manifest.project_root.clone();
+        let context = context.clone();
+        let root = context.project_root.clone();
         let concurrency_limiter = Arc::new(Semaphore::new(cmd_args.max_concurrent_files.0));
         let ignores = Arc::new(
-            manifest
+            context
                 .ignores
                 .clone()
                 .unwrap_or_default()
                 .0
                 .into_iter()
-                .map(|ignore| ignore.compile(&manifest.project_root))
+                .map(|ignore| ignore.compile(&context.project_root))
                 .collect::<anyhow::Result<Vec<_>>>()?,
         );
         let allows = Arc::new(
-            manifest
+            context
                 .allows
                 .clone()
                 .unwrap_or_default()
                 .into_iter()
-                .map(|allow| allow.compile(&manifest.project_root))
+                .map(|allow| allow.compile(&context.project_root))
                 .collect::<anyhow::Result<Vec<_>>>()?,
         );
-        async move { walkdir(manifest2, root, ignores, allows, concurrency_limiter, tx).await }
+        async move { walkdir(context, root, ignores, allows, concurrency_limiter, tx).await }
     });
     // TODO(kcza): how are errors propagated here?
 
@@ -211,10 +211,10 @@ fn ignore(cmd_args: IgnoreCmd) -> anyhow::Result<()> {
             return Err(Error::UnknownLanguages(unknown_languages).into());
         }
     }
-    Manifest::ignore(cmd_args.kind, cmd_args.to_ignore)
+    Context::ignore(cmd_args.kind, cmd_args.to_ignore)
 }
 
 fn init() -> anyhow::Result<()> {
     let cwd = Utf8PathBuf::try_from(env::current_dir()?)?;
-    Manifest::init(cwd)
+    Context::init(cwd)
 }

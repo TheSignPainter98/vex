@@ -8,8 +8,8 @@ use tokio::{fs, sync::OnceCell, task::JoinSet};
 use tree_sitter::{Query, QueryCursor, QueryMatch};
 
 use crate::{
+    context::{Context, QueriesDir},
     error::Error,
-    manifest::{Manifest, QueriesDir},
     source_file::SourceFile,
     supported_language::SupportedLanguage,
 };
@@ -18,10 +18,10 @@ use crate::{
 pub struct Vexes(Arc<VexesImpl>);
 
 impl Vexes {
-    pub fn new(manifest: &Manifest) -> Self {
+    pub fn new(manifest: &Context) -> Self {
         let queries_dir = manifest.project_root.clone().join(
             &manifest
-                .data
+                .manifest
                 .queries_dir
                 .as_ref()
                 .unwrap_or(&QueriesDir::default())
