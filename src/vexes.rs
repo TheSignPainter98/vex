@@ -113,10 +113,7 @@ impl VexSet {
             .queries
             .iter()
             .flat_map(|query| query.check(src_file))
-            // .flatten()
             .collect())
-        // TODO(kcza): sort the problems by: (start_idx, end_idx)
-        // TODO(kcza): create the snippets here!
     }
 
     pub fn iter(&self) -> std::slice::Iter<'_, Vex> {
@@ -145,25 +142,10 @@ impl Vex {
     fn check(&self, src_file: &SourceFile) -> Vec<Problem> {
         let root = src_file.tree.root_node();
         let src = &src_file.content;
-        let mut cursor = QueryCursor::new();
-        cursor
+        QueryCursor::new()
             .matches(&self.query, root, src.as_bytes())
             .map(|nit| Problem::new(self, src_file, nit))
             .collect()
-        // for m in cursor.matches(&self.query, root, src.as_bytes()) {
-        //
-        // }
-        // let src = &src_file.content;
-        // let mut problems = Vec::new();
-        //     if let Some(problem) = query.check(src_file) {
-        //         problems.push(problem)
-        //     }
-        //     // let mut cursor = QueryCursor::new();
-        //     // // problems.extend(cursor.matches(&query, root, src))
-        //     // for m in cursor.matches(&query.query, root, src.as_bytes()) {
-        //     //     println!("{m:?}");
-        //     //     problems.push(m.clone())
-        //     // }
     }
 }
 
@@ -185,7 +167,6 @@ impl Problem {
                 annotation_type: AnnotationType::Warning,
             }),
             footer: Vec::with_capacity(0), // TODO(kcza): is vec![] a good
-            // substitute?
             slices: query_match
                 .captures
                 .iter()
@@ -193,16 +174,14 @@ impl Problem {
                     let node = capture.node;
                     let range = node.range();
                     Slice {
-                        source: &src_file.content[range.start_byte..range.end_byte], // TODO(kcza): .. or ..=?
+                        source: &src_file.content[range.start_byte..range.end_byte],
                         line_start: range.start_point.row,
                         origin: Some(src_file.path.as_str()),
                         annotations: vec![], // TODO(kcza): figure out how to
-                        // annotate this!
                         fold: true,
                     }
                 })
                 .collect(),
-            // TODO(kcza): match -> captures -> node -> range()
         };
         Self {
             message: Renderer::styled().render(snippet).to_string(),

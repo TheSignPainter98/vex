@@ -20,7 +20,6 @@ impl SupportedLanguage {
         match extension {
             "rs" => Some(Self::Rust),
             _ => None,
-            // _ => Err(Error::UnknownFileExtension(extension.to_string()).into()),
         }
     }
 

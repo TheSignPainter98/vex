@@ -164,36 +164,6 @@ async fn check(cmd_args: CheckCmd) -> anyhow::Result<()> {
     }
     println!("scanned {npaths} paths");
 
-    // let src = indoc::indoc! {r#"
-    //     fn main() {
-    //         println!("hello, world!");
-    //         sqlx::query("SELECT * FROM foo")?;
-    //     }
-    // "#};
-    // let mut parser = Parser::new();
-    // parser
-    //     .set_language(tree_sitter_rust::language())
-    //     .expect("failed to load Rust grammar");
-    // let tree = parser.parse(src, None).unwrap(); // TODO(kcza): make this a result!
-    //
-    // let query_src = indoc::indoc! {r#"
-    //     (call_expression
-    //         function: (scoped_identifier
-    //             path: (identifier) @_pkg (#eq? @_pkg "sqlx")
-    //             name: (identifier) @_func (#eq? @_func "query"))
-    //         arguments: (arguments
-    //             (string_literal) @sql (#offset! @sql 1 0 -1 0)))
-    //     "#};
-    // let query = Query::new(tree_sitter_rust::language(), query_src)?;
-    // let mut query_cursor = QueryCursor::new();
-    // println!("=====");
-    // for m in query_cursor.matches(&query, tree.root_node(), src.as_bytes()) {
-    //     println!("match: {}, {:?}: {m:?}", m.pattern_index, m.captures);
-    // }
-    // println!("=====");
-    //
-    // println!("{}", tree.root_node().to_sexp());
-
     Ok(())
 }
 

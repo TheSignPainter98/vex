@@ -248,18 +248,6 @@ impl CompiledFilePattern {
     }
 }
 
-// pub fn glob(&self) -> anyhow::Result<Pattern> {
-//     Ok(Pattern::new(&self.0)?)
-//     // Ok(glob::glob_with(
-//     //     &self.0,
-//     //     MatchOptions {
-//     //         case_sensitive: true,
-//     //         require_literal_separator: true,
-//     //         require_literal_leading_dot: true,
-//     //     },
-//     // )?)
-// }
-
 #[cfg(test)]
 mod test {
     use super::*;

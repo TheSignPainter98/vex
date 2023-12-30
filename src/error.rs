@@ -8,8 +8,6 @@ pub enum Error {
     #[error("cannot find manifest, try running `vex init` in the project’s root")]
     ManifestNotFound,
 
-    // #[error("{0} has no file extension")]
-    // MissingExtension(Utf8PathBuf),
     #[error("{0} missing file name")]
     MissingFileName(Utf8PathBuf),
 
@@ -22,8 +20,4 @@ pub enum Error {
 
     #[error("unsupported languages: {}", .0.join(", "))]
     UnknownLanguages(Vec<String>),
-    // #[error("unknown file extension: {0}")]
-    // UnknownFileExtension(String),
-    // #[error("{0} are not yet supported")]
-    // Unsupported(&'static str),
 }

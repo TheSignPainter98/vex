@@ -7,7 +7,6 @@ use clap::{
 
 #[derive(Debug, Parser)]
 #[command(
-    // name,
     author,
     version,
     about,
