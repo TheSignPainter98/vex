@@ -3,6 +3,7 @@
 mod cli;
 mod context;
 mod error;
+mod plural;
 mod source_file;
 mod supported_language;
 mod vexes;
@@ -26,6 +27,7 @@ use tokio::{
 use crate::{
     cli::{Args, Command},
     context::CompiledFilePattern,
+    plural::Plural,
     vexes::Vexes,
 };
 
@@ -164,7 +166,11 @@ async fn check(cmd_args: CheckCmd) -> anyhow::Result<()> {
             println!("{problem}");
         }
     }
-    println!("scanned {npaths} paths");
+    println!(
+        "scanned {} and found {}",
+        Plural::new(npaths, "path", "paths"),
+        Plural::new(problems.len(), "problem", "problems"),
+    );
 
     Ok(())
 }
