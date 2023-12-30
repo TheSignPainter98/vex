@@ -221,7 +221,7 @@ impl FilePattern {
         Ok(CompiledFilePattern(Pattern::new(
             if self.0.starts_with('/') {
                 // absolute
-                project_root.join(Utf8PathBuf::from(&self.0))
+                project_root.join(Utf8PathBuf::from(&self.0[1..]))
             } else {
                 // relative
                 project_root
