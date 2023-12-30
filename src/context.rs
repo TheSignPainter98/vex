@@ -233,6 +233,7 @@ impl FilePattern {
     }
 }
 
+#[derive(Debug)]
 pub struct CompiledFilePattern(Pattern);
 
 impl CompiledFilePattern {
