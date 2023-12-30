@@ -159,7 +159,7 @@ async fn check(cmd_args: CheckCmd) -> anyhow::Result<()> {
     problems.sort();
     for (_, file_problems) in problems {
         for problem in file_problems {
-            println!("\t{problem}");
+            println!("{problem}");
         }
     }
     println!("scanned {npaths} paths");
