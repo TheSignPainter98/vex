@@ -74,6 +74,47 @@ impl Display for MaxConcurrentFileLimit {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum MaxProblems {
+    Unlimited,
+    Limited(u32),
+}
+
+impl MaxProblems {
+    fn parser() -> impl TypedValueParser {
+        StringValueParser::new().try_map(|s| {
+            if s.to_lowercase() == "unlimited" {
+                return Ok(Self::Unlimited);
+            }
+
+            let max: u32 = s.parse()?;
+            Ok::<_, anyhow::Error>(Self::Limited(max))
+        })
+    }
+
+    pub fn is_exceeded_by(&self, to_check: usize) -> bool {
+        match self {
+            Self::Unlimited => false,
+            Self::Limited(lim) => to_check >= *lim as usize,
+        }
+    }
+}
+
+impl Default for MaxProblems {
+    fn default() -> Self {
+        Self::Limited(100)
+    }
+}
+
+impl Display for MaxProblems {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unlimited => write!(f, "unlimited"),
+            Self::Limited(l) => l.fmt(f),
+        }
+    }
+}
+
 #[derive(Clone, Debug, clap::Args)]
 pub struct IgnoreCmd {
     pub kind: IgnoreKind,
