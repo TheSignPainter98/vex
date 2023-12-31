@@ -3,6 +3,7 @@
 mod cli;
 mod context;
 mod error;
+mod logger;
 mod plural;
 mod source_file;
 mod supported_language;
@@ -17,7 +18,7 @@ use clap::Parser as _;
 use cli::{CheckCmd, IgnoreCmd, IgnoreKind};
 use context::Context;
 use error::Error;
-use log::{info, warn};
+use log::{info, trace, warn};
 use strum::IntoEnumIterator;
 use supported_language::SupportedLanguage;
 use tokio::{
@@ -37,12 +38,7 @@ use crate::{
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-
-    stderrlog::new()
-        .module(module_path!())
-        .verbosity(Verbosity::try_from(args.verbosity_level)?.log_level_num())
-        .timestamp(stderrlog::Timestamp::Off)
-        .init()?;
+    logger::init(Verbosity::try_from(args.verbosity_level)?)?;
 
     match args.command.unwrap_or_default() {
         Command::ListLanguages => list_languages(),
@@ -81,6 +77,7 @@ async fn check(cmd_args: CheckCmd) -> anyhow::Result<()> {
         concurrency_limiter: Arc<Semaphore>,
         tx: mpsc::Sender<Utf8PathBuf>,
     ) -> anyhow::Result<()> {
+        trace!("walking {path}");
         let mut dir = fs::read_dir(path).await?;
         let mut child_paths: Vec<Utf8PathBuf> = Vec::new();
         while let Some(entry) = dir.next_entry().await? {
@@ -99,7 +96,7 @@ async fn check(cmd_args: CheckCmd) -> anyhow::Result<()> {
             let metadata = fs::symlink_metadata(&entry_path).await?;
 
             if metadata.is_symlink() {
-                info!("symlinks are not supported: ignoring {entry_path}");
+                info!("symlinks are not yet supported, ignoring {entry_path}");
             } else if metadata.is_dir() {
                 child_paths.push(entry_path);
             } else if metadata.is_file() {
@@ -188,7 +185,7 @@ async fn check(cmd_args: CheckCmd) -> anyhow::Result<()> {
     }
     problems.sort();
     for problem in &problems {
-        warn!("{problem}");
+        warn!(target: "vex", custom = true; "{problem}");
     }
     info!(
         "scanned {} and found {}",

@@ -1,9 +1,9 @@
 use std::{fmt::Display, ops::Deref, sync::Arc};
 
-use annotate_snippets::{Annotation, AnnotationType, Renderer, Slice, Snippet};
+use annotate_snippets::{Annotation, AnnotationType, Slice, Snippet};
 use camino::{Utf8Path, Utf8PathBuf};
 use enum_map::EnumMap;
-use log::info;
+use log::trace;
 use strum::IntoEnumIterator;
 use tokio::{fs, sync::OnceCell, task::JoinSet};
 use tree_sitter::{Query, QueryCursor, QueryMatch};
@@ -11,6 +11,7 @@ use tree_sitter::{Query, QueryCursor, QueryMatch};
 use crate::{
     context::{Context, QueriesDir},
     error::Error,
+    logger,
     source_file::SourceFile,
     supported_language::SupportedLanguage,
 };
@@ -57,11 +58,11 @@ impl VexesImpl {
 
     pub async fn check(&self, path: Utf8PathBuf) -> anyhow::Result<Vec<Problem>> {
         let Some(extension) = path.extension() else {
-            info!("ignoring {path} (no file extension)");
+            trace!("ignoring {path} (no file extension)");
             return Ok(vec![]);
         };
         let Some(lang) = SupportedLanguage::try_from_extension(extension) else {
-            info!("ignoring {path} (no known language)");
+            trace!("ignoring {path} (no known language)");
             return Ok(vec![]);
         };
 
@@ -185,7 +186,7 @@ impl Problem {
                 .collect(),
         };
         Self {
-            message: Renderer::styled().render(snippet).to_string(),
+            message: logger::render_snippet(snippet),
             start_byte: nit
                 .captures
                 .iter()
