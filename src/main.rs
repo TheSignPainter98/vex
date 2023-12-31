@@ -19,7 +19,7 @@ use error::Error;
 use strum::IntoEnumIterator;
 use supported_language::SupportedLanguage;
 use tokio::{
-    fs::{self},
+    fs,
     sync::{mpsc, Semaphore},
     task::JoinSet,
 };
@@ -114,12 +114,14 @@ async fn check(cmd_args: CheckCmd) -> anyhow::Result<()> {
                     concurrency_limiter,
                     tx,
                 )
-            });
+                .await
+            })
+            .await??;
         }
 
         Ok(())
     }
-    let (tx, mut rx) = mpsc::channel(1024);
+    let (path_tx, mut path_rx) = mpsc::channel(1024);
     tokio::spawn({
         let context = context.clone();
         let root = context.project_root.clone();
@@ -144,8 +146,9 @@ async fn check(cmd_args: CheckCmd) -> anyhow::Result<()> {
                 .map(|allow| allow.compile(&context.project_root))
                 .collect::<anyhow::Result<Vec<_>>>()?,
         );
-        async move { walkdir(context, root, ignores, allows, concurrency_limiter, tx).await }
-    });
+        async move { walkdir(context, root, ignores, allows, concurrency_limiter, path_tx).await }
+    })
+    .await??;
     // TODO(kcza): how are errors propagated here?
 
     let mut npaths = 0;
@@ -154,7 +157,7 @@ async fn check(cmd_args: CheckCmd) -> anyhow::Result<()> {
         MaxProblems::Unlimited => 1000, // Large limit but still capped.
     };
     let mut set = JoinSet::new();
-    while let Some(path) = rx.recv().await {
+    while let Some(path) = path_rx.recv().await {
         npaths += 1;
         let vexes = vexes.clone();
         set.spawn(async move { Ok::<_, anyhow::Error>((path.clone(), vexes.check(path).await?)) });
