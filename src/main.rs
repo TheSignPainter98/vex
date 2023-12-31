@@ -18,7 +18,7 @@ use clap::Parser as _;
 use cli::{CheckCmd, IgnoreCmd, IgnoreKind};
 use context::Context;
 use error::Error;
-use log::{info, trace, warn};
+use log::{info, log_enabled, trace, warn};
 use strum::IntoEnumIterator;
 use supported_language::SupportedLanguage;
 use tokio::{
@@ -77,7 +77,9 @@ async fn check(cmd_args: CheckCmd) -> anyhow::Result<()> {
         concurrency_limiter: Arc<Semaphore>,
         tx: mpsc::Sender<Utf8PathBuf>,
     ) -> anyhow::Result<()> {
-        trace!("walking {path}");
+        if log_enabled!(log::Level::Trace) {
+            trace!("walking {path}");
+        }
         let mut dir = fs::read_dir(path).await?;
         let mut child_paths: Vec<Utf8PathBuf> = Vec::new();
         while let Some(entry) = dir.next_entry().await? {
@@ -96,7 +98,9 @@ async fn check(cmd_args: CheckCmd) -> anyhow::Result<()> {
             let metadata = fs::symlink_metadata(&entry_path).await?;
 
             if metadata.is_symlink() {
-                info!("symlinks are not yet supported, ignoring {entry_path}");
+                if log_enabled!(log::Level::Info) {
+                    info!("symlinks are not yet supported, ignoring {entry_path}");
+                }
             } else if metadata.is_dir() {
                 child_paths.push(entry_path);
             } else if metadata.is_file() {
@@ -129,7 +133,7 @@ async fn check(cmd_args: CheckCmd) -> anyhow::Result<()> {
         Ok(())
     }
     let (path_tx, mut path_rx) = mpsc::channel(1024);
-    tokio::spawn({
+    let walk_handle = tokio::spawn({
         let context = context.clone();
         let root = context.project_root.clone();
         let concurrency_limiter =
@@ -154,9 +158,7 @@ async fn check(cmd_args: CheckCmd) -> anyhow::Result<()> {
                 .collect::<anyhow::Result<Vec<_>>>()?,
         );
         async move { walkdir(context, root, ignores, allows, concurrency_limiter, path_tx).await }
-    })
-    .await??;
-    // TODO(kcza): how are errors propagated here?
+    });
 
     let mut npaths = 0;
     let max_problem_channel_size = match cmd_args.max_problems {
@@ -179,19 +181,24 @@ async fn check(cmd_args: CheckCmd) -> anyhow::Result<()> {
             break;
         }
     }
+    walk_handle.await??;
 
     if let MaxProblems::Limited(max_problems) = cmd_args.max_problems {
         problems.truncate(max_problems as usize);
     }
     problems.sort();
     for problem in &problems {
-        warn!(target: "vex", custom = true; "{problem}");
+        if log_enabled!(log::Level::Warn) {
+            warn!(target: "vex", custom = true; "{problem}");
+        }
     }
-    info!(
-        "scanned {} and found {}",
-        Plural::new(npaths, "path", "paths"),
-        Plural::new(problems.len(), "problem", "problems"),
-    );
+    if log_enabled!(log::Level::Info) {
+        info!(
+            "scanned {} and found {}",
+            Plural::new(npaths, "path", "paths"),
+            Plural::new(problems.len(), "problem", "problems"),
+        );
+    }
 
     Ok(())
 }

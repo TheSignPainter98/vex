@@ -3,7 +3,7 @@ use std::{fmt::Display, ops::Deref, sync::Arc};
 use annotate_snippets::{Annotation, AnnotationType, Slice, Snippet};
 use camino::{Utf8Path, Utf8PathBuf};
 use enum_map::EnumMap;
-use log::trace;
+use log::{log_enabled, trace};
 use strum::IntoEnumIterator;
 use tokio::{fs, sync::OnceCell, task::JoinSet};
 use tree_sitter::{Query, QueryCursor, QueryMatch};
@@ -58,11 +58,15 @@ impl VexesImpl {
 
     pub async fn check(&self, path: Utf8PathBuf) -> anyhow::Result<Vec<Problem>> {
         let Some(extension) = path.extension() else {
-            trace!("ignoring {path} (no file extension)");
+            if log_enabled!(log::Level::Trace) {
+                trace!("ignoring {path} (no file extension)");
+            }
             return Ok(vec![]);
         };
         let Some(lang) = SupportedLanguage::try_from_extension(extension) else {
-            trace!("ignoring {path} (no known language)");
+            if log_enabled!(log::Level::Trace) {
+                trace!("ignoring {path} (no known language)");
+            }
             return Ok(vec![]);
         };
 
