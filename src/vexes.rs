@@ -155,6 +155,7 @@ pub struct Problem {
     message: String,
     start_byte: usize,
     end_byte: usize,
+    path: Utf8PathBuf,
 }
 
 impl Problem {
@@ -184,25 +185,30 @@ impl Problem {
         };
         Self {
             message: Renderer::styled().render(snippet).to_string(),
-            start_byte: query_match
+            start_byte: nit
                 .captures
                 .iter()
                 .map(|cap| cap.node.start_byte())
                 .min()
                 .unwrap_or(0),
-            end_byte: query_match
+            end_byte: nit
                 .captures
                 .iter()
                 .map(|cap| cap.node.end_byte())
                 .max()
                 .unwrap_or(usize::MAX),
+            path: src_file.path.clone(),
         }
     }
 }
 
 impl Ord for Problem {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        (self.start_byte, self.end_byte).cmp(&(other.start_byte, other.end_byte))
+        (&self.path, self.start_byte, self.end_byte).cmp(&(
+            &other.path,
+            other.start_byte,
+            other.end_byte,
+        ))
     }
 }
 
