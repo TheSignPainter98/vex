@@ -25,7 +25,7 @@ use tokio::{
 };
 
 use crate::{
-    cli::{Args, Command},
+    cli::{Args, Command, MaxProblems},
     context::CompiledFilePattern,
     plural::Plural,
     vexes::Vexes,
@@ -123,7 +123,8 @@ async fn check(cmd_args: CheckCmd) -> anyhow::Result<()> {
     tokio::spawn({
         let context = context.clone();
         let root = context.project_root.clone();
-        let concurrency_limiter = Arc::new(Semaphore::new(cmd_args.max_concurrent_files.0));
+        let concurrency_limiter =
+            Arc::new(Semaphore::new(cmd_args.max_concurrent_files.0 as usize));
         let ignores = Arc::new(
             context
                 .ignores
@@ -148,6 +149,10 @@ async fn check(cmd_args: CheckCmd) -> anyhow::Result<()> {
     // TODO(kcza): how are errors propagated here?
 
     let mut npaths = 0;
+    let max_problem_channel_size = match cmd_args.max_problems {
+        MaxProblems::Limited(lim) => lim as usize,
+        MaxProblems::Unlimited => 1000, // Large limit but still capped.
+    };
     let mut set = JoinSet::new();
     while let Some(path) = rx.recv().await {
         npaths += 1;
@@ -155,11 +160,14 @@ async fn check(cmd_args: CheckCmd) -> anyhow::Result<()> {
         set.spawn(async move { Ok::<_, anyhow::Error>((path.clone(), vexes.check(path).await?)) });
     }
 
-    let mut problems = Vec::new();
+    let mut problems = Vec::with_capacity(max_problem_channel_size);
     while let Some(res) = set.join_next().await {
         problems.push(res??)
     }
 
+    if let MaxProblems::Limited(max_problems) = cmd_args.max_problems {
+        problems.truncate(max_problems as usize);
+    }
     problems.sort();
     for (_, file_problems) in problems {
         for problem in file_problems {
