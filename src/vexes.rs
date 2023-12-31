@@ -57,11 +57,11 @@ impl VexesImpl {
     pub async fn check(&self, path: Utf8PathBuf) -> anyhow::Result<Vec<Problem>> {
         let Some(extension) = path.extension() else {
             eprintln!("ignoring {path} (no file extension)");
-            return Ok(Vec::with_capacity(0));
+            return Ok(vec![]);
         };
         let Some(lang) = SupportedLanguage::try_from_extension(extension) else {
             eprintln!("ignoring {path} (no known language)");
-            return Ok(Vec::with_capacity(0));
+            return Ok(vec![]);
         };
 
         let src_file = SourceFile::new(path, lang).await?;
@@ -109,11 +109,11 @@ impl VexSet {
     }
 
     async fn check(&self, src_file: &SourceFile) -> anyhow::Result<Vec<Problem>> {
-        Ok(self
-            .queries
-            .iter()
-            .flat_map(|query| query.check(src_file))
-            .collect())
+        let mut problems = vec![];
+        for query in &self.queries {
+            problems.extend(query.check(src_file)?);
+        }
+        Ok(problems)
     }
 
     pub fn iter(&self) -> std::slice::Iter<'_, Vex> {
@@ -139,13 +139,14 @@ impl Vex {
         Ok(Self { name, query })
     }
 
-    fn check(&self, src_file: &SourceFile) -> Vec<Problem> {
+    fn check(&self, src_file: &SourceFile) -> anyhow::Result<Vec<Problem>> {
         let root = src_file.tree.root_node();
         let src = &src_file.content;
-        QueryCursor::new()
+        Ok(QueryCursor::new()
             .matches(&self.query, root, src.as_bytes())
-            .map(|nit| Problem::new(self, src_file, nit))
-            .collect()
+            .into_iter()
+            .map(|nit| Problem::new(self, &src_file, nit))
+            .collect())
     }
 }
 
@@ -159,15 +160,15 @@ pub struct Problem {
 static_assertions::assert_impl_all!(Problem: Send);
 
 impl Problem {
-    fn new(source: &Vex, src_file: &SourceFile, query_match: QueryMatch) -> Self {
+    fn new(source: &Vex, src_file: &SourceFile, nit: QueryMatch<'_, '_>) -> Self {
         let snippet = Snippet {
             title: Some(Annotation {
-                id: None,
+                id: Some(&source.name),
                 label: Some(&source.name),
                 annotation_type: AnnotationType::Warning,
             }),
             footer: Vec::with_capacity(0), // TODO(kcza): is vec![] a good
-            slices: query_match
+            slices: nit
                 .captures
                 .iter()
                 .map(|capture| {

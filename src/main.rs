@@ -160,22 +160,25 @@ async fn check(cmd_args: CheckCmd) -> anyhow::Result<()> {
     while let Some(path) = path_rx.recv().await {
         npaths += 1;
         let vexes = vexes.clone();
-        set.spawn(async move { Ok::<_, anyhow::Error>((path.clone(), vexes.check(path).await?)) });
+        let path = path.clone();
+        set.spawn(async move { vexes.check(path).await });
     }
 
     let mut problems = Vec::with_capacity(max_problem_channel_size);
     while let Some(res) = set.join_next().await {
-        problems.push(res??)
+        problems.extend(res??);
+
+        if cmd_args.max_problems.is_exceeded_by(problems.len()) {
+            break;
+        }
     }
 
     if let MaxProblems::Limited(max_problems) = cmd_args.max_problems {
         problems.truncate(max_problems as usize);
     }
     problems.sort();
-    for (_, file_problems) in problems {
-        for problem in file_problems {
-            println!("{problem}");
-        }
+    for problem in &problems {
+        println!("{problem}");
     }
     println!(
         "scanned {} and found {}",
