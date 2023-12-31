@@ -145,19 +145,17 @@ impl Vex {
         Ok(QueryCursor::new()
             .matches(&self.query, root, src.as_bytes())
             .into_iter()
-            .map(|nit| Problem::new(self, &src_file, nit))
+            .map(|nit| Problem::new(self, src_file, nit))
             .collect())
     }
 }
 
-#[derive(PartialEq, Eq, PartialOrd)]
+#[derive(Debug, PartialEq, Eq, PartialOrd)]
 pub struct Problem {
     message: String,
     start_byte: usize,
     end_byte: usize,
 }
-
-static_assertions::assert_impl_all!(Problem: Send);
 
 impl Problem {
     fn new(source: &Vex, src_file: &SourceFile, nit: QueryMatch<'_, '_>) -> Self {
