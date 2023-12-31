@@ -18,6 +18,9 @@ pub struct Args {
     #[command(subcommand)]
     pub command: Option<Command>,
 
+    #[arg(short, value_name="level", action=ArgAction::Count, value_name="level", global=true)]
+    pub verbosity_level: u8,
+
     /// Print help information, use `--help` for more detail
     #[arg(short, long, action=ArgAction::Help, global=true)]
     pub help: Option<bool>,

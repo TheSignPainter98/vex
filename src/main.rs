@@ -6,6 +6,7 @@ mod error;
 mod plural;
 mod source_file;
 mod supported_language;
+mod verbosity;
 mod vexes;
 
 use std::{env, sync::Arc};
@@ -16,6 +17,7 @@ use clap::Parser as _;
 use cli::{CheckCmd, IgnoreCmd, IgnoreKind};
 use context::Context;
 use error::Error;
+use log::{info, warn};
 use strum::IntoEnumIterator;
 use supported_language::SupportedLanguage;
 use tokio::{
@@ -28,12 +30,20 @@ use crate::{
     cli::{Args, Command, MaxProblems},
     context::CompiledFilePattern,
     plural::Plural,
+    verbosity::Verbosity,
     vexes::Vexes,
 };
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
+
+    stderrlog::new()
+        .module(module_path!())
+        .verbosity(Verbosity::try_from(args.verbosity_level)?.log_level_num())
+        .timestamp(stderrlog::Timestamp::Off)
+        .init()?;
+
     match args.command.unwrap_or_default() {
         Command::ListLanguages => list_languages(),
         Command::ListLints => list_lints().await,
@@ -89,7 +99,7 @@ async fn check(cmd_args: CheckCmd) -> anyhow::Result<()> {
             let metadata = fs::symlink_metadata(&entry_path).await?;
 
             if metadata.is_symlink() {
-                eprintln!("symlinks are not supported: ignoring {entry_path}");
+                info!("symlinks are not supported: ignoring {entry_path}");
             } else if metadata.is_dir() {
                 child_paths.push(entry_path);
             } else if metadata.is_file() {
@@ -178,9 +188,9 @@ async fn check(cmd_args: CheckCmd) -> anyhow::Result<()> {
     }
     problems.sort();
     for problem in &problems {
-        println!("{problem}");
+        warn!("{problem}");
     }
-    println!(
+    info!(
         "scanned {} and found {}",
         Plural::new(npaths, "path", "paths"),
         Plural::new(problems.len(), "problem", "problems"),
