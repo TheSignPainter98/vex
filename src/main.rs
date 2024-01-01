@@ -10,9 +10,8 @@ mod supported_language;
 mod verbosity;
 mod vexes;
 
-use std::{env, sync::Arc};
+use std::{env, fs};
 
-use async_recursion::async_recursion;
 use camino::Utf8PathBuf;
 use clap::Parser as _;
 use cli::{CheckCmd, IgnoreCmd, IgnoreKind};
@@ -21,11 +20,7 @@ use error::Error;
 use log::{info, log_enabled, trace, warn};
 use strum::IntoEnumIterator;
 use supported_language::SupportedLanguage;
-use tokio::{
-    fs,
-    sync::{mpsc, Semaphore},
-    task::JoinSet,
-};
+use tokio::task::JoinSet;
 
 use crate::{
     cli::{Args, Command, MaxProblems},
@@ -65,109 +60,43 @@ async fn list_lints() -> anyhow::Result<()> {
 }
 
 async fn check(cmd_args: CheckCmd) -> anyhow::Result<()> {
-    let context = Arc::new(Context::acquire()?);
+    let context = Context::acquire()?;
     let vexes = Vexes::new(&context);
 
-    #[async_recursion]
-    async fn walkdir(
-        manifest: Arc<Context>,
-        path: Utf8PathBuf,
-        ignores: Arc<Vec<CompiledFilePattern>>,
-        allows: Arc<Vec<CompiledFilePattern>>,
-        concurrency_limiter: Arc<Semaphore>,
-        tx: mpsc::Sender<Utf8PathBuf>,
-    ) -> anyhow::Result<()> {
-        if log_enabled!(log::Level::Trace) {
-            trace!("walking {path}");
-        }
-        let mut dir = fs::read_dir(path).await?;
-        let mut child_paths: Vec<Utf8PathBuf> = Vec::new();
-        while let Some(entry) = dir.next_entry().await? {
-            let _permit = concurrency_limiter.acquire().await?;
+    let paths = {
+        let mut paths = Vec::new();
+        let ignores = context
+            .ignores
+            .clone()
+            .unwrap_or_default()
+            .0
+            .into_iter()
+            .map(|ignore| ignore.compile(&context.project_root))
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        let allows = context
+            .allows
+            .clone()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|allow| allow.compile(&context.project_root))
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        walkdir(
+            &context,
+            context.project_root.clone(),
+            &ignores,
+            &allows,
+            &mut paths,
+        )?;
+        paths
+    };
 
-            let entry_path = Utf8PathBuf::try_from(entry.path())?;
-            if !allows.iter().any(|p| p.matches_path(&entry_path)) {
-                let hidden = entry_path
-                    .file_name()
-                    .is_some_and(|name| name.starts_with('.'));
-                if hidden || ignores.iter().any(|p| p.matches_path(&entry_path)) {
-                    continue;
-                }
-            }
-
-            let metadata = fs::symlink_metadata(&entry_path).await?;
-
-            if metadata.is_symlink() {
-                if log_enabled!(log::Level::Info) {
-                    info!("symlinks are not yet supported, ignoring {entry_path}");
-                }
-            } else if metadata.is_dir() {
-                child_paths.push(entry_path);
-            } else if metadata.is_file() {
-                tx.send(entry_path).await?;
-            } else {
-                panic!("unreachable");
-            }
-        }
-
-        for child_path in child_paths {
-            let tx = tx.clone();
-            let concurrency_limiter = concurrency_limiter.clone();
-            let manifest = manifest.clone();
-            let ignores = ignores.clone();
-            let allows = allows.clone();
-            tokio::spawn(async move {
-                walkdir(
-                    manifest,
-                    child_path,
-                    ignores,
-                    allows,
-                    concurrency_limiter,
-                    tx,
-                )
-                .await
-            })
-            .await??;
-        }
-
-        Ok(())
-    }
-    let (path_tx, mut path_rx) = mpsc::channel(1024);
-    let walk_handle = tokio::spawn({
-        let context = context.clone();
-        let root = context.project_root.clone();
-        let concurrency_limiter =
-            Arc::new(Semaphore::new(cmd_args.max_concurrent_files.0 as usize));
-        let ignores = Arc::new(
-            context
-                .ignores
-                .clone()
-                .unwrap_or_default()
-                .0
-                .into_iter()
-                .map(|ignore| ignore.compile(&context.project_root))
-                .collect::<anyhow::Result<Vec<_>>>()?,
-        );
-        let allows = Arc::new(
-            context
-                .allows
-                .clone()
-                .unwrap_or_default()
-                .into_iter()
-                .map(|allow| allow.compile(&context.project_root))
-                .collect::<anyhow::Result<Vec<_>>>()?,
-        );
-        async move { walkdir(context, root, ignores, allows, concurrency_limiter, path_tx).await }
-    });
-
-    let mut npaths = 0;
     let max_problem_channel_size = match cmd_args.max_problems {
         MaxProblems::Limited(lim) => lim as usize,
         MaxProblems::Unlimited => 1000, // Large limit but still capped.
     };
+    let npaths = paths.len();
     let mut set = JoinSet::new();
-    while let Some(path) = path_rx.recv().await {
-        npaths += 1;
+    for path in paths {
         let vexes = vexes.clone();
         let path = path.clone();
         set.spawn(async move { vexes.check(path).await });
@@ -181,7 +110,6 @@ async fn check(cmd_args: CheckCmd) -> anyhow::Result<()> {
             break;
         }
     }
-    walk_handle.await??;
 
     if let MaxProblems::Limited(max_problems) = cmd_args.max_problems {
         problems.truncate(max_problems as usize);
@@ -198,6 +126,52 @@ async fn check(cmd_args: CheckCmd) -> anyhow::Result<()> {
             Plural::new(npaths, "path", "paths"),
             Plural::new(problems.len(), "problem", "problems"),
         );
+    }
+
+    Ok(())
+}
+
+fn walkdir(
+    ctx: &Context,
+    path: Utf8PathBuf,
+    ignores: &[CompiledFilePattern],
+    allows: &[CompiledFilePattern],
+    paths: &mut Vec<Utf8PathBuf>,
+) -> anyhow::Result<()> {
+    if log_enabled!(log::Level::Trace) {
+        trace!("walking {path}");
+    }
+    let dir = fs::read_dir(path)?;
+    for entry in dir {
+        let entry = entry?;
+        let entry_path = Utf8PathBuf::try_from(entry.path())?;
+        let metadata = fs::symlink_metadata(&entry_path)?;
+        if !allows.iter().any(|p| p.matches_path(&entry_path)) {
+            let hidden = entry_path
+                .file_name()
+                .is_some_and(|name| name.starts_with('.'));
+            if hidden || ignores.iter().any(|p| p.matches_path(&entry_path)) {
+                if log_enabled!(log::Level::Info) {
+                    let ignore_path = entry_path.strip_prefix(&ctx.project_root)?;
+                    let dir_marker = if metadata.is_dir() { "/" } else { "" };
+                    info!("ignoring /{ignore_path}{dir_marker}");
+                }
+                continue;
+            }
+        }
+
+        if metadata.is_symlink() {
+            if log_enabled!(log::Level::Info) {
+                let symlink_path = entry_path.strip_prefix(&ctx.project_root)?;
+                info!("ignoring /{symlink_path} (symlink)");
+            }
+        } else if metadata.is_dir() {
+            walkdir(ctx, entry_path, ignores, allows, paths)?;
+        } else if metadata.is_file() {
+            paths.push(entry_path);
+        } else {
+            panic!("unreachable");
+        }
     }
 
     Ok(())
