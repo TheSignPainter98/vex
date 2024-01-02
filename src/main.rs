@@ -54,7 +54,7 @@ async fn list_lints() -> anyhow::Result<()> {
     let vexes = Vexes::new(&manifest);
     vexes.vexes().await?.iter().for_each(|(lang, set)| {
         println!("{}:", lang.name());
-        set.iter().for_each(|vex| println!("\t{}", vex.name));
+        set.iter().for_each(|vex| println!("\t{}", vex.id));
     });
     Ok(())
 }

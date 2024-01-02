@@ -128,7 +128,7 @@ impl VexSet {
 }
 
 pub struct Vex {
-    pub name: String,
+    pub id: VexId,
     query: Query,
 }
 
@@ -137,12 +137,13 @@ impl Vex {
         let Some(name) = path.file_stem().map(ToString::to_string) else {
             return Err(Error::MissingFileName(path.to_owned()).into());
         };
-        let name = name.to_string();
+        let id = VexId(name.to_string());
 
         let query_src = fs::read_to_string(&path).await?;
+
         let query = Query::new(lang.ts_language(), &query_src)?;
 
-        Ok(Self { name, query })
+        Ok(Self { id, query })
     }
 
     fn check(&self, src_file: &SourceFile) -> anyhow::Result<Vec<Problem>> {
@@ -153,6 +154,21 @@ impl Vex {
             .into_iter()
             .map(|nit| Problem::new(self, src_file, nit))
             .collect())
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct VexId(String);
+
+impl VexId {
+    fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Display for VexId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
     }
 }
 
@@ -168,8 +184,8 @@ impl Problem {
     fn new(source: &Vex, src_file: &SourceFile, nit: QueryMatch<'_, '_>) -> Self {
         let snippet = Snippet {
             title: Some(Annotation {
-                id: Some(&source.name),
-                label: Some(&source.name),
+                id: Some(source.id.as_str()),
+                label: Some(source.id.as_str()),
                 annotation_type: AnnotationType::Warning,
             }),
             footer: Vec::with_capacity(0), // TODO(kcza): is vec![] a good
