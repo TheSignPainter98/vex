@@ -19,12 +19,45 @@ pub struct Context {
 }
 
 impl Context {
-    const FILE_NAME: &str = "vex.toml";
-    const DEFAULT_MANIFEST: &str = indoc! {r#"
+    pub fn acquire() -> anyhow::Result<Self> {
+        let (project_root, raw_data) = Manifest::acquire_file()?;
+        let data = toml_edit::de::from_str(&raw_data)?;
+        Ok(Context {
+            project_root,
+            manifest: data,
+        })
+    }
+}
+
+impl Deref for Context {
+    type Target = Manifest;
+
+    fn deref(&self) -> &Self::Target {
+        &self.manifest
+    }
+}
+
+#[derive(Debug, Deserialise, Serialise, PartialEq)]
+pub struct Manifest {
+    pub associations: Option<HashMap<String, String>>,
+
+    pub queries_dir: Option<QueriesDir>,
+
+    #[serde(rename = "ignore")]
+    pub ignores: Option<IgnoreData>,
+
+    #[serde(rename = "allow")]
+    pub allows: Option<Vec<FilePattern>>,
+}
+
+impl Manifest {
+    const FILE_NAME: &'static str = "vex.toml";
+    const DEFAULT_CONTENT: &'static str = indoc! {r#"
         ignore = [ "/.git", "/target", ".gitignore" ]
     "#};
+
     pub fn init(project_root: Utf8PathBuf) -> anyhow::Result<()> {
-        match Context::acquire_file() {
+        match Manifest::acquire_file() {
             Ok((found_root, _)) => return Err(Error::AlreadyInited { found_root }.into()),
             Err(e)
                 if e.downcast_ref::<Error>()
@@ -41,17 +74,8 @@ impl Context {
             .create_new(true)
             .open(project_root.join(Self::FILE_NAME))?;
         let mut writer = BufWriter::new(file);
-        writer.write_all(Self::DEFAULT_MANIFEST.as_bytes())?;
+        writer.write_all(Self::DEFAULT_CONTENT.as_bytes())?;
         Ok(())
-    }
-
-    pub fn acquire() -> anyhow::Result<Self> {
-        let (project_root, raw_data) = Self::acquire_file()?;
-        let data = toml_edit::de::from_str(&raw_data)?;
-        Ok(Context {
-            project_root,
-            manifest: data,
-        })
     }
 
     pub fn ignore(kind: IgnoreKind, to_ignore: Vec<String>) -> anyhow::Result<()> {
@@ -123,13 +147,13 @@ impl Context {
         Ok(())
     }
 
-    pub fn acquire_document() -> anyhow::Result<(Utf8PathBuf, Document)> {
+    fn acquire_document() -> anyhow::Result<(Utf8PathBuf, Document)> {
         let (project_root, raw_data) = Self::acquire_file()?;
         let document = raw_data.parse()?;
         Ok((project_root, document))
     }
 
-    pub fn acquire_file() -> anyhow::Result<(Utf8PathBuf, String)> {
+    fn acquire_file() -> anyhow::Result<(Utf8PathBuf, String)> {
         let mut project_root = Utf8PathBuf::try_from(env::current_dir()?)?;
         let mut manifest_file = loop {
             match File::open(project_root.join(Self::FILE_NAME)) {
@@ -152,27 +176,6 @@ impl Context {
 
         Ok((project_root, raw_data))
     }
-}
-
-impl Deref for Context {
-    type Target = Manifest;
-
-    fn deref(&self) -> &Self::Target {
-        &self.manifest
-    }
-}
-
-#[derive(Debug, Deserialise, Serialise, PartialEq)]
-pub struct Manifest {
-    pub associations: Option<HashMap<String, String>>,
-
-    pub queries_dir: Option<QueriesDir>,
-
-    #[serde(rename = "ignore")]
-    pub ignores: Option<IgnoreData>,
-
-    #[serde(rename = "allow")]
-    pub allows: Option<Vec<FilePattern>>,
 }
 
 impl Default for Manifest {
@@ -256,7 +259,7 @@ mod test {
     #[test]
     fn init() {
         let init_manifest: Manifest =
-            toml_edit::de::from_str(Context::DEFAULT_MANIFEST).expect("default manifest invalid");
+            toml_edit::de::from_str(Manifest::DEFAULT_CONTENT).expect("default manifest invalid");
         assert_eq!(Manifest::default(), init_manifest);
     }
 }
