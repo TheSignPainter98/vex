@@ -15,7 +15,7 @@ use std::{env, fs};
 use camino::Utf8PathBuf;
 use clap::Parser as _;
 use cli::{CheckCmd, IgnoreCmd, IgnoreKind};
-use context::Context;
+use context::{Context, Manifest};
 use error::Error;
 use log::{info, log_enabled, trace, warn};
 use strum::IntoEnumIterator;
@@ -191,10 +191,10 @@ fn ignore(cmd_args: IgnoreCmd) -> anyhow::Result<()> {
             return Err(Error::UnknownLanguages(unknown_languages).into());
         }
     }
-    Context::ignore(cmd_args.kind, cmd_args.to_ignore)
+    Manifest::ignore(cmd_args.kind, cmd_args.to_ignore)
 }
 
 fn init() -> anyhow::Result<()> {
     let cwd = Utf8PathBuf::try_from(env::current_dir()?)?;
-    Context::init(cwd)
+    Manifest::init(cwd)
 }
