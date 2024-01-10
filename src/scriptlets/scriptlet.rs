@@ -2,6 +2,7 @@ use std::{collections::HashSet, fs, marker::PhantomData};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use starlark::{
+    analysis::AstModuleLint,
     environment::{FrozenModule, Globals, GlobalsBuilder, LibraryExtension, Module},
     errors::Lint,
     eval::Evaluator,

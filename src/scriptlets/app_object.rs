@@ -8,6 +8,7 @@ use starlark::{
     values::Value,
     values::{none::NoneType, NoSerialize, ProvidesStaticType, StarlarkValue, ValueLike},
 };
+use starlark_derive::starlark_value;
 
 use crate::{error::Error, scriptlets::Stage};
 
@@ -98,9 +99,8 @@ impl AppObject {
 }
 
 starlark::starlark_simple_value!(AppObject);
+#[starlark_value(type = "vex")]
 impl<'v> StarlarkValue<'v> for AppObject {
-    starlark::starlark_type!(AppObject::NAME);
-
     fn get_methods() -> Option<&'static Methods> {
         static RES: MethodsStatic = MethodsStatic::new();
         RES.methods(AppObject::methods)
