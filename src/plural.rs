@@ -8,6 +8,7 @@ pub struct Plural<'a, N: Num> {
 }
 
 impl<'a, N: Num> Plural<'a, N> {
+    #[allow(unused)]
     pub fn new(num: N, singular: &'a str, plural: &'a str) -> Self {
         Self {
             num,

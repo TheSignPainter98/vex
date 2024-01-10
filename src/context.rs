@@ -27,6 +27,16 @@ impl Context {
             manifest: data,
         })
     }
+
+    pub fn vex_dir(&self) -> Utf8PathBuf {
+        self.project_root.join(
+            self.manifest
+                .queries_dir
+                .as_ref()
+                .unwrap_or(&QueriesDir::default())
+                .as_str(),
+        )
+    }
 }
 
 impl Deref for Context {
@@ -190,7 +200,13 @@ impl Default for Manifest {
 }
 
 #[derive(Debug, Deserialise, Serialise, PartialEq)]
-pub struct QueriesDir(pub String);
+pub struct QueriesDir(String);
+
+impl QueriesDir {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
 
 impl Default for QueriesDir {
     fn default() -> Self {
