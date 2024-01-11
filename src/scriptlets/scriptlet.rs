@@ -92,15 +92,6 @@ impl Scriptlet<Preiniting> {
 
 impl Scriptlet<Initing> {
     pub fn init(self) -> anyhow::Result<Scriptlet<Vexing>> {
-        println!(
-            "{:?}",
-            self.module
-                .as_frozen()
-                .unwrap()
-                .names()
-                .map(FrozenValueTyped::as_str)
-                .collect::<Vec<_>>()
-        );
         let Some(init) = self
             .module
             .frozen()
