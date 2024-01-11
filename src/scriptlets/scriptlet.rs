@@ -109,9 +109,12 @@ impl Scriptlet<Initing> {
             return Err(Error::NoInit(self.path).into());
         };
 
-        // let blank_module = Module::new();
-        // let mut eval = Evaluator::new(&blank_module);
-        // eval.eval_function(init.value(), &[], &[])?;
+        let blank_module = Module::new();
+        let print_handler = StdoutPrintHandler { path: &self.path };
+        let mut eval = Evaluator::new(&blank_module);
+        eval.set_print_handler(&print_handler);
+        eval.eval_function(init.value(), &[], &[])?;
+
         todo!();
     }
 }
