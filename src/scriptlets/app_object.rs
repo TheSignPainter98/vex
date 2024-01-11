@@ -12,45 +12,22 @@ use starlark_derive::starlark_value;
 
 use crate::{error::Error, scriptlets::Stage};
 
+use super::extra_data::ExtraData;
+
 #[derive(Debug, PartialEq, Eq, ProvidesStaticType, NoSerialize, Allocative)]
-pub struct AppObject {
-    stage_name: &'static str,
-    available_fields: &'static [AttrName],
-}
+pub struct AppObject;
 
 impl AppObject {
     pub const NAME: &'static str = "vex";
 
-    pub fn new<S: Stage>() -> Self {
-        Self {
-            stage_name: S::NAME,
-            available_fields: S::APP_OBJECT_ATTRS,
-        }
-    }
-
-    fn check_available(&self, attr: AttrName) -> anyhow::Result<()> {
-        if !self.available_fields.contains(&attr) {
-            return Err(Error::Unavailable {
-                attr,
-                stage_name: self.stage_name,
-            }
-            .into());
-        }
-        Ok(())
-    }
-
     #[starlark_module]
     fn methods(builder: &mut MethodsBuilder) {
         fn language<'v>(
-            this: Value<'v>,
+            #[starlark(this)] _this: Value<'v>,
             lang: &'v str,
-            _eval: &mut Evaluator<'v, '_>,
+            eval: &mut Evaluator<'v, '_>,
         ) -> anyhow::Result<NoneType> {
-            let this = this
-                .downcast_ref::<AppObject>()
-                .expect("expected app object receiver");
-            this.check_available(AttrName::Language)?;
-            // TODO(kcza): store available methods in the evaluator
+            AppObject::check_available(eval, AttrName::Language)?;
             println!("vex.language({lang})");
 
             // let lang: SupportedLanguage = lang.parse()?;
@@ -66,9 +43,9 @@ impl AppObject {
         fn query<'v>(
             #[starlark(this)] _this: Value<'v>,
             query: &'v str,
-            _eval: &mut Evaluator<'v, '_>,
+            eval: &mut Evaluator<'v, '_>,
         ) -> anyhow::Result<NoneType> {
-            // let query = Query::new(lang.ts_language(), query)?;
+            AppObject::check_available(eval, AttrName::Query)?;
             // TODO(kcza): don't rely on language being set already here!
             // TODO(kcza): attach the id in errors somewhere?
             println!("vex.seek({query:?}) called");
@@ -79,22 +56,34 @@ impl AppObject {
             #[starlark(this)] _this: Value<'v>,
             event: &str,
             handler: Value<'v>,
-            _eval: &mut Evaluator<'v, '_>,
+            eval: &mut Evaluator<'v, '_>,
         ) -> anyhow::Result<NoneType> {
+            AppObject::check_available(eval, AttrName::Observe)?;
             let event = event.parse::<EventType>()?;
-            println!("vex.observe({event:?}, {handler}) called");
+            println!("vex.observe({event:?}, ...) called");
             Ok(NoneType)
         }
-        //
-        // fn warn<'v>(
-        //     #[starlark(this)] _this: Value<'v>,
-        //     msg: &'v str,
-        //     eval: &mut Evaluator<'v, 'v>,
-        // ) -> anyhow::Result<NoneType> {
-        //     println!("vex.warn({msg}) called");
-        //     todo!();
-        //     // Ok(NoneType)
-        // }
+
+        fn warn<'v>(
+            #[starlark(this)] _this: Value<'v>,
+            msg: &'v str,
+            eval: &mut Evaluator<'v, '_>,
+        ) -> anyhow::Result<NoneType> {
+            AppObject::check_available(eval, AttrName::Warn)?;
+            println!("vex.warn({msg}) called");
+            todo!();
+            // Ok(NoneType)
+        }
+    }
+
+    fn check_available(eval: &Evaluator<'_, '_>, attr: AttrName) -> anyhow::Result<()> {
+        let extra = eval
+            .extra
+            .as_ref()
+            .expect("extra unset")
+            .downcast_ref::<ExtraData>()
+            .expect("extra has wrong type");
+        extra.check_available(AppObject::TYPE, attr)
     }
 }
 
@@ -163,6 +152,10 @@ impl FromStr for EventType {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
+            "start" => Ok(EventType::Start),
+            "match" => Ok(EventType::Match),
+            "eof" => Ok(EventType::EoF),
+            "end" => Ok(EventType::End),
             _ => Err(Error::UnknownEvent(s.to_owned()).into()),
         }
     }

@@ -15,6 +15,7 @@ use crate::{
     error::Error,
     scriptlets::{
         app_object::AppObject,
+        extra_data::ExtraData,
         stage::{Initing, Preiniting, Vexing},
         store::ScriptletExports,
         Stage,
@@ -110,9 +111,11 @@ impl Scriptlet<Initing> {
         };
 
         let blank_module = Module::new();
+        let extra_data = ExtraData::new::<Initing>();
         let print_handler = StdoutPrintHandler { path: &self.path };
         let mut eval = Evaluator::new(&blank_module);
         eval.set_print_handler(&print_handler);
+        eval.extra = Some(&extra_data);
         eval.eval_function(init.value(), &[], &[])?;
 
         todo!();
@@ -120,13 +123,9 @@ impl Scriptlet<Initing> {
 }
 
 impl<S: Stage> Scriptlet<S> {
-    fn app_object(&self) -> AppObject {
-        AppObject::new::<S>()
-    }
-
     fn globals(&self) -> Globals {
         let mut builder = GlobalsBuilder::extended_by(&[LibraryExtension::Print]);
-        builder.set(AppObject::NAME, builder.alloc(self.app_object()));
+        builder.set(AppObject::NAME, builder.alloc(AppObject));
         builder.build()
     }
 

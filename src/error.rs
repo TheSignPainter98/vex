@@ -33,8 +33,9 @@ pub enum Error {
         actual: &'static str,
     },
 
-    #[error("{attr} is unavailable during {stage_name}")]
+    #[error("{recv_name}.{attr} is unavailable during {stage_name}")]
     Unavailable {
+        recv_name: &'static str,
         attr: AttrName,
         stage_name: &'static str,
     },

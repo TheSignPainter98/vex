@@ -1,4 +1,5 @@
 pub mod app_object;
+mod extra_data;
 mod scriptlet;
 pub mod stage;
 mod store;
