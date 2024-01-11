@@ -27,6 +27,16 @@ impl Context {
             manifest: data,
         })
     }
+
+    pub fn vex_dir(&self) -> Utf8PathBuf {
+        self.project_root.join(
+            self.manifest
+                .queries_dir
+                .as_ref()
+                .unwrap_or(&QueriesDir::default())
+                .as_str(),
+        )
+    }
 }
 
 impl Deref for Context {
@@ -190,7 +200,13 @@ impl Default for Manifest {
 }
 
 #[derive(Debug, Deserialise, Serialise, PartialEq)]
-pub struct QueriesDir(pub String);
+pub struct QueriesDir(String);
+
+impl QueriesDir {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
 
 impl Default for QueriesDir {
     fn default() -> Self {
@@ -236,6 +252,13 @@ impl FilePattern {
     }
 }
 
+#[cfg(test)]
+impl FilePattern {
+    fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 #[derive(Debug)]
 pub struct CompiledFilePattern(Pattern);
 
@@ -260,6 +283,24 @@ mod test {
     fn init() {
         let init_manifest: Manifest =
             toml_edit::de::from_str(Manifest::DEFAULT_CONTENT).expect("default manifest invalid");
-        assert_eq!(Manifest::default(), init_manifest);
+        assert!(init_manifest.allows.is_none());
+        assert_eq!(
+            init_manifest
+                .ignores
+                .expect("default ignores are not set")
+                .0
+                .iter()
+                .map(FilePattern::as_str)
+                .collect::<Vec<_>>(),
+            &[".git/", ".gitignore", "/target"]
+        );
+
+        let raw_manifest: Document = Manifest::DEFAULT_CONTENT.parse().unwrap();
+        let formatted = {
+            let mut formatted = raw_manifest.clone();
+            formatted.fmt();
+            formatted
+        };
+        assert_eq!(raw_manifest.to_string(), formatted.to_string());
     }
 }
