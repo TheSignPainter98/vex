@@ -63,7 +63,7 @@ pub struct Manifest {
 impl Manifest {
     const FILE_NAME: &'static str = "vex.toml";
     const DEFAULT_CONTENT: &'static str = indoc! {r#"
-        ignore = [ ".git/", ".gitignore", "/target" ]
+        ignore = [ "/.git", "/target", ".gitignore" ]
     "#};
 
     pub fn init(project_root: Utf8PathBuf) -> anyhow::Result<()> {
