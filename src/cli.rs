@@ -36,8 +36,6 @@ pub enum Command {
 
     Check(CheckCmd),
 
-    Ignore(IgnoreCmd),
-
     Init,
 }
 
@@ -118,19 +116,4 @@ impl Display for MaxProblems {
             Self::Limited(l) => l.fmt(f),
         }
     }
-}
-
-#[derive(Clone, Debug, clap::Args)]
-pub struct IgnoreCmd {
-    pub kind: IgnoreKind,
-
-    #[arg(required = true)]
-    pub to_ignore: Vec<String>,
-}
-
-#[derive(Clone, Debug, PartialEq, clap::ValueEnum)]
-pub enum IgnoreKind {
-    Extension,
-    Language,
-    Dir,
 }

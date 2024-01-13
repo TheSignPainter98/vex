@@ -26,13 +26,6 @@ pub enum Error {
     //
     // #[error("{0} declares no trigger")]
     // NoTrigger(Id),
-    #[error("invalid toml type: expected {expected} but got {actual}")]
-    TomlTypeError {
-        name: String,
-        expected: &'static str,
-        actual: &'static str,
-    },
-
     #[error("{attr} is unavailable during {stage_name}")]
     Unavailable {
         attr: AttrName,
