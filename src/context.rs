@@ -9,7 +9,6 @@ use std::io::{BufWriter, ErrorKind, Read, Write};
 use std::ops::Deref;
 use toml_edit::Document;
 
-use crate::cli::IgnoreKind;
 use crate::error::Error;
 
 #[derive(Debug)]
@@ -85,75 +84,6 @@ impl Manifest {
             .open(project_root.join(Self::FILE_NAME))?;
         let mut writer = BufWriter::new(file);
         writer.write_all(Self::DEFAULT_CONTENT.as_bytes())?;
-        Ok(())
-    }
-
-    pub fn ignore(kind: IgnoreKind, to_ignore: Vec<String>) -> anyhow::Result<()> {
-        const IGNORE_TABLE_KEY: &str = "ignore";
-        const IGNORE_DIRS_KEY: &str = "dirs";
-        const IGNORE_EXTENSIONS_KEY: &str = "extensions";
-        const IGNORE_LANGUAGES_KEY: &str = "languages";
-
-        let (project_root, mut document) = Self::acquire_document()?;
-        let ignores = match document.get_mut(IGNORE_TABLE_KEY) {
-            Some(i) => {
-                if let Some(it) = i.as_table_mut() {
-                    it
-                } else {
-                    return Err(Error::TomlTypeError {
-                        name: IGNORE_TABLE_KEY.into(),
-                        expected: "table",
-                        actual: document.get(IGNORE_TABLE_KEY).unwrap().type_name(),
-                    }
-                    .into());
-                }
-            }
-            None => {
-                document.insert(IGNORE_TABLE_KEY, toml_edit::table());
-                document
-                    .get_mut(IGNORE_TABLE_KEY)
-                    .unwrap()
-                    .as_table_mut()
-                    .unwrap()
-            }
-        };
-
-        let key = match kind {
-            IgnoreKind::Dir => IGNORE_DIRS_KEY,
-            IgnoreKind::Extension => IGNORE_EXTENSIONS_KEY,
-            IgnoreKind::Language => IGNORE_LANGUAGES_KEY,
-        };
-        let ignore_arr = match ignores.get_mut(key) {
-            Some(ia) => {
-                if let Some(iaa) = ia.as_array_mut() {
-                    iaa
-                } else {
-                    return Err(Error::TomlTypeError {
-                        name: format!("{IGNORE_TABLE_KEY}.{key}"),
-                        expected: "array",
-                        actual: ignores.get(key).unwrap().type_name(),
-                    }
-                    .into());
-                }
-            }
-            None => {
-                ignores.insert(key, toml_edit::array());
-                ignores.get_mut(key).unwrap().as_array_mut().unwrap()
-            }
-        };
-        for item in to_ignore {
-            ignore_arr.push(item);
-        }
-
-        ignore_arr.fmt();
-        ignores.fmt();
-        document.fmt();
-
-        let file = File::options()
-            .write(true)
-            .open(project_root.join(Self::FILE_NAME))?;
-        let mut writer = BufWriter::new(file);
-        writer.write_all(document.to_string().as_bytes())?;
         Ok(())
     }
 

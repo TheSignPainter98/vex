@@ -17,9 +17,8 @@ use std::{env, fs, process::ExitCode};
 
 use camino::Utf8PathBuf;
 use clap::Parser as _;
-use cli::{CheckCmd, IgnoreCmd, IgnoreKind};
+use cli::CheckCmd;
 use context::{Context, Manifest};
-use error::Error;
 use log::{info, log_enabled, trace};
 use source_file::SourceFile;
 use strum::IntoEnumIterator;
@@ -42,7 +41,6 @@ async fn main() -> anyhow::Result<ExitCode> {
         Command::ListLanguages => list_languages(),
         Command::ListLints => list_lints().await,
         Command::Check(cmd_args) => check(cmd_args),
-        Command::Ignore(cmd_args) => ignore(cmd_args),
         Command::Init => init(),
     }?;
 
@@ -201,23 +199,6 @@ fn walkdir(
     }
 
     Ok(())
-}
-
-fn ignore(cmd_args: IgnoreCmd) -> anyhow::Result<()> {
-    if cmd_args.kind == IgnoreKind::Language {
-        let unknown_languages: Vec<_> = cmd_args
-            .to_ignore
-            .iter()
-            .filter(|lang_name| {
-                SupportedLanguage::iter().all(|sup_lang| sup_lang.name() != *lang_name)
-            })
-            .map(ToOwned::to_owned)
-            .collect();
-        if let Some(unknown) = unknown_languages.first() {
-            return Err(Error::UnknownLanguage(unknown.to_string()).into());
-        }
-    }
-    Manifest::ignore(cmd_args.kind, cmd_args.to_ignore)
 }
 
 fn init() -> anyhow::Result<()> {
