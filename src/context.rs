@@ -7,7 +7,6 @@ use std::env;
 use std::fs::File;
 use std::io::{BufWriter, ErrorKind, Read, Write};
 use std::ops::Deref;
-use toml_edit::Document;
 
 use crate::error::Error;
 
@@ -85,12 +84,6 @@ impl Manifest {
         let mut writer = BufWriter::new(file);
         writer.write_all(Self::DEFAULT_CONTENT.as_bytes())?;
         Ok(())
-    }
-
-    fn acquire_document() -> anyhow::Result<(Utf8PathBuf, Document)> {
-        let (project_root, raw_data) = Self::acquire_file()?;
-        let document = raw_data.parse()?;
-        Ok((project_root, document))
     }
 
     fn acquire_file() -> anyhow::Result<(Utf8PathBuf, String)> {
