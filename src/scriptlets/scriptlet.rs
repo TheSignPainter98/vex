@@ -7,7 +7,6 @@ use starlark::{
     errors::Lint,
     eval::Evaluator,
     syntax::{AstModule, Dialect},
-    values::FrozenValueTyped,
     PrintHandler,
 };
 
@@ -15,7 +14,7 @@ use crate::{
     error::Error,
     scriptlets::{
         app_object::AppObject,
-        extra_data::ExtraData,
+        extra_data::{EvaluatorData, HandlerData, HandlerDataBuilder},
         stage::{Initing, Preiniting, Vexing},
         store::ScriptletExports,
         Stage,
@@ -92,24 +91,41 @@ impl Scriptlet<Preiniting> {
 
 impl Scriptlet<Initing> {
     pub fn init(self) -> anyhow::Result<Scriptlet<Vexing>> {
-        let Some(init) = self
-            .module
-            .frozen()
+        let Self {
+            path,
+            module,
+            loads_files,
+            state,
+        } = self;
+
+        let Some(init) = module
+            .as_frozen()
             .expect("inited module not frozen")
             .get_option("init")?
         else {
-            return Err(Error::NoInit(self.path).into());
+            return Err(Error::NoInit(path).into());
         };
 
-        let blank_module = Module::new();
-        let extra_data = ExtraData::new::<Initing>();
-        let print_handler = StdoutPrintHandler { path: &self.path };
-        let mut eval = Evaluator::new(&blank_module);
-        eval.set_print_handler(&print_handler);
-        eval.extra = Some(&extra_data);
-        eval.eval_function(init.value(), &[], &[])?;
+        let init_module = Module::new();
+        HandlerDataBuilder::new().insert_into(&init_module);
+        {
+            let extra = EvaluatorData::new::<Initing>();
+            let print_handler = StdoutPrintHandler { path: &path };
+            let mut eval = Evaluator::new(&init_module);
+            eval.set_print_handler(&print_handler);
+            extra.insert_into(&mut eval);
+            eval.eval_function(init.value(), &[], &[])?;
+        }
+        let frozen_module = init_module.freeze()?;
+        let handler_data = HandlerData::get_from(&frozen_module);
+        println!("got handler data: {handler_data:?}");
 
-        todo!();
+        Ok(Scriptlet {
+            path,
+            module,
+            loads_files,
+            state: PhantomData,
+        })
     }
 }
 

@@ -82,8 +82,6 @@ impl Store<Preiniting> {
     }
 
     fn load_toplevel(&mut self, path: Utf8PathBuf) -> anyhow::Result<()> {
-        println!("loading toplevel: {path}");
-
         if let Some(new_idx) = self.load(path.clone())? {
             self.toplevel.push(new_idx);
         }

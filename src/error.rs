@@ -7,6 +7,7 @@ pub enum Error {
     #[error("already inited in a parent directory {found_root}")]
     AlreadyInited { found_root: Utf8PathBuf },
 
+    #[allow(unused)]
     #[error("import cycle detected: {}", .0.into_iter().map(ToString::to_string).collect::<Vec<_>>().join(", "))]
     ImportCycle(Vec<Utf8PathBuf>),
 

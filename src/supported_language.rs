@@ -9,6 +9,7 @@ use tree_sitter::Language;
 use crate::error::Error;
 
 #[derive(Copy, Clone, Debug, EnumIter, Subcommand, Enum, Allocative, PartialEq, Eq)]
+// #[repr(u32)]
 pub enum SupportedLanguage {
     Rust,
 }

@@ -6,13 +6,14 @@ use starlark::{
     eval::Evaluator,
     starlark_module,
     values::Value,
-    values::{none::NoneType, NoSerialize, ProvidesStaticType, StarlarkValue, ValueLike},
+    values::{none::NoneType, NoSerialize, ProvidesStaticType, StarlarkValue},
 };
 use starlark_derive::starlark_value;
 
-use crate::{error::Error, scriptlets::Stage};
-
-use super::extra_data::ExtraData;
+use crate::{
+    error::Error,
+    scriptlets::extra_data::{EvaluatorData, HandlerDataBuilder},
+};
 
 #[derive(Debug, PartialEq, Eq, ProvidesStaticType, NoSerialize, Allocative)]
 pub struct AppObject;
@@ -28,15 +29,9 @@ impl AppObject {
             eval: &mut Evaluator<'v, '_>,
         ) -> anyhow::Result<NoneType> {
             AppObject::check_available(eval, AttrName::Language)?;
-            println!("vex.language({lang})");
 
-            // let lang: SupportedLanguage = lang.parse()?;
-            // let store = eval
-            //     .extra
-            //     .expect("extra not set")
-            //     .downcast_ref::<HandlerStore>()
-            //     .expect("extra has wrong type");
-            // store.0.borrow_mut().language = Some(lang);
+            HandlerDataBuilder::get_from(eval.module()).set_language(lang.into());
+
             Ok(NoneType)
         }
 
@@ -46,9 +41,10 @@ impl AppObject {
             eval: &mut Evaluator<'v, '_>,
         ) -> anyhow::Result<NoneType> {
             AppObject::check_available(eval, AttrName::Query)?;
-            // TODO(kcza): don't rely on language being set already here!
+
             // TODO(kcza): attach the id in errors somewhere?
-            println!("vex.seek({query:?}) called");
+            HandlerDataBuilder::get_from(eval.module()).set_query(query.into());
+
             Ok(NoneType)
         }
 
@@ -59,31 +55,27 @@ impl AppObject {
             eval: &mut Evaluator<'v, '_>,
         ) -> anyhow::Result<NoneType> {
             AppObject::check_available(eval, AttrName::Observe)?;
-            let event = event.parse::<EventType>()?;
-            println!("vex.observe({event:?}, ...) called");
+
+            let event = event.parse()?;
+            HandlerDataBuilder::get_from(eval.module()).add_observer(event, handler);
+
             Ok(NoneType)
         }
 
         fn warn<'v>(
             #[starlark(this)] _this: Value<'v>,
-            msg: &'v str,
+            _msg: &'v str,
             eval: &mut Evaluator<'v, '_>,
         ) -> anyhow::Result<NoneType> {
             AppObject::check_available(eval, AttrName::Warn)?;
-            println!("vex.warn({msg}) called");
+
             todo!();
             // Ok(NoneType)
         }
     }
 
     fn check_available(eval: &Evaluator<'_, '_>, attr: AttrName) -> anyhow::Result<()> {
-        let extra = eval
-            .extra
-            .as_ref()
-            .expect("extra unset")
-            .downcast_ref::<ExtraData>()
-            .expect("extra has wrong type");
-        extra.check_available(AppObject::TYPE, attr)
+        EvaluatorData::get_from(eval).check_available(Self::TYPE, attr)
     }
 }
 
@@ -128,6 +120,7 @@ impl Display for AttrName {
     }
 }
 
+// TODO(kcza): move EventType to its own event module
 #[derive(Debug)]
 pub enum EventType {
     Start,
@@ -137,6 +130,7 @@ pub enum EventType {
 }
 
 impl EventType {
+    #[allow(unused)]
     fn name(&self) -> &str {
         match self {
             EventType::Start => "start",
