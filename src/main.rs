@@ -29,14 +29,13 @@ use crate::{
     verbosity::Verbosity,
 };
 
-#[tokio::main]
-async fn main() -> anyhow::Result<ExitCode> {
+fn main() -> anyhow::Result<ExitCode> {
     let args = Args::parse();
     logger::init(Verbosity::try_from(args.verbosity_level)?)?;
 
     match args.command.unwrap_or_default() {
         Command::ListLanguages => list_languages(),
-        Command::ListLints => list_lints().await,
+        Command::ListLints => list_lints(),
         Command::Check(cmd_args) => check(cmd_args),
         Command::Init => init(),
     }?;
@@ -49,7 +48,7 @@ fn list_languages() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn list_lints() -> anyhow::Result<()> {
+fn list_lints() -> anyhow::Result<()> {
     let ctx = Context::acquire()?;
     let store = PreinitingStore::new(&ctx)?.preinit()?;
     store.vexes().for_each(|vex| println!("{}", vex.path));

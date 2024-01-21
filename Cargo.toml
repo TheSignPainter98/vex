@@ -26,12 +26,6 @@ starlark = "0.10.0"
 starlark_derive = "0.10.0"
 strum = { version = "0.25.0", features = ["derive"] }
 thiserror = "1.0.51"
-tokio = { version = "1.35.1", features = [
-  "sync",
-  "fs",
-  "rt-multi-thread",
-  "macros",
-] }
 toml_edit = { version = "0.21.0", features = ["serde"] }
 tree-sitter = "0.20.10"
 tree-sitter-rust = "0.20.4"
