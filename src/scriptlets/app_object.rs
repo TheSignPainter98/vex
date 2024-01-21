@@ -1,4 +1,4 @@
-use std::{fmt::Display, str::FromStr};
+use std::fmt::Display;
 
 use allocative::Allocative;
 use starlark::{
@@ -6,72 +6,49 @@ use starlark::{
     eval::Evaluator,
     starlark_module,
     values::Value,
-    values::{none::NoneType, NoSerialize, ProvidesStaticType, StarlarkValue, ValueLike},
+    values::{none::NoneType, NoSerialize, ProvidesStaticType, StarlarkValue},
 };
 use starlark_derive::starlark_value;
 
-use crate::{error::Error, scriptlets::Stage};
+use crate::{
+    error::Error,
+    scriptlets::{
+        action::Action,
+        event::EventType,
+        extra_data::{HandlerDataBuilder, InvocationData},
+    },
+};
 
 #[derive(Debug, PartialEq, Eq, ProvidesStaticType, NoSerialize, Allocative)]
-pub struct AppObject {
-    stage_name: &'static str,
-    available_fields: &'static [AttrName],
-}
+pub struct AppObject;
 
 impl AppObject {
     pub const NAME: &'static str = "vex";
 
-    pub fn new<S: Stage>() -> Self {
-        Self {
-            stage_name: S::NAME,
-            available_fields: S::APP_OBJECT_ATTRS,
-        }
-    }
-
-    fn check_available(&self, attr: AttrName) -> anyhow::Result<()> {
-        if !self.available_fields.contains(&attr) {
-            return Err(Error::Unavailable {
-                attr,
-                stage_name: self.stage_name,
-            }
-            .into());
-        }
-        Ok(())
-    }
-
     #[starlark_module]
     fn methods(builder: &mut MethodsBuilder) {
         fn language<'v>(
-            this: Value<'v>,
+            #[starlark(this)] _this: Value<'v>,
             lang: &'v str,
-            _eval: &mut Evaluator<'v, '_>,
+            eval: &mut Evaluator<'v, '_>,
         ) -> anyhow::Result<NoneType> {
-            let this = this
-                .downcast_ref::<AppObject>()
-                .expect("expected app object receiver");
-            this.check_available(AttrName::Language)?;
-            // TODO(kcza): store available methods in the evaluator
-            println!("vex.language({lang})");
+            AppObject::check_attr_available(eval, "vex.language", &[Action::Initing])?;
 
-            // let lang: SupportedLanguage = lang.parse()?;
-            // let store = eval
-            //     .extra
-            //     .expect("extra not set")
-            //     .downcast_ref::<HandlerStore>()
-            //     .expect("extra has wrong type");
-            // store.0.borrow_mut().language = Some(lang);
+            HandlerDataBuilder::get_from(eval.module()).set_language(lang.into());
+
             Ok(NoneType)
         }
 
         fn query<'v>(
             #[starlark(this)] _this: Value<'v>,
             query: &'v str,
-            _eval: &mut Evaluator<'v, '_>,
+            eval: &mut Evaluator<'v, '_>,
         ) -> anyhow::Result<NoneType> {
-            // let query = Query::new(lang.ts_language(), query)?;
-            // TODO(kcza): don't rely on language being set already here!
+            AppObject::check_attr_available(eval, "vex.query", &[Action::Initing])?;
+
             // TODO(kcza): attach the id in errors somewhere?
-            println!("vex.seek({query:?}) called");
+            HandlerDataBuilder::get_from(eval.module()).set_query(query.into());
+
             Ok(NoneType)
         }
 
@@ -79,22 +56,51 @@ impl AppObject {
             #[starlark(this)] _this: Value<'v>,
             event: &str,
             handler: Value<'v>,
-            _eval: &mut Evaluator<'v, '_>,
+            eval: &mut Evaluator<'v, '_>,
         ) -> anyhow::Result<NoneType> {
-            let event = event.parse::<EventType>()?;
-            println!("vex.observe({event:?}, {handler}) called");
+            AppObject::check_attr_available(eval, "vex.observe", &[Action::Initing])?;
+
+            let event = event.parse()?;
+            HandlerDataBuilder::get_from(eval.module()).add_observer(event, handler);
+
             Ok(NoneType)
         }
-        //
-        // fn warn<'v>(
-        //     #[starlark(this)] _this: Value<'v>,
-        //     msg: &'v str,
-        //     eval: &mut Evaluator<'v, 'v>,
-        // ) -> anyhow::Result<NoneType> {
-        //     println!("vex.warn({msg}) called");
-        //     todo!();
-        //     // Ok(NoneType)
-        // }
+
+        fn warn<'v>(
+            #[starlark(this)] _this: Value<'v>,
+            _msg: &'v str,
+            eval: &mut Evaluator<'v, '_>,
+        ) -> anyhow::Result<NoneType> {
+            AppObject::check_attr_available(
+                eval,
+                "vex.warn",
+                &[
+                    Action::Vexing(EventType::Start),
+                    Action::Vexing(EventType::Match),
+                    Action::Vexing(EventType::EoF),
+                    Action::Vexing(EventType::End),
+                ],
+            )?;
+
+            todo!();
+            // Ok(NoneType)
+        }
+    }
+
+    fn check_attr_available(
+        eval: &Evaluator<'_, '_>,
+        attr_path: &'static str,
+        available_actions: &[Action],
+    ) -> anyhow::Result<()> {
+        let curr_action = InvocationData::get_from(eval).action();
+        if !available_actions.contains(&curr_action) {
+            return Err(Error::Unavailable {
+                what: attr_path,
+                action: curr_action,
+            }
+            .into());
+        }
+        Ok(())
     }
 }
 
@@ -110,60 +116,5 @@ impl<'v> StarlarkValue<'v> for AppObject {
 impl Display for AppObject {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         Self::NAME.fmt(f)
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Allocative)]
-pub enum AttrName {
-    Language,
-    Observe,
-    Query,
-    Warn,
-}
-
-impl AttrName {
-    #[allow(unused)]
-    fn name(&self) -> &str {
-        match self {
-            AttrName::Language => "language",
-            AttrName::Observe => "observe",
-            AttrName::Query => "query",
-            AttrName::Warn => "warn",
-        }
-    }
-}
-
-impl Display for AttrName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.name().fmt(f)
-    }
-}
-
-#[derive(Debug)]
-pub enum EventType {
-    Start,
-    Match,
-    EoF,
-    End,
-}
-
-impl EventType {
-    fn name(&self) -> &str {
-        match self {
-            EventType::Start => "start",
-            EventType::Match => "match",
-            EventType::EoF => "eof",
-            EventType::End => "end",
-        }
-    }
-}
-
-impl FromStr for EventType {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            _ => Err(Error::UnknownEvent(s.to_owned()).into()),
-        }
     }
 }
