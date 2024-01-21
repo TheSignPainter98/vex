@@ -24,11 +24,11 @@ impl PreinitingStore {
             path_indices: BTreeMap::new(),
             store: Vec::new(),
         };
-        ret.load_dir(ctx, ctx.vex_dir())?;
+        ret.load_dir(ctx, ctx.vex_dir(), true)?;
         Ok(ret)
     }
 
-    fn load_dir(&mut self, ctx: &Context, path: Utf8PathBuf) -> anyhow::Result<()> {
+    fn load_dir(&mut self, ctx: &Context, path: Utf8PathBuf, toplevel: bool) -> anyhow::Result<()> {
         for entry in fs::read_dir(path)? {
             let entry = entry?;
             let entry_path = Utf8PathBuf::try_from(entry.path())?;
@@ -43,7 +43,7 @@ impl PreinitingStore {
             }
 
             if metadata.is_dir() {
-                return self.load_dir(ctx, entry_path);
+                return self.load_dir(ctx, entry_path, false);
             }
 
             if !metadata.is_file() {
@@ -56,19 +56,19 @@ impl PreinitingStore {
                 }
                 continue;
             }
-            self.load_file(entry_path)?;
+            self.load_file(entry_path, toplevel)?;
         }
 
         Ok(())
     }
 
-    fn load_file(&mut self, path: Utf8PathBuf) -> anyhow::Result<()> {
+    fn load_file(&mut self, path: Utf8PathBuf, toplevel: bool) -> anyhow::Result<()> {
         let stripped_path = path.strip_prefix(&self.dir)?;
         if self.path_indices.get(stripped_path).is_some() {
             return Ok(());
         }
 
-        let scriptlet = PreinitingScriptlet::new(path.clone())?;
+        let scriptlet = PreinitingScriptlet::new(path.clone(), toplevel)?;
         self.store.push(scriptlet);
         self.path_indices
             .insert(stripped_path.into(), self.store.len() - 1);

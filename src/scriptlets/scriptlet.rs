@@ -22,30 +22,27 @@ use crate::{
 
 pub struct PreinitingScriptlet {
     pub path: Utf8PathBuf,
+    toplevel: bool,
     ast: AstModule,
     loads_files: HashSet<Utf8PathBuf>,
 }
 
 impl PreinitingScriptlet {
-    pub fn new(path: impl Into<Utf8PathBuf>) -> anyhow::Result<Self> {
-        let path = path.into();
+    pub fn new(path: Utf8PathBuf, toplevel: bool) -> anyhow::Result<Self> {
         let code = fs::read_to_string(&path)?;
-        Self::new_from_str(path, code)
+        Self::new_from_str(path, code, toplevel)
     }
 
-    fn new_from_str(path: impl Into<Utf8PathBuf>, code: impl Into<String>) -> anyhow::Result<Self> {
-        let path = path.into();
-        let code = code.into();
-
+    fn new_from_str(path: Utf8PathBuf, code: String, toplevel: bool) -> anyhow::Result<Self> {
         let ast = AstModule::parse(path.as_str(), code, &Dialect::Standard)?;
         let loads_files = ast
             .loads()
             .into_iter()
             .map(|load| Utf8PathBuf::from(load.module_id))
             .collect();
-
         Ok(Self {
             path,
+            toplevel,
             ast,
             loads_files,
         })
@@ -57,7 +54,12 @@ impl PreinitingScriptlet {
     }
 
     pub fn preinit(self, store: &ScriptletExports) -> anyhow::Result<InitingScriptlet> {
-        let Self { path, ast, .. } = self;
+        let Self {
+            path,
+            ast,
+            toplevel,
+            loads_files: _,
+        } = self;
 
         let preinited_module = {
             let module = Module::new();
@@ -76,6 +78,7 @@ impl PreinitingScriptlet {
 
         Ok(InitingScriptlet {
             path,
+            toplevel,
             preinited_module,
         })
     }
@@ -97,6 +100,7 @@ impl PreinitingScriptlet {
 
 pub struct InitingScriptlet {
     pub path: Utf8PathBuf,
+    toplevel: bool,
     pub preinited_module: FrozenModule,
 }
 
@@ -104,12 +108,21 @@ impl InitingScriptlet {
     pub fn init(self) -> anyhow::Result<VexingScriptlet> {
         let Self {
             path,
+            toplevel,
             preinited_module,
         } = self;
 
         let Some(init) = preinited_module.get_option("init")? else {
-            return Err(Error::NoInit(path).into()); // TODO(kcza): allow non-toplevel .star files
-                                                    // to have no init (they may be helper libs)
+            if toplevel {
+                return Err(Error::NoInit(path).into());
+            }
+            // Non-toplevel scriptlets may be helper libraries.
+            return Ok(VexingScriptlet {
+                path,
+                preinited_module,
+                inited_module: None,
+                handler_data: None,
+            });
         };
 
         let inited_module = {
@@ -130,8 +143,8 @@ impl InitingScriptlet {
         Ok(VexingScriptlet {
             path,
             preinited_module,
-            inited_module,
-            handler_data,
+            inited_module: Some(inited_module),
+            handler_data: Some(handler_data),
         })
     }
 
@@ -147,13 +160,13 @@ pub struct VexingScriptlet {
     #[allow(unused)]
     preinited_module: FrozenModule, // Keep frozen heap alive
     #[allow(unused)]
-    inited_module: FrozenModule, // Keep frozen heap alive
-    handler_data: HandlerData,
+    inited_module: Option<FrozenModule>, // Keep frozen heap alive
+    handler_data: Option<HandlerData>,
 }
 
 impl VexingScriptlet {
-    pub fn handler_data(&self) -> &HandlerData {
-        &self.handler_data
+    pub fn handler_data(&self) -> Option<&HandlerData> {
+        self.handler_data.as_ref()
     }
 }
 
