@@ -16,16 +16,21 @@ use tree_sitter::Query;
 
 use crate::{
     error::Error,
-    scriptlets::{action::Action, event::EventType},
+    scriptlets::{
+        action::Action,
+        event::EventType,
+        handlers::{OnEndHandler, OnEofHandler, OnMatchHandler, OnStartHandler},
+        ScriptletHandlerData,
+    },
     supported_language::SupportedLanguage,
 };
 
 #[derive(Debug, ProvidesStaticType, NoSerialize, Allocative)]
-pub struct EvaluatorData {
+pub struct InvocationData {
     action: Action,
 }
 
-impl EvaluatorData {
+impl InvocationData {
     pub fn new(action: Action) -> Self {
         Self { action }
     }
@@ -47,13 +52,13 @@ impl EvaluatorData {
     }
 }
 
-starlark::starlark_simple_value!(EvaluatorData);
+starlark::starlark_simple_value!(InvocationData);
 #[starlark_value(type = "EvaluatorData")]
-impl<'v> StarlarkValue<'v> for EvaluatorData {}
+impl<'v> StarlarkValue<'v> for InvocationData {}
 
-impl Display for EvaluatorData {
+impl Display for InvocationData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", EvaluatorData::TYPE)
+        write!(f, "{}", InvocationData::TYPE)
     }
 }
 
@@ -213,7 +218,7 @@ impl FrozenHandlerDataBuilder {
             .expect("FrozenModule extra has wrong type")
     }
 
-    pub fn build(&self, path: &Utf8Path) -> anyhow::Result<HandlerData> {
+    pub fn build(&self, path: &Utf8Path) -> anyhow::Result<ScriptletHandlerData> {
         let Self {
             lang,
             query,
@@ -239,11 +244,27 @@ impl FrozenHandlerDataBuilder {
             };
             Query::new(lang.ts_language(), &query)?
         };
-        let on_start = on_start.iter().map(Dupe::dupe).collect();
-        let on_match = on_match.iter().map(Dupe::dupe).collect();
-        let on_eof = on_eof.iter().map(Dupe::dupe).collect();
-        let on_end = on_end.iter().map(Dupe::dupe).collect();
-        Ok(HandlerData {
+        let on_start = on_start
+            .iter()
+            .map(Dupe::dupe)
+            .map(OnStartHandler::new)
+            .collect();
+        let on_match = on_match
+            .iter()
+            .map(Dupe::dupe)
+            .map(OnMatchHandler::new)
+            .collect();
+        let on_eof = on_eof
+            .iter()
+            .map(Dupe::dupe)
+            .map(OnEofHandler::new)
+            .collect();
+        let on_end = on_end
+            .iter()
+            .map(Dupe::dupe)
+            .map(OnEndHandler::new)
+            .collect();
+        Ok(ScriptletHandlerData {
             lang,
             query,
             on_start,
@@ -274,14 +295,4 @@ impl Display for FrozenHandlerDataBuilder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Self::TYPE.fmt(f)
     }
-}
-
-#[derive(Debug)]
-pub struct HandlerData {
-    pub lang: SupportedLanguage,
-    pub query: Query,
-    pub on_start: Vec<FrozenValue>,
-    pub on_match: Vec<FrozenValue>,
-    pub on_eof: Vec<FrozenValue>,
-    pub on_end: Vec<FrozenValue>,
 }

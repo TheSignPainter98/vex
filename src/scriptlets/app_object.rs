@@ -15,7 +15,7 @@ use crate::{
     scriptlets::{
         action::Action,
         event::EventType,
-        extra_data::{EvaluatorData, HandlerDataBuilder},
+        extra_data::{HandlerDataBuilder, InvocationData},
     },
 };
 
@@ -92,7 +92,7 @@ impl AppObject {
         attr_path: &'static str,
         available_actions: &[Action],
     ) -> anyhow::Result<()> {
-        let curr_action = EvaluatorData::get_from(eval).action();
+        let curr_action = InvocationData::get_from(eval).action();
         if !available_actions.contains(&curr_action) {
             return Err(Error::Unavailable {
                 what: attr_path,

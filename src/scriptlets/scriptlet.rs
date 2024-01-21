@@ -15,8 +15,9 @@ use crate::{
     scriptlets::{
         action::Action,
         app_object::AppObject,
-        extra_data::{EvaluatorData, FrozenHandlerDataBuilder, HandlerData, HandlerDataBuilder},
+        extra_data::{FrozenHandlerDataBuilder, HandlerDataBuilder, InvocationData},
         store::ScriptletExports,
+        ScriptletHandlerData,
     },
 };
 
@@ -64,7 +65,7 @@ impl PreinitingScriptlet {
         let preinited_module = {
             let module = Module::new();
             {
-                let extra = EvaluatorData::new(Action::Preiniting);
+                let extra = InvocationData::new(Action::Preiniting);
                 let print_handler = StdoutPrintHandler { path: &path };
                 let mut eval = Evaluator::new(&module);
                 eval.set_loader(&store);
@@ -129,7 +130,7 @@ impl InitingScriptlet {
             let module = Module::new();
             HandlerDataBuilder::new().insert_into(&module);
             {
-                let extra = EvaluatorData::new(Action::Initing);
+                let extra = InvocationData::new(Action::Initing);
                 let print_handler = StdoutPrintHandler { path: &path };
                 let mut eval = Evaluator::new(&module);
                 eval.set_print_handler(&print_handler);
@@ -161,11 +162,11 @@ pub struct VexingScriptlet {
     preinited_module: FrozenModule, // Keep frozen heap alive
     #[allow(unused)]
     inited_module: Option<FrozenModule>, // Keep frozen heap alive
-    handler_data: Option<HandlerData>,
+    handler_data: Option<ScriptletHandlerData>,
 }
 
 impl VexingScriptlet {
-    pub fn handler_data(&self) -> Option<&HandlerData> {
+    pub fn handler_data(&self) -> Option<&ScriptletHandlerData> {
         self.handler_data.as_ref()
     }
 }
