@@ -5,43 +5,28 @@ use log::{kv::Key, Level, Log, Metadata, Record};
 
 use crate::verbosity::Verbosity;
 
+static NUM_ERRS: Mutex<u32> = Mutex::new(0);
+static NUM_WARNINGS: Mutex<u32> = Mutex::new(0);
+
 pub fn init(level: Verbosity) -> anyhow::Result<()> {
     let level = level.into();
-    log::set_boxed_logger(Box::new(Logger {
-        level,
-        num_errs: Mutex::new(0),
-        num_warnings: Mutex::new(0),
-    }))?;
+    log::set_boxed_logger(Box::new(Logger { level }))?;
     log::set_max_level(level.to_level_filter());
     Ok(())
 }
 
 pub fn report() -> ExitCode {
-    todo!()
+    if *NUM_ERRS.lock().expect("NUM_ERRS in use") > 0 {
+        ExitCode::from(u8::MAX)
+    } else if *NUM_WARNINGS.lock().expect("NUM_WARNINGS in use") > 0 {
+        ExitCode::from(1)
+    } else {
+        ExitCode::SUCCESS
+    }
 }
 
 struct Logger {
     level: Level,
-    num_errs: Mutex<u64>,
-    num_warnings: Mutex<u64>,
-}
-
-impl Logger {
-    #[allow(unused)]
-    fn report(&self) -> ExitCode {
-        if *self.num_errs.lock().expect("failed to lock num_errs") > 0 {
-            ExitCode::from(u8::MAX)
-        } else if *self
-            .num_warnings
-            .lock()
-            .expect("failed to lock num_warnings")
-            > 0
-        {
-            ExitCode::from(1)
-        } else {
-            ExitCode::SUCCESS
-        }
-    }
 }
 
 impl Log for Logger {
@@ -80,13 +65,8 @@ impl Log for Logger {
         };
 
         match level {
-            Level::Error => *self.num_errs.lock().expect("failed to lock num_errs") += 1,
-            Level::Warn => {
-                *self
-                    .num_warnings
-                    .lock()
-                    .expect("failed to lock num_warnings") += 1
-            }
+            Level::Error => *NUM_ERRS.lock().expect("failed to lock num_errs") += 1,
+            Level::Warn => *NUM_WARNINGS.lock().expect("failed to lock NUM_WARNINGS") += 1,
             _ => {}
         }
     }
