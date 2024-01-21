@@ -17,20 +17,19 @@ use std::{env, fs, process::ExitCode};
 
 use camino::Utf8PathBuf;
 use clap::Parser as _;
-use cli::{CheckCmd, IgnoreCmd, IgnoreKind};
-use context::{Context, Manifest};
-use error::Error;
 use log::{info, log_enabled, trace};
-use source_file::SourceFile;
 use strum::IntoEnumIterator;
-use supported_language::SupportedLanguage;
 
 use crate::{
     cli::{Args, Command},
+    cli::{CheckCmd, IgnoreCmd, IgnoreKind},
     context::CompiledFilePattern,
-    scriptlets::Store as ScriptletStore,
+    context::{Context, Manifest},
+    error::Error,
+    scriptlets::PreinitingStore,
+    source_file::SourceFile,
+    supported_language::SupportedLanguage,
     verbosity::Verbosity,
-    vex_store::VexStore,
 };
 
 #[tokio::main]
@@ -56,19 +55,14 @@ fn list_languages() -> anyhow::Result<()> {
 
 async fn list_lints() -> anyhow::Result<()> {
     let ctx = Context::acquire()?;
-    let scriptlet_store = ScriptletStore::new(&ctx)?.preinit()?.init()?;
-    VexStore::from_iter(scriptlet_store.toplevel())?
-        .all()
-        .for_each(|vex| {
-            println!("{}", vex.id);
-        });
+    let store = PreinitingStore::new(&ctx)?.preinit()?;
+    store.vexes().for_each(|vex| println!("{}", vex.path));
     Ok(())
 }
 
 fn check(_cmd_args: CheckCmd) -> anyhow::Result<()> {
     let ctx = Context::acquire()?;
-    let scriptlet_store = ScriptletStore::new(&ctx)?.preinit()?.init()?;
-    let vex_store = VexStore::from_iter(scriptlet_store.toplevel())?;
+    let _store = PreinitingStore::new(&ctx)?.preinit()?.init()?;
 
     let paths = {
         let mut paths = Vec::new();
@@ -103,9 +97,10 @@ fn check(_cmd_args: CheckCmd) -> anyhow::Result<()> {
             continue;
         };
         let src_file = src_file?;
-        let Some(_vexes) = vex_store.get(src_file.lang) else {
-            continue;
-        };
+        println!("linting {}...", src_file.path);
+        // let Some(_vexes) = vex_store.get(src_file.lang) else {
+        //     continue;
+        // };
 
         // let mut vex_irritations = Vec::new();
         // for vex in vexes {

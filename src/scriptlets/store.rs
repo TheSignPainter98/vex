@@ -1,49 +1,34 @@
-use std::{
-    collections::{BTreeMap, HashSet},
-    fs,
-    marker::PhantomData,
-};
+use std::{cell::RefCell, collections::BTreeMap, fs, iter};
 
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
+use dupe::Dupe;
 use log::{info, log_enabled};
 use starlark::{environment::FrozenModule, eval::FileLoader};
 
 use crate::{
     context::Context,
     error::Error,
-    scriptlets::{
-        stage::{Initing, Preiniting, Vexing},
-        Scriptlet, Stage,
-    },
+    scriptlets::{scriptlet::InitingScriptlet, PreinitingScriptlet, VexingScriptlet},
 };
 
-pub struct Store<S: Stage> {
+pub struct PreinitingStore {
     dir: Utf8PathBuf,
     path_indices: BTreeMap<Utf8PathBuf, usize>,
-    toplevel: Vec<usize>,
-
-    /// Scriptlets stored in topographic order.
-    store: Vec<Scriptlet<S>>,
+    store: Vec<PreinitingScriptlet>,
 }
 
-impl Store<Preiniting> {
+impl PreinitingStore {
     pub fn new(ctx: &Context) -> anyhow::Result<Self> {
         let mut ret = Self {
             dir: ctx.vex_dir(),
             path_indices: BTreeMap::new(),
-            toplevel: Vec::new(),
             store: Vec::new(),
         };
-        ret.load_recursively(ctx, ctx.vex_dir(), true)?;
+        ret.load_dir(ctx, ctx.vex_dir())?;
         Ok(ret)
     }
 
-    fn load_recursively(
-        &mut self,
-        ctx: &Context,
-        path: Utf8PathBuf,
-        toplevel: bool,
-    ) -> anyhow::Result<()> {
+    fn load_dir(&mut self, ctx: &Context, path: Utf8PathBuf) -> anyhow::Result<()> {
         for entry in fs::read_dir(path)? {
             let entry = entry?;
             let entry_path = Utf8PathBuf::try_from(entry.path())?;
@@ -58,7 +43,7 @@ impl Store<Preiniting> {
             }
 
             if metadata.is_dir() {
-                return self.load_recursively(ctx, entry_path, false);
+                return self.load_dir(ctx, entry_path);
             }
 
             if !metadata.is_file() {
@@ -71,160 +56,193 @@ impl Store<Preiniting> {
                 }
                 continue;
             }
-            if toplevel {
-                self.load_toplevel(entry_path)?;
-            } else {
-                self.load(entry_path)?;
-            }
+            self.load_file(entry_path)?;
         }
 
         Ok(())
     }
 
-    fn load_toplevel(&mut self, path: Utf8PathBuf) -> anyhow::Result<()> {
-        if let Some(new_idx) = self.load(path.clone())? {
-            self.toplevel.push(new_idx);
+    fn load_file(&mut self, path: Utf8PathBuf) -> anyhow::Result<()> {
+        let stripped_path = path.strip_prefix(&self.dir)?;
+        if self.path_indices.get(stripped_path).is_some() {
+            return Ok(());
         }
+
+        let scriptlet = PreinitingScriptlet::new(path.clone())?;
+        self.store.push(scriptlet);
+        self.path_indices
+            .insert(stripped_path.into(), self.store.len() - 1);
+
         Ok(())
     }
 
-    fn load(&mut self, path: Utf8PathBuf) -> anyhow::Result<Option<usize>> {
-        if self.path_indices.get(&path).is_some() {
-            return Ok(None);
+    pub fn preinit(mut self) -> anyhow::Result<InitingStore> {
+        self.sort();
+        self.linearise_store()?;
+
+        let Self { dir, store, .. } = self;
+
+        let mut initing_store = Vec::with_capacity(store.len());
+        let mut loader = ScriptletExports {
+            exports: BTreeMap::new(),
+        };
+        for scriptlet in store.into_iter() {
+            let preinited_scriptlet = scriptlet.preinit(&loader)?;
+            loader.insert(&dir, &preinited_scriptlet);
+            initing_store.push(preinited_scriptlet);
         }
 
-        let scriptlet = Scriptlet::new(&path)?;
-        let midst_idx_lim = self
+        Ok(InitingStore {
+            store: initing_store,
+        })
+    }
+
+    fn sort(&mut self) {
+        self.store.sort_by(|s, t| s.path.cmp(&t.path));
+        self.path_indices = self
             .store
             .iter()
             .enumerate()
-            .filter_map(|(i, s)| if s.loads(&scriptlet) { Some(i) } else { None })
-            .next();
-        let new_idx = midst_idx_lim.unwrap_or(self.store.len());
-        self.store.insert(new_idx, scriptlet); // Insert in topographic order.
-        if let Some(midst_insertion_idx) = midst_idx_lim {
-            self.toplevel.iter_mut().for_each(|idx| {
-                if *idx >= midst_insertion_idx {
-                    *idx += 1;
+            .map(|(i, s)| (s.path.strip_prefix(&self.dir).unwrap().to_path_buf(), i))
+            .collect();
+    }
+
+    /// Topographically order the store
+    fn linearise_store(&mut self) -> anyhow::Result<()> {
+        type StoreIndex = usize;
+
+        fn dfs<'s>(
+            linearised: &mut Vec<StoreIndex>,
+            stack: &RefCell<Vec<StoreIndex>>,
+            explored: &RefCell<Vec<bool>>,
+            edges_in: &[Vec<StoreIndex>],
+            edges_out: &[Vec<StoreIndex>],
+            node: StoreIndex,
+            store: &[PreinitingScriptlet],
+            dir: &Utf8Path,
+        ) -> anyhow::Result<()> {
+            {
+                let explored = explored.borrow();
+                if !edges_in[node].iter().all(|n| explored[*n]) {
+                    return Ok(());
                 }
-            });
-            self.path_indices.values_mut().for_each(|idx| {
-                if *idx >= midst_insertion_idx {
-                    *idx += 1;
-                }
-            });
+            }
+
+            if stack.borrow().contains(&node) {
+                let cycle = stack
+                    .borrow()
+                    .iter()
+                    .map(|idx| store[*idx].path.clone())
+                    .collect();
+                return Err(Error::ImportCycle(cycle).into());
+            }
+            stack.borrow_mut().push(node);
+
+            explored.borrow_mut()[node] = true;
+            linearised.push(node);
+            for m in &edges_out[node] {
+                dfs(
+                    linearised, stack, explored, edges_in, edges_out, *m, store, dir,
+                )?;
+            }
+
+            Ok(())
         }
-        self.path_indices.insert(path, new_idx);
-        Ok(Some(new_idx))
-    }
 
-    pub fn preinit(self) -> anyhow::Result<Store<Initing>> {
-        self.validate_imports()?;
-
-        let mut store = Vec::with_capacity(self.store.len());
-        for scriptlet in self.store {
-            let loader = ScriptletExports::new(&store);
-            store.push(scriptlet.preinit(loader)?);
-        }
-
-        Ok(Store {
-            dir: self.dir,
-            path_indices: self.path_indices,
-            toplevel: self.toplevel,
-            store,
-        })
-    }
-
-    fn validate_imports(&self) -> anyhow::Result<()> {
-        let known_files: HashSet<_> = self.store.iter().map(|s| &s.path).collect();
-        self.store
-            .iter()
-            .flat_map(|s| s.loads_files.iter())
-            .map(|load| {
-                known_files
-                    .get(load)
-                    .ok_or_else(|| {
-                        anyhow::Error::from(Error::UnknownModule {
-                            vexes_dir: self.dir.clone(),
-                            requested: load.to_path_buf(),
-                        })
-                    })
-                    .map(|_| ())
-            })
-            .collect()
-    }
-}
-
-pub struct ScriptletExports<'s> {
-    exports: BTreeMap<&'s str, &'s FrozenModule>,
-}
-
-impl<'s> ScriptletExports<'s> {
-    fn new(store: &'s [Scriptlet<Initing>]) -> Self {
-        Self {
-            exports: store
-                .iter()
-                .map(|s| (s.path.as_str(), s.module.as_frozen().unwrap()))
-                .collect(),
-        }
-    }
-}
-
-impl<'s> FileLoader for ScriptletExports<'s> {
-    fn load(&self, module_path: &str) -> anyhow::Result<starlark::environment::FrozenModule> {
-        let Some(module) = self.exports.get(module_path) else {
-            todo!("compute cycles");
-        };
-        #[allow(suspicious_double_ref_op)]
-        Ok(module.clone().clone())
-    }
-}
-
-impl Store<Initing> {
-    pub fn init(self) -> anyhow::Result<Store<Vexing>> {
-        let store = self
+        let n = self.store.len();
+        let stack = RefCell::new(vec![]);
+        let edges_in: Vec<Vec<StoreIndex>> = self
             .store
-            .into_iter()
-            .map(Scriptlet::init)
-            .collect::<anyhow::Result<Vec<_>>>()?;
-        Ok(Store {
-            dir: self.dir,
-            path_indices: self.path_indices,
-            toplevel: self.toplevel,
-            store,
-        })
-    }
-}
+            .iter()
+            .map(|s| {
+                let mut g = s
+                    .loads()
+                    .iter()
+                    .map(|m| *self.path_indices.get(m).unwrap())
+                    .collect::<Vec<_>>();
+                g.sort();
+                g
+            })
+            .collect();
+        let edges_out: Vec<Vec<StoreIndex>> = {
+            let mut edges_out = iter::repeat_with(|| vec![]).take(n).collect::<Vec<_>>();
+            edges_in
+                .iter()
+                .enumerate()
+                .rev()
+                .for_each(|(n, g)| g.iter().for_each(|m| edges_out[*m].push(n)));
+            edges_out
+        };
+        let explored = RefCell::new(vec![false; n]);
+        let mut linearised = Vec::with_capacity(n);
+        for node in 0..n {
+            if explored.borrow_mut()[node] {
+                continue;
+            }
 
-impl Store<Vexing> {
-    pub fn toplevel(&self) -> impl Iterator<Item = ScriptletRef<'_, Vexing>> {
-        self.toplevel.iter().map(|index| ScriptletRef {
-            index: *index,
-            _store: PhantomData,
-        })
-    }
-}
-
-pub struct ScriptletRef<'s, S: Stage> {
-    #[allow(unused)]
-    index: usize,
-    _store: PhantomData<&'s Store<S>>,
-}
-
-impl<'s, S: Stage> ScriptletRef<'s, S> {
-    #[allow(unused)]
-    fn new(index: usize) -> Self {
-        Self {
-            index,
-            _store: PhantomData,
+            dfs(
+                &mut linearised,
+                &stack,
+                &explored,
+                &edges_in,
+                &edges_out,
+                node,
+                &self.store,
+                &self.dir,
+            )?;
         }
+        linearised.into_iter().enumerate().for_each(|(i, j)| {
+            if i < j {
+                self.store.swap(i, j)
+            }
+        });
+
+        Ok(())
     }
 }
 
-// impl<'s, S: Stage> Deref for ScriptletRef<'s, S> {
-//     type Target = Scriptlet<S>;
-//
-//     fn deref(&self) -> &Self::Target {
-//
-//     }
-// }
+#[derive(Debug)]
+pub struct ScriptletExports {
+    exports: BTreeMap<String, FrozenModule>,
+}
+
+impl ScriptletExports {
+    fn insert(&mut self, dir: &Utf8Path, scriptlet: &InitingScriptlet) {
+        self.exports.insert(
+            scriptlet.path.strip_prefix(dir).unwrap().to_string(),
+            scriptlet.preinited_module.dupe(),
+        );
+    }
+}
+
+impl FileLoader for &ScriptletExports {
+    fn load(&self, module_path: &str) -> anyhow::Result<starlark::environment::FrozenModule> {
+        self.exports
+            .get(module_path)
+            .map(Dupe::dupe)
+            .ok_or_else(|| Error::UnknownModule(module_path.into()).into())
+    }
+}
+
+pub struct InitingStore {
+    store: Vec<InitingScriptlet>,
+}
+
+impl InitingStore {
+    pub fn init(self) -> anyhow::Result<VexingStore> {
+        let Self { store } = self;
+        let store = store
+            .into_iter()
+            .map(InitingScriptlet::init)
+            .collect::<anyhow::Result<_>>()?;
+        Ok(VexingStore { store })
+    }
+
+    pub fn vexes(&self) -> impl Iterator<Item = &InitingScriptlet> {
+        self.store.iter().filter(|s| s.is_vex())
+    }
+}
+
+pub struct VexingStore {
+    store: Vec<VexingScriptlet>,
+}

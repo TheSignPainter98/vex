@@ -1,4 +1,4 @@
-use std::{fmt::Display, str::FromStr};
+use std::fmt::Display;
 
 use allocative::Allocative;
 use starlark::{
@@ -12,7 +12,11 @@ use starlark_derive::starlark_value;
 
 use crate::{
     error::Error,
-    scriptlets::extra_data::{EvaluatorData, HandlerDataBuilder},
+    scriptlets::{
+        action::Action,
+        event::EventType,
+        extra_data::{EvaluatorData, HandlerDataBuilder},
+    },
 };
 
 #[derive(Debug, PartialEq, Eq, ProvidesStaticType, NoSerialize, Allocative)]
@@ -28,7 +32,7 @@ impl AppObject {
             lang: &'v str,
             eval: &mut Evaluator<'v, '_>,
         ) -> anyhow::Result<NoneType> {
-            AppObject::check_available(eval, AttrName::Language)?;
+            AppObject::check_attr_available(eval, "vex.language", &[Action::Initing])?;
 
             HandlerDataBuilder::get_from(eval.module()).set_language(lang.into());
 
@@ -40,7 +44,7 @@ impl AppObject {
             query: &'v str,
             eval: &mut Evaluator<'v, '_>,
         ) -> anyhow::Result<NoneType> {
-            AppObject::check_available(eval, AttrName::Query)?;
+            AppObject::check_attr_available(eval, "vex.query", &[Action::Initing])?;
 
             // TODO(kcza): attach the id in errors somewhere?
             HandlerDataBuilder::get_from(eval.module()).set_query(query.into());
@@ -54,7 +58,7 @@ impl AppObject {
             handler: Value<'v>,
             eval: &mut Evaluator<'v, '_>,
         ) -> anyhow::Result<NoneType> {
-            AppObject::check_available(eval, AttrName::Observe)?;
+            AppObject::check_attr_available(eval, "vex.observe", &[Action::Initing])?;
 
             let event = event.parse()?;
             HandlerDataBuilder::get_from(eval.module()).add_observer(event, handler);
@@ -67,15 +71,36 @@ impl AppObject {
             _msg: &'v str,
             eval: &mut Evaluator<'v, '_>,
         ) -> anyhow::Result<NoneType> {
-            AppObject::check_available(eval, AttrName::Warn)?;
+            AppObject::check_attr_available(
+                eval,
+                "vex.warn",
+                &[
+                    Action::Vexing(EventType::Start),
+                    Action::Vexing(EventType::Match),
+                    Action::Vexing(EventType::EoF),
+                    Action::Vexing(EventType::End),
+                ],
+            )?;
 
             todo!();
             // Ok(NoneType)
         }
     }
 
-    fn check_available(eval: &Evaluator<'_, '_>, attr: AttrName) -> anyhow::Result<()> {
-        EvaluatorData::get_from(eval).check_available(Self::TYPE, attr)
+    fn check_attr_available(
+        eval: &Evaluator<'_, '_>,
+        attr_path: &'static str,
+        available_actions: &[Action],
+    ) -> anyhow::Result<()> {
+        let curr_action = EvaluatorData::get_from(eval).action();
+        if !available_actions.contains(&curr_action) {
+            return Err(Error::Unavailable {
+                what: attr_path,
+                action: curr_action,
+            }
+            .into());
+        }
+        Ok(())
     }
 }
 
@@ -117,40 +142,5 @@ impl AttrName {
 impl Display for AttrName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.name().fmt(f)
-    }
-}
-
-// TODO(kcza): move EventType to its own event module
-#[derive(Debug)]
-pub enum EventType {
-    Start,
-    Match,
-    EoF,
-    End,
-}
-
-impl EventType {
-    #[allow(unused)]
-    fn name(&self) -> &str {
-        match self {
-            EventType::Start => "start",
-            EventType::Match => "match",
-            EventType::EoF => "eof",
-            EventType::End => "end",
-        }
-    }
-}
-
-impl FromStr for EventType {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "start" => Ok(EventType::Start),
-            "match" => Ok(EventType::Match),
-            "eof" => Ok(EventType::EoF),
-            "end" => Ok(EventType::End),
-            _ => Err(Error::UnknownEvent(s.to_owned()).into()),
-        }
     }
 }

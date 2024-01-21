@@ -1,4 +1,4 @@
-use std::{collections::HashSet, fs, marker::PhantomData};
+use std::{collections::HashSet, fs};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use starlark::{
@@ -13,22 +13,20 @@ use starlark::{
 use crate::{
     error::Error,
     scriptlets::{
+        action::Action,
         app_object::AppObject,
-        extra_data::{EvaluatorData, HandlerData, HandlerDataBuilder},
-        stage::{Initing, Preiniting, Vexing},
+        extra_data::{EvaluatorData, FrozenHandlerDataBuilder, HandlerData, HandlerDataBuilder},
         store::ScriptletExports,
-        Stage,
     },
 };
 
-pub struct Scriptlet<S: Stage> {
+pub struct PreinitingScriptlet {
     pub path: Utf8PathBuf,
-    pub module: ScriptletModule,
-    pub loads_files: HashSet<Utf8PathBuf>,
-    state: PhantomData<S>,
+    ast: AstModule,
+    loads_files: HashSet<Utf8PathBuf>,
 }
 
-impl Scriptlet<Preiniting> {
+impl PreinitingScriptlet {
     pub fn new(path: impl Into<Utf8PathBuf>) -> anyhow::Result<Self> {
         let path = path.into();
         let code = fs::read_to_string(&path)?;
@@ -45,92 +43,44 @@ impl Scriptlet<Preiniting> {
             .into_iter()
             .map(|load| Utf8PathBuf::from(load.module_id))
             .collect();
+
         Ok(Self {
             path,
-            module: ast.into(),
+            ast,
             loads_files,
-            state: PhantomData,
         })
     }
 
     #[allow(unused)]
     pub fn lint(&self) -> Vec<Lint> {
-        self.module
-            .as_ast()
-            .unwrap()
-            .lint(Some(&self.global_names()))
+        self.ast.lint(Some(&self.global_names()))
     }
 
-    pub fn preinit(self, store: ScriptletExports) -> anyhow::Result<Scriptlet<Initing>> {
-        let module = {
+    pub fn preinit(self, store: &ScriptletExports) -> anyhow::Result<InitingScriptlet> {
+        let Self { path, ast, .. } = self;
+
+        let preinited_module = {
             let module = Module::new();
             {
-                let print_handler = StdoutPrintHandler { path: &self.path };
+                let extra = EvaluatorData::new(Action::Preiniting);
+                let print_handler = StdoutPrintHandler { path: &path };
                 let mut eval = Evaluator::new(&module);
                 eval.set_loader(&store);
                 eval.set_print_handler(&print_handler);
-                let globals = self.globals();
-                let ast = self.module.ast().expect("module not ast");
+                extra.insert_into(&mut eval);
+                let globals = Self::globals();
                 eval.eval_module(ast, &globals)?;
             }
             module.freeze()?
         };
 
-        Ok(Scriptlet {
-            path: self.path,
-            module: module.into(),
-            loads_files: self.loads_files,
-            state: PhantomData,
+        Ok(InitingScriptlet {
+            path,
+            preinited_module,
         })
     }
 
-    pub fn loads(&self, other: &Scriptlet<Preiniting>) -> bool {
-        self.loads_files.contains(&other.path)
-    }
-}
-
-impl Scriptlet<Initing> {
-    pub fn init(self) -> anyhow::Result<Scriptlet<Vexing>> {
-        let Self {
-            path,
-            module,
-            loads_files,
-            state,
-        } = self;
-
-        let Some(init) = module
-            .as_frozen()
-            .expect("inited module not frozen")
-            .get_option("init")?
-        else {
-            return Err(Error::NoInit(path).into());
-        };
-
-        let init_module = Module::new();
-        HandlerDataBuilder::new().insert_into(&init_module);
-        {
-            let extra = EvaluatorData::new::<Initing>();
-            let print_handler = StdoutPrintHandler { path: &path };
-            let mut eval = Evaluator::new(&init_module);
-            eval.set_print_handler(&print_handler);
-            extra.insert_into(&mut eval);
-            eval.eval_function(init.value(), &[], &[])?;
-        }
-        let frozen_module = init_module.freeze()?;
-        let handler_data = HandlerData::get_from(&frozen_module);
-        println!("got handler data: {handler_data:?}");
-
-        Ok(Scriptlet {
-            path,
-            module,
-            loads_files,
-            state: PhantomData,
-        })
-    }
-}
-
-impl<S: Stage> Scriptlet<S> {
-    fn globals(&self) -> Globals {
+    fn globals() -> Globals {
         let mut builder = GlobalsBuilder::extended_by(&[LibraryExtension::Print]);
         builder.set(AppObject::NAME, builder.alloc(AppObject));
         builder.build()
@@ -139,52 +89,71 @@ impl<S: Stage> Scriptlet<S> {
     fn global_names(&self) -> HashSet<String> {
         HashSet::from_iter(["vex".to_string()].into_iter())
     }
-}
 
-pub enum ScriptletModule {
-    Ast(AstModule),
-    Frozen(FrozenModule),
-}
-
-impl ScriptletModule {
-    pub fn ast(self) -> Option<AstModule> {
-        match self {
-            Self::Ast(ast) => Some(ast),
-            _ => None,
-        }
-    }
-
-    pub fn as_ast(&self) -> Option<&AstModule> {
-        match self {
-            Self::Ast(ast) => Some(ast),
-            _ => None,
-        }
-    }
-
-    pub fn frozen(self) -> Option<FrozenModule> {
-        match self {
-            Self::Frozen(frozen) => Some(frozen),
-            _ => None,
-        }
-    }
-
-    pub fn as_frozen(&self) -> Option<&FrozenModule> {
-        match self {
-            Self::Frozen(frozen) => Some(frozen),
-            _ => None,
-        }
+    pub fn loads(&self) -> &HashSet<Utf8PathBuf> {
+        &self.loads_files
     }
 }
 
-impl From<AstModule> for ScriptletModule {
-    fn from(ast: AstModule) -> Self {
-        Self::Ast(ast)
+pub struct InitingScriptlet {
+    pub path: Utf8PathBuf,
+    pub preinited_module: FrozenModule,
+}
+
+impl InitingScriptlet {
+    pub fn init(self) -> anyhow::Result<VexingScriptlet> {
+        let Self {
+            path,
+            preinited_module,
+        } = self;
+
+        let Some(init) = preinited_module.get_option("init")? else {
+            return Err(Error::NoInit(path).into()); // TODO(kcza): allow non-toplevel .star files
+                                                    // to have no init (they may be helper libs)
+        };
+
+        let inited_module = {
+            let module = Module::new();
+            HandlerDataBuilder::new().insert_into(&module);
+            {
+                let extra = EvaluatorData::new(Action::Initing);
+                let print_handler = StdoutPrintHandler { path: &path };
+                let mut eval = Evaluator::new(&module);
+                eval.set_print_handler(&print_handler);
+                extra.insert_into(&mut eval);
+                eval.eval_function(init.value(), &[], &[])?;
+            }
+            module.freeze()?
+        };
+        let handler_data = FrozenHandlerDataBuilder::get_from(&inited_module).build(&path)?;
+
+        Ok(VexingScriptlet {
+            path,
+            preinited_module,
+            inited_module,
+            handler_data,
+        })
+    }
+
+    pub fn is_vex(&self) -> bool {
+        self.preinited_module
+            .get_option("init")
+            .is_ok_and(|o| o.is_some())
     }
 }
 
-impl From<FrozenModule> for ScriptletModule {
-    fn from(frozen: FrozenModule) -> Self {
-        Self::Frozen(frozen)
+pub struct VexingScriptlet {
+    pub path: Utf8PathBuf,
+    #[allow(unused)]
+    preinited_module: FrozenModule, // Keep frozen heap alive
+    #[allow(unused)]
+    inited_module: FrozenModule, // Keep frozen heap alive
+    handler_data: HandlerData,
+}
+
+impl VexingScriptlet {
+    pub fn handler_data(&self) -> &HandlerData {
+        &self.handler_data
     }
 }
 
