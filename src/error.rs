@@ -30,13 +30,6 @@ pub enum Error {
     #[error("{0} declares no query")]
     NoQuery(Utf8PathBuf),
 
-    #[error("invalid toml type: expected {expected} but got {actual}")]
-    TomlTypeError {
-        name: String,
-        expected: &'static str,
-        actual: &'static str,
-    },
-
     #[error("{what} is unavailable during {}", .action.name())]
     Unavailable { what: &'static str, action: Action },
 
