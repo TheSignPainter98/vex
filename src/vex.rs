@@ -6,6 +6,7 @@ use std::marker::PhantomData;
 
 pub use self::id::Id;
 
+#[allow(unused)]
 pub struct Vex<'s> {
     pub id: Id,
     _marker: PhantomData<&'s ()>,

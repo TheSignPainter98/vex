@@ -166,6 +166,7 @@ pub struct VexingScriptlet {
 }
 
 impl VexingScriptlet {
+    #[allow(unused)]
     pub fn handler_data(&self) -> Option<&ScriptletHandlerData> {
         self.handler_data.as_ref()
     }

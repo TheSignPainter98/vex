@@ -244,5 +244,6 @@ impl InitingStore {
 }
 
 pub struct VexingStore {
+    #[allow(unused)]
     store: Vec<VexingScriptlet>,
 }

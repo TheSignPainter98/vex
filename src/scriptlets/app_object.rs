@@ -118,29 +118,3 @@ impl Display for AppObject {
         Self::NAME.fmt(f)
     }
 }
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Allocative)]
-pub enum AttrName {
-    Language,
-    Observe,
-    Query,
-    Warn,
-}
-
-impl AttrName {
-    #[allow(unused)]
-    fn name(&self) -> &str {
-        match self {
-            AttrName::Language => "language",
-            AttrName::Observe => "observe",
-            AttrName::Query => "query",
-            AttrName::Warn => "warn",
-        }
-    }
-}
-
-impl Display for AttrName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.name().fmt(f)
-    }
-}
