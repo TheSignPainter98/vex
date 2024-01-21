@@ -16,9 +16,9 @@ pub fn init(level: Verbosity) -> anyhow::Result<()> {
 }
 
 pub fn report() -> ExitCode {
-    if *NUM_ERRS.lock().expect("NUM_ERRS in use") > 0 {
+    if *NUM_ERRS.lock().expect("failed to lock NUM_ERRS") > 0 {
         ExitCode::from(u8::MAX)
-    } else if *NUM_WARNINGS.lock().expect("NUM_WARNINGS in use") > 0 {
+    } else if *NUM_WARNINGS.lock().expect("failed to lock NUM_WARNINGS") > 0 {
         ExitCode::from(1)
     } else {
         ExitCode::SUCCESS
@@ -65,7 +65,7 @@ impl Log for Logger {
         };
 
         match level {
-            Level::Error => *NUM_ERRS.lock().expect("failed to lock num_errs") += 1,
+            Level::Error => *NUM_ERRS.lock().expect("failed to lock NUM_ERRS") += 1,
             Level::Warn => *NUM_WARNINGS.lock().expect("failed to lock NUM_WARNINGS") += 1,
             _ => {}
         }
