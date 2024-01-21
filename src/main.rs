@@ -19,6 +19,7 @@ use camino::Utf8PathBuf;
 use clap::Parser as _;
 use log::{info, log_enabled, trace};
 use strum::IntoEnumIterator;
+use tree_sitter::QueryCursor;
 
 use crate::{
     cli::{Args, CheckCmd, Command},
@@ -57,8 +58,9 @@ fn list_lints() -> anyhow::Result<()> {
 
 fn check(_cmd_args: CheckCmd) -> anyhow::Result<()> {
     let ctx = Context::acquire()?;
-    let _store = PreinitingStore::new(&ctx)?.preinit()?.init()?;
+    let store = PreinitingStore::new(&ctx)?.preinit()?.init()?;
 
+    let language_handlers = store.language_handlers();
     let paths = {
         let mut paths = Vec::new();
         let ignores = ctx
@@ -85,14 +87,28 @@ fn check(_cmd_args: CheckCmd) -> anyhow::Result<()> {
         )?;
         paths
     };
-
+    // TODO(kcza): run on_start
     // let mut irritations = Vec::new();
     for path in paths {
         let Some(src_file) = SourceFile::load_if_supported(path) else {
             continue;
         };
         let src_file = src_file?;
+
         println!("linting {}...", src_file.path);
+        for handler in &language_handlers[src_file.lang] {
+            println!("running a handler set...");
+            for qmatch in QueryCursor::new().matches(
+                handler.query.as_ref(),
+                src_file.tree.root_node(),
+                src_file.content[..].as_bytes(),
+            ) {
+                // TODO(kcza): run on match
+                println!("found {qmatch:?}");
+            }
+            // TODO(kcza): run on eof
+        }
+
         // let Some(_vexes) = vex_store.get(src_file.lang) else {
         //     continue;
         // };
@@ -103,6 +119,7 @@ fn check(_cmd_args: CheckCmd) -> anyhow::Result<()> {
         // }
         // irritations.push((vex.id, vex_irritations));
     }
+    // TODO(kcza): run end
 
     // let max_problem_channel_size = match cmd_args.max_problems {
     //     MaxProblems::Limited(lim) => lim as usize,

@@ -1,4 +1,4 @@
-use std::{cell::RefCell, fmt::Display};
+use std::{cell::RefCell, fmt::Display, sync::Arc};
 
 use allocative::Allocative;
 use camino::Utf8Path;
@@ -242,28 +242,36 @@ impl FrozenHandlerDataBuilder {
             let Some(query) = query else {
                 return Err(Error::NoQuery(path.to_owned()).into());
             };
-            Query::new(lang.ts_language(), &query)?
+            Arc::new(Query::new(lang.ts_language(), &query)?)
         };
-        let on_start = on_start
-            .iter()
-            .map(Dupe::dupe)
-            .map(OnStartHandler::new)
-            .collect();
-        let on_match = on_match
-            .iter()
-            .map(Dupe::dupe)
-            .map(OnMatchHandler::new)
-            .collect();
-        let on_eof = on_eof
-            .iter()
-            .map(Dupe::dupe)
-            .map(OnEofHandler::new)
-            .collect();
-        let on_end = on_end
-            .iter()
-            .map(Dupe::dupe)
-            .map(OnEndHandler::new)
-            .collect();
+        let on_start = Arc::new(
+            on_start
+                .iter()
+                .map(Dupe::dupe)
+                .map(OnStartHandler::new)
+                .collect(),
+        );
+        let on_match = Arc::new(
+            on_match
+                .iter()
+                .map(Dupe::dupe)
+                .map(OnMatchHandler::new)
+                .collect(),
+        );
+        let on_eof = Arc::new(
+            on_eof
+                .iter()
+                .map(Dupe::dupe)
+                .map(OnEofHandler::new)
+                .collect(),
+        );
+        let on_end = Arc::new(
+            on_end
+                .iter()
+                .map(Dupe::dupe)
+                .map(OnEndHandler::new)
+                .collect(),
+        );
         Ok(ScriptletHandlerData {
             lang,
             query,

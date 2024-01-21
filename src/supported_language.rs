@@ -2,14 +2,14 @@ use std::{fmt::Display, str::FromStr};
 
 use allocative::Allocative;
 use clap::Subcommand;
+use dupe::Dupe;
 use enum_map::Enum;
 use strum::EnumIter;
 use tree_sitter::Language;
 
 use crate::error::Error;
 
-#[derive(Copy, Clone, Debug, EnumIter, Subcommand, Enum, Allocative, PartialEq, Eq)]
-// #[repr(u32)]
+#[derive(Copy, Clone, Debug, Dupe, EnumIter, Subcommand, Enum, Allocative, PartialEq, Eq)]
 pub enum SupportedLanguage {
     Rust,
 }
