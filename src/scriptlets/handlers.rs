@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use derive_new::new;
 use dupe::Dupe;
 use starlark::values::FrozenValue;
@@ -5,14 +7,14 @@ use tree_sitter::Query;
 
 use crate::supported_language::SupportedLanguage;
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Dupe)]
 pub struct ScriptletHandlerData {
     pub lang: SupportedLanguage,
-    pub query: Query,
-    pub on_start: Vec<OnStartHandler>,
-    pub on_match: Vec<OnMatchHandler>,
-    pub on_eof: Vec<OnEofHandler>,
-    pub on_end: Vec<OnEndHandler>,
+    pub query: Arc<Query>,
+    pub on_start: Arc<Vec<OnStartHandler>>,
+    pub on_match: Arc<Vec<OnMatchHandler>>,
+    pub on_eof: Arc<Vec<OnEofHandler>>,
+    pub on_end: Arc<Vec<OnEndHandler>>,
 }
 
 pub trait Handler {

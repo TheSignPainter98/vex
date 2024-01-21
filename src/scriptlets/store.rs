@@ -2,13 +2,18 @@ use std::{cell::RefCell, collections::BTreeMap, fs, iter};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use dupe::Dupe;
+use enum_map::EnumMap;
 use log::{info, log_enabled};
 use starlark::{environment::FrozenModule, eval::FileLoader};
+use strum::IntoEnumIterator;
 
 use crate::{
     context::Context,
     error::Error,
-    scriptlets::{scriptlet::InitingScriptlet, PreinitingScriptlet, VexingScriptlet},
+    scriptlets::{
+        scriptlet::InitingScriptlet, PreinitingScriptlet, ScriptletHandlerData, VexingScriptlet,
+    },
+    supported_language::SupportedLanguage,
 };
 type StoreIndex = usize;
 
@@ -305,4 +310,16 @@ impl InitingStore {
 pub struct VexingStore {
     #[allow(unused)]
     store: Vec<VexingScriptlet>,
+}
+
+impl VexingStore {
+    pub fn language_handlers(&self) -> EnumMap<SupportedLanguage, Vec<ScriptletHandlerData>> {
+        let mut result: EnumMap<_, Vec<ScriptletHandlerData>> =
+            EnumMap::from_iter(SupportedLanguage::iter().map(|s| (s, vec![])));
+        self.store
+            .iter()
+            .flat_map(VexingScriptlet::handler_data)
+            .for_each(|h| result[h.lang].push(h.dupe()));
+        result
+    }
 }
