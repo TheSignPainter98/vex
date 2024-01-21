@@ -9,8 +9,7 @@ pub enum Error {
     #[error("already inited in a parent directory {found_root}")]
     AlreadyInited { found_root: Utf8PathBuf },
 
-    #[allow(unused)]
-    #[error("import cycle detected: {}", .0.iter().join_with(", "))]
+    #[error("import cycle detected: {}", .0.iter().join_with(" -> "))]
     ImportCycle(Vec<Utf8PathBuf>),
 
     #[error("cannot find manifest, try running `vex init` in the project’s root")]

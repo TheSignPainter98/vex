@@ -10,10 +10,11 @@ use crate::{
     error::Error,
     scriptlets::{scriptlet::InitingScriptlet, PreinitingScriptlet, VexingScriptlet},
 };
+type StoreIndex = usize;
 
 pub struct PreinitingStore {
     dir: Utf8PathBuf,
-    path_indices: BTreeMap<Utf8PathBuf, usize>,
+    path_indices: BTreeMap<Utf8PathBuf, StoreIndex>,
     store: Vec<PreinitingScriptlet>,
 }
 
@@ -109,70 +110,30 @@ impl PreinitingStore {
 
     /// Topographically order the store
     fn linearise_store(&mut self) -> anyhow::Result<()> {
-        type StoreIndex = usize;
-
-        fn dfs<'s>(
+        fn directed_dfs<'s>(
             linearised: &mut Vec<StoreIndex>,
-            stack: &RefCell<Vec<StoreIndex>>,
             explored: &RefCell<Vec<bool>>,
-            edges_in: &[Vec<StoreIndex>],
-            edges_out: &[Vec<StoreIndex>],
+            loads: &[Vec<StoreIndex>],
+            loaded_by: &[Vec<StoreIndex>],
             node: StoreIndex,
-            store: &[PreinitingScriptlet],
-            dir: &Utf8Path,
-        ) -> anyhow::Result<()> {
+        ) {
             {
                 let explored = explored.borrow();
-                if !edges_in[node].iter().all(|n| explored[*n]) {
-                    return Ok(());
+                if !loads[node].iter().all(|n| explored[*n]) {
+                    return;
                 }
             }
 
-            if stack.borrow().contains(&node) {
-                let cycle = stack
-                    .borrow()
-                    .iter()
-                    .map(|idx| store[*idx].path.clone())
-                    .collect();
-                return Err(Error::ImportCycle(cycle).into());
-            }
-            stack.borrow_mut().push(node);
-
             explored.borrow_mut()[node] = true;
             linearised.push(node);
-            for m in &edges_out[node] {
-                dfs(
-                    linearised, stack, explored, edges_in, edges_out, *m, store, dir,
-                )?;
+            for m in &loaded_by[node] {
+                directed_dfs(linearised, explored, loads, loaded_by, *m);
             }
-
-            Ok(())
         }
 
+        let load_edges = self.get_load_edges();
+        let loaded_by_edges = self.get_loaded_by_edges(&load_edges);
         let n = self.store.len();
-        let stack = RefCell::new(vec![]);
-        let edges_in: Vec<Vec<StoreIndex>> = self
-            .store
-            .iter()
-            .map(|s| {
-                let mut g = s
-                    .loads()
-                    .iter()
-                    .map(|m| *self.path_indices.get(m).unwrap())
-                    .collect::<Vec<_>>();
-                g.sort();
-                g
-            })
-            .collect();
-        let edges_out: Vec<Vec<StoreIndex>> = {
-            let mut edges_out = iter::repeat_with(|| vec![]).take(n).collect::<Vec<_>>();
-            edges_in
-                .iter()
-                .enumerate()
-                .rev()
-                .for_each(|(n, g)| g.iter().for_each(|m| edges_out[*m].push(n)));
-            edges_out
-        };
         let explored = RefCell::new(vec![false; n]);
         let mut linearised = Vec::with_capacity(n);
         for node in 0..n {
@@ -180,16 +141,18 @@ impl PreinitingStore {
                 continue;
             }
 
-            dfs(
+            directed_dfs(
                 &mut linearised,
-                &stack,
                 &explored,
-                &edges_in,
-                &edges_out,
+                &load_edges,
+                &loaded_by_edges,
                 node,
-                &self.store,
-                &self.dir,
-            )?;
+            );
+        }
+        if linearised.len() != self.store.len() {
+            // Presence of an import cycle will prevent some nodes entering the
+            // linearisation.
+            return Err(Error::ImportCycle(self.find_cycle()).into());
         }
         linearised.into_iter().enumerate().for_each(|(i, j)| {
             if i < j {
@@ -198,6 +161,102 @@ impl PreinitingStore {
         });
 
         Ok(())
+    }
+
+    fn find_cycle(&self) -> Vec<Utf8PathBuf> {
+        fn undirected_dfs(
+            stack: &RefCell<Vec<StoreIndex>>,
+            explored: &RefCell<Vec<bool>>,
+            edges: &[Vec<StoreIndex>],
+            node: StoreIndex,
+        ) -> Option<Vec<StoreIndex>> {
+            if stack.borrow().contains(&node) {
+                return Some(
+                    stack
+                        .borrow()
+                        .iter()
+                        .map(|n| *n)
+                        .skip_while(|n| *n != node)
+                        .chain([node].into_iter())
+                        .collect(),
+                );
+            }
+
+            if explored.borrow()[node] {
+                return None;
+            }
+            explored.borrow_mut()[node] = true;
+
+            stack.borrow_mut().push(node);
+            for next in &edges[node] {
+                let r = undirected_dfs(stack, explored, edges, *next);
+                if r.is_some() {
+                    return r;
+                }
+            }
+            stack.borrow_mut().pop();
+
+            None
+        }
+
+        let stack = RefCell::new(vec![]);
+        let edges = {
+            let mut edges = self.get_load_edges();
+            self.get_loaded_by_edges(&edges)
+                .into_iter()
+                .enumerate()
+                .for_each(|(n, g)| g.iter().for_each(|m| edges[*m].push(n)));
+            edges
+        };
+        let n = self.store.len();
+        let explored = RefCell::new(vec![false; n]);
+        let mut cycle = None;
+        for node in 0..n {
+            let c = undirected_dfs(&stack, &explored, &edges, node);
+            if c.is_some() {
+                cycle = c;
+                break;
+            }
+        }
+        cycle
+            .unwrap()
+            .into_iter()
+            .map(|idx| {
+                self.store[idx]
+                    .path
+                    .to_path_buf()
+                    .strip_prefix(&self.dir)
+                    .unwrap()
+                    .to_path_buf()
+            })
+            .collect()
+    }
+
+    fn get_load_edges(&self) -> Vec<Vec<StoreIndex>> {
+        self.store
+            .iter()
+            .map(|s| {
+                let mut adjacent = s
+                    .loads()
+                    .iter()
+                    .map(|m| *self.path_indices.get(m).unwrap())
+                    .collect::<Vec<_>>();
+                adjacent.sort();
+                adjacent
+            })
+            .collect()
+    }
+
+    fn get_loaded_by_edges(&self, load_edges: &[Vec<StoreIndex>]) -> Vec<Vec<StoreIndex>> {
+        let mut ret = iter::repeat_with(|| vec![])
+            .take(self.store.len())
+            .collect::<Vec<_>>();
+        load_edges
+            .iter()
+            .enumerate()
+            .rev()
+            .for_each(|(n, a)| a.iter().for_each(|m| ret[*m].push(n)));
+        ret
     }
 }
 
