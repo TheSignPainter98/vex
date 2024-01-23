@@ -61,7 +61,7 @@ fn check(_cmd_args: CheckCmd) -> anyhow::Result<()> {
     let ctx = Context::acquire()?;
     let store = PreinitingStore::new(&ctx)?.preinit()?.init()?;
 
-    let language_handlers = store.language_handlers();
+    let language_observers = store.language_observers();
     let paths = {
         let mut paths = Vec::new();
         let ignores = ctx
@@ -100,10 +100,10 @@ fn check(_cmd_args: CheckCmd) -> anyhow::Result<()> {
         let src_file = src_file?;
 
         println!("linting {}...", src_file.path);
-        for handler in &language_handlers[src_file.lang] {
+        for observers in &language_observers[src_file.lang] {
             println!("running a handler set...");
             for qmatch in QueryCursor::new().matches(
-                handler.query.as_ref(),
+                observers.query.as_ref(),
                 src_file.tree.root_node(),
                 src_file.content[..].as_bytes(),
             ) {

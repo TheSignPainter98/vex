@@ -11,7 +11,8 @@ use crate::{
     context::Context,
     error::Error,
     scriptlets::{
-        scriptlet::InitingScriptlet, PreinitingScriptlet, ScriptletHandlerData, VexingScriptlet,
+        scriptlet::{InitingScriptlet, PreinitingScriptlet, VexingScriptlet},
+        ScriptletObserverData,
     },
     supported_language::SupportedLanguage,
 };
@@ -313,12 +314,12 @@ pub struct VexingStore {
 }
 
 impl VexingStore {
-    pub fn language_handlers(&self) -> EnumMap<SupportedLanguage, Vec<ScriptletHandlerData>> {
-        let mut result: EnumMap<_, Vec<ScriptletHandlerData>> =
+    pub fn language_observers(&self) -> EnumMap<SupportedLanguage, Vec<ScriptletObserverData>> {
+        let mut result: EnumMap<_, Vec<ScriptletObserverData>> =
             EnumMap::from_iter(SupportedLanguage::iter().map(|s| (s, vec![])));
         self.store
             .iter()
-            .flat_map(VexingScriptlet::handler_data)
+            .flat_map(VexingScriptlet::observer_data)
             .for_each(|h| result[h.lang].push(h.dupe()));
         result
     }

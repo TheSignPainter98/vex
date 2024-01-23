@@ -19,8 +19,11 @@ use crate::{
     scriptlets::{
         action::Action,
         event::EventType,
-        handlers::{OnEndHandler, OnEofHandler, OnMatchHandler, OnStartHandler},
-        ScriptletHandlerData,
+        observers::{
+            CloseFileObserver, CloseProjectObserver, MatchObserver, OpenFileObserver,
+            OpenProjectObserver,
+        },
+        ScriptletObserverData,
     },
     supported_language::SupportedLanguage,
 };
@@ -63,7 +66,7 @@ impl Display for InvocationData {
 }
 
 #[derive(Debug, Trace, Default, ProvidesStaticType, NoSerialize, Allocative)]
-pub struct HandlerDataBuilder<'v> {
+pub struct ObserverDataBuilder<'v> {
     #[allocative(skip)]
     pub lang: RefCell<Option<RawSupportedLanguage<'v>>>,
     #[allocative(skip)]
@@ -74,7 +77,7 @@ pub struct HandlerDataBuilder<'v> {
     pub on_end: RefCell<Vec<Value<'v>>>,
 }
 
-impl<'v> HandlerDataBuilder<'v> {
+impl<'v> ObserverDataBuilder<'v> {
     pub fn new() -> Self {
         Self::default()
     }
@@ -111,17 +114,17 @@ impl<'v> HandlerDataBuilder<'v> {
 }
 
 #[starlark_value(type = "HandlerDataBuilder")]
-impl<'v> StarlarkValue<'v> for HandlerDataBuilder<'v> {
+impl<'v> StarlarkValue<'v> for ObserverDataBuilder<'v> {
     fn provide(&'v self, demand: &mut Demand<'_, 'v>) {
         demand.provide_value(self)
     }
 }
 
-impl<'v> Freeze for HandlerDataBuilder<'v> {
-    type Frozen = FrozenHandlerDataBuilder;
+impl<'v> Freeze for ObserverDataBuilder<'v> {
+    type Frozen = FrozenObserverDataBuilder;
 
     fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
-        let HandlerDataBuilder {
+        let ObserverDataBuilder {
             lang,
             query,
             on_start,
@@ -151,7 +154,7 @@ impl<'v> Freeze for HandlerDataBuilder<'v> {
             .into_iter()
             .map(|v| v.freeze(freezer))
             .collect::<anyhow::Result<_>>()?;
-        Ok(FrozenHandlerDataBuilder {
+        Ok(FrozenObserverDataBuilder {
             lang,
             query,
             on_start,
@@ -162,14 +165,14 @@ impl<'v> Freeze for HandlerDataBuilder<'v> {
     }
 }
 
-impl<'v> AllocValue<'v> for HandlerDataBuilder<'v> {
+impl<'v> AllocValue<'v> for ObserverDataBuilder<'v> {
     #[inline]
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
         heap.alloc_complex(self)
     }
 }
 
-impl<'v> Display for HandlerDataBuilder<'v> {
+impl<'v> Display for ObserverDataBuilder<'v> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Self::TYPE.fmt(f)
     }
@@ -199,7 +202,7 @@ impl<'v> Display for RawStr<'v> {
 }
 
 #[derive(Debug, ProvidesStaticType, NoSerialize, Allocative)]
-pub struct FrozenHandlerDataBuilder {
+pub struct FrozenObserverDataBuilder {
     pub lang: Option<String>,
     pub query: Option<String>,
     pub on_start: Vec<FrozenValue>,
@@ -208,7 +211,7 @@ pub struct FrozenHandlerDataBuilder {
     pub on_end: Vec<FrozenValue>,
 }
 
-impl FrozenHandlerDataBuilder {
+impl FrozenObserverDataBuilder {
     pub fn get_from(frozen_module: &FrozenModule) -> &Self {
         frozen_module
             .extra_value()
@@ -218,7 +221,7 @@ impl FrozenHandlerDataBuilder {
             .expect("FrozenModule extra has wrong type")
     }
 
-    pub fn build(&self, path: &Utf8Path) -> anyhow::Result<ScriptletHandlerData> {
+    pub fn build(&self, path: &Utf8Path) -> anyhow::Result<ScriptletObserverData> {
         let Self {
             lang,
             query,
@@ -272,7 +275,7 @@ impl FrozenHandlerDataBuilder {
                 .map(OnEndHandler::new)
                 .collect(),
         );
-        Ok(ScriptletHandlerData {
+        Ok(ScriptletObserverData {
             lang,
             query,
             on_start,
@@ -284,22 +287,22 @@ impl FrozenHandlerDataBuilder {
 }
 
 #[starlark_value(type = "HandlerData")]
-impl<'v> StarlarkValue<'v> for FrozenHandlerDataBuilder {
-    type Canonical = HandlerDataBuilder<'v>;
+impl<'v> StarlarkValue<'v> for FrozenObserverDataBuilder {
+    type Canonical = ObserverDataBuilder<'v>;
 
     fn provide(&'v self, demand: &mut Demand<'_, 'v>) {
         demand.provide_value(self)
     }
 }
 
-impl AllocFrozenValue for FrozenHandlerDataBuilder {
+impl AllocFrozenValue for FrozenObserverDataBuilder {
     #[inline]
     fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
         heap.alloc_simple(self)
     }
 }
 
-impl Display for FrozenHandlerDataBuilder {
+impl Display for FrozenObserverDataBuilder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Self::TYPE.fmt(f)
     }

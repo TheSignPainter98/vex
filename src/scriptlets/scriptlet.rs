@@ -14,10 +14,10 @@ use crate::{
     scriptlets::{
         action::Action,
         app_object::AppObject,
-        extra_data::{FrozenHandlerDataBuilder, HandlerDataBuilder, InvocationData},
+        extra_data::{FrozenObserverDataBuilder, InvocationData, ObserverDataBuilder},
         print_handler::PrintHandler,
         store::ScriptletExports,
-        ScriptletHandlerData,
+        ScriptletObserverData,
     },
 };
 
@@ -121,13 +121,13 @@ impl InitingScriptlet {
                 path,
                 preinited_module,
                 inited_module: None,
-                handler_data: None,
+                observer_data: None,
             });
         };
 
         let inited_module = {
             let module = Module::new();
-            HandlerDataBuilder::new().insert_into(&module);
+            ObserverDataBuilder::new().insert_into(&module);
             {
                 let extra = InvocationData::new(Action::Initing);
                 let print_handler = PrintHandler::new(&path);
@@ -138,13 +138,13 @@ impl InitingScriptlet {
             }
             module.freeze()?
         };
-        let handler_data = FrozenHandlerDataBuilder::get_from(&inited_module).build(&path)?;
+        let observer_data = FrozenObserverDataBuilder::get_from(&inited_module).build(&path)?;
 
         Ok(VexingScriptlet {
             path,
             preinited_module,
             inited_module: Some(inited_module),
-            handler_data: Some(handler_data),
+            observer_data: Some(observer_data),
         })
     }
 
@@ -161,12 +161,12 @@ pub struct VexingScriptlet {
     preinited_module: FrozenModule, // Keep frozen heap alive
     #[allow(unused)]
     inited_module: Option<FrozenModule>, // Keep frozen heap alive
-    handler_data: Option<ScriptletHandlerData>,
+    observer_data: Option<ScriptletObserverData>,
 }
 
 impl VexingScriptlet {
-    pub fn handler_data(&self) -> Option<&ScriptletHandlerData> {
-        self.handler_data.as_ref()
+    pub fn observer_data(&self) -> Option<&ScriptletObserverData> {
+        self.observer_data.as_ref()
     }
 }
 
