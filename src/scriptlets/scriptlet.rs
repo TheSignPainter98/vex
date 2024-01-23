@@ -1,13 +1,12 @@
 use std::{collections::HashSet, fs};
 
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8PathBuf;
 use starlark::{
     analysis::AstModuleLint,
     environment::{FrozenModule, Globals, GlobalsBuilder, LibraryExtension, Module},
     errors::Lint,
     eval::Evaluator,
     syntax::{AstModule, Dialect},
-    PrintHandler,
 };
 
 use crate::{
@@ -16,6 +15,7 @@ use crate::{
         action::Action,
         app_object::AppObject,
         extra_data::{FrozenHandlerDataBuilder, HandlerDataBuilder, InvocationData},
+        print_handler::PrintHandler,
         store::ScriptletExports,
         ScriptletHandlerData,
     },
@@ -66,7 +66,7 @@ impl PreinitingScriptlet {
             let module = Module::new();
             {
                 let extra = InvocationData::new(Action::Preiniting);
-                let print_handler = StdoutPrintHandler { path: &path };
+                let print_handler = PrintHandler::new(&path);
                 let mut eval = Evaluator::new(&module);
                 eval.set_loader(&store);
                 eval.set_print_handler(&print_handler);
@@ -130,7 +130,7 @@ impl InitingScriptlet {
             HandlerDataBuilder::new().insert_into(&module);
             {
                 let extra = InvocationData::new(Action::Initing);
-                let print_handler = StdoutPrintHandler { path: &path };
+                let print_handler = PrintHandler::new(&path);
                 let mut eval = Evaluator::new(&module);
                 eval.set_print_handler(&print_handler);
                 extra.insert_into(&mut eval);
@@ -167,17 +167,6 @@ pub struct VexingScriptlet {
 impl VexingScriptlet {
     pub fn handler_data(&self) -> Option<&ScriptletHandlerData> {
         self.handler_data.as_ref()
-    }
-}
-
-struct StdoutPrintHandler<'a> {
-    path: &'a Utf8Path,
-}
-
-impl<'a> PrintHandler for StdoutPrintHandler<'a> {
-    fn println(&self, text: &str) -> anyhow::Result<()> {
-        println!("{}: {text}", self.path);
-        Ok(())
     }
 }
 
