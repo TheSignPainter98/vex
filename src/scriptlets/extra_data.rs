@@ -8,7 +8,7 @@ use starlark::{
     eval::Evaluator,
     values::{
         AllocFrozenValue, AllocValue, Demand, Freeze, Freezer, FrozenHeap, FrozenValue, Heap,
-        ProvidesStaticType, StarlarkValue, Trace, Tracer, Value, ValueLike,
+        OwnedFrozenValue, ProvidesStaticType, StarlarkValue, Trace, Tracer, Value, ValueLike,
     },
 };
 use starlark_derive::{starlark_value, NoSerialize};
@@ -71,10 +71,11 @@ pub struct ObserverDataBuilder<'v> {
     pub lang: RefCell<Option<RawSupportedLanguage<'v>>>,
     #[allocative(skip)]
     pub query: RefCell<Option<RawQuery<'v>>>,
-    pub on_start: RefCell<Vec<Value<'v>>>,
+    pub on_open_project: RefCell<Vec<Value<'v>>>,
+    pub on_open_file: RefCell<Vec<Value<'v>>>,
     pub on_match: RefCell<Vec<Value<'v>>>,
-    pub on_eof: RefCell<Vec<Value<'v>>>,
-    pub on_end: RefCell<Vec<Value<'v>>>,
+    pub on_close_file: RefCell<Vec<Value<'v>>>,
+    pub on_close_project: RefCell<Vec<Value<'v>>>,
 }
 
 impl<'v> ObserverDataBuilder<'v> {
@@ -105,10 +106,11 @@ impl<'v> ObserverDataBuilder<'v> {
 
     pub fn add_observer(&self, event: EventType, handler: Value<'v>) {
         match event {
-            EventType::Start => self.on_start.borrow_mut().push(handler),
+            EventType::OpenProject => self.on_open_project.borrow_mut().push(handler),
+            EventType::OpenFile => self.on_open_file.borrow_mut().push(handler),
             EventType::Match => self.on_match.borrow_mut().push(handler),
-            EventType::EoF => self.on_eof.borrow_mut().push(handler),
-            EventType::End => self.on_end.borrow_mut().push(handler),
+            EventType::CloseFile => self.on_close_file.borrow_mut().push(handler),
+            EventType::CloseProject => self.on_close_project.borrow_mut().push(handler),
         }
     }
 }
@@ -127,14 +129,20 @@ impl<'v> Freeze for ObserverDataBuilder<'v> {
         let ObserverDataBuilder {
             lang,
             query,
-            on_start,
+            on_open_project,
+            on_open_file,
             on_match,
-            on_eof,
-            on_end,
+            on_close_file,
+            on_close_project,
         } = self;
         let lang = lang.into_inner().map(|e| e.to_string());
         let query = query.into_inner().map(|e| e.to_string());
-        let on_start = on_start
+        let on_open_project = on_open_project
+            .into_inner()
+            .into_iter()
+            .map(|v| v.freeze(freezer))
+            .collect::<anyhow::Result<_>>()?;
+        let on_open_file = on_open_file
             .into_inner()
             .into_iter()
             .map(|v| v.freeze(freezer))
@@ -144,12 +152,12 @@ impl<'v> Freeze for ObserverDataBuilder<'v> {
             .into_iter()
             .map(|v| v.freeze(freezer))
             .collect::<anyhow::Result<_>>()?;
-        let on_eof = on_eof
+        let on_close_file = on_close_file
             .into_inner()
             .into_iter()
             .map(|v| v.freeze(freezer))
             .collect::<anyhow::Result<_>>()?;
-        let on_end = on_end
+        let on_close_project = on_close_project
             .into_inner()
             .into_iter()
             .map(|v| v.freeze(freezer))
@@ -157,10 +165,11 @@ impl<'v> Freeze for ObserverDataBuilder<'v> {
         Ok(FrozenObserverDataBuilder {
             lang,
             query,
-            on_start,
+            on_open_project,
+            on_open_file,
             on_match,
-            on_eof,
-            on_end,
+            on_close_file,
+            on_close_project,
         })
     }
 }
@@ -205,10 +214,11 @@ impl<'v> Display for RawStr<'v> {
 pub struct FrozenObserverDataBuilder {
     pub lang: Option<String>,
     pub query: Option<String>,
-    pub on_start: Vec<FrozenValue>,
+    pub on_open_project: Vec<FrozenValue>,
+    pub on_open_file: Vec<FrozenValue>,
     pub on_match: Vec<FrozenValue>,
-    pub on_eof: Vec<FrozenValue>,
-    pub on_end: Vec<FrozenValue>,
+    pub on_close_file: Vec<FrozenValue>,
+    pub on_close_project: Vec<FrozenValue>,
 }
 
 impl FrozenObserverDataBuilder {
@@ -225,13 +235,20 @@ impl FrozenObserverDataBuilder {
         let Self {
             lang,
             query,
-            on_start,
+            on_open_project,
+            on_open_file,
             on_match,
-            on_eof,
-            on_end,
+            on_close_file,
+            on_close_project,
         } = self;
 
-        if on_start.len() + on_match.len() + on_end.len() + on_end.len() == 0 {
+        if on_open_project.len()
+            + on_open_file.len()
+            + on_match.len()
+            + on_close_file.len()
+            + on_close_project.len()
+            == 0
+        {
             return Err(Error::NoCallbacks(path.to_owned()).into());
         }
 
@@ -247,41 +264,54 @@ impl FrozenObserverDataBuilder {
             };
             Arc::new(Query::new(lang.ts_language(), &query)?)
         };
-        let on_start = Arc::new(
-            on_start
+        let on_open_project = Arc::new(
+            on_open_project
                 .iter()
                 .map(Dupe::dupe)
-                .map(OnStartHandler::new)
+                .map(OwnedFrozenValue::alloc)
+                .map(OpenProjectObserver::new)
+                .collect(),
+        );
+        let on_open_file = Arc::new(
+            on_open_file
+                .iter()
+                .map(Dupe::dupe)
+                .map(OwnedFrozenValue::alloc)
+                .map(OpenFileObserver::new)
                 .collect(),
         );
         let on_match = Arc::new(
             on_match
                 .iter()
                 .map(Dupe::dupe)
-                .map(OnMatchHandler::new)
+                .map(OwnedFrozenValue::alloc)
+                .map(MatchObserver::new)
                 .collect(),
         );
-        let on_eof = Arc::new(
-            on_eof
+        let on_close_file = Arc::new(
+            on_close_file
                 .iter()
                 .map(Dupe::dupe)
-                .map(OnEofHandler::new)
+                .map(OwnedFrozenValue::alloc)
+                .map(CloseFileObserver::new)
                 .collect(),
         );
-        let on_end = Arc::new(
-            on_end
+        let on_close_project = Arc::new(
+            on_close_project
                 .iter()
                 .map(Dupe::dupe)
-                .map(OnEndHandler::new)
+                .map(OwnedFrozenValue::alloc)
+                .map(CloseProjectObserver::new)
                 .collect(),
         );
         Ok(ScriptletObserverData {
             lang,
             query,
-            on_start,
+            on_open_project,
+            on_open_file,
             on_match,
-            on_eof,
-            on_end,
+            on_close_file,
+            on_close_project,
         })
     }
 }
