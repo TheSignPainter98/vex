@@ -25,7 +25,10 @@ use tree_sitter::QueryCursor;
 use crate::{
     cli::{Args, CheckCmd, Command},
     context::{CompiledFilePattern, Context, Manifest},
-    scriptlets::PreinitingStore,
+    scriptlets::{
+        event::{CloseFileEvent, MatchEvent, OpenFileEvent, OpenProjectEvent},
+        Observer, PreinitingStore,
+    },
     source_file::SourceFile,
     supported_language::SupportedLanguage,
     verbosity::Verbosity,
@@ -91,7 +94,15 @@ fn check(_cmd_args: CheckCmd) -> anyhow::Result<()> {
             .map(|p| Arc::<Utf8Path>::from(p.as_path()))
             .collect::<Vec<_>>()
     };
-    // TODO(kcza): run on_start
+
+    let project_root = Arc::<Utf8Path>::from(ctx.project_root.clone());
+    for language_observer in language_observers.values() {
+        for observer in language_observer {
+            for on_open_project in &observer.on_open_project[..] {
+                on_open_project.handle(OpenProjectEvent::new(project_root.dupe()))?;
+            }
+        }
+    }
     // let mut irritations = Vec::new();
     for path in paths {
         let Some(src_file) = SourceFile::load_if_supported(path.dupe()) else {
@@ -101,21 +112,26 @@ fn check(_cmd_args: CheckCmd) -> anyhow::Result<()> {
 
         println!("linting {}...", src_file.path);
         for observers in &language_observers[src_file.lang] {
+            for on_open_file in &observers.on_open_file[..] {
+                on_open_file.handle(OpenFileEvent::new(path.dupe()))?;
+            }
+
             println!("running a handler set...");
             for qmatch in QueryCursor::new().matches(
                 observers.query.as_ref(),
                 src_file.tree.root_node(),
                 src_file.content[..].as_bytes(),
             ) {
-                // TODO(kcza): run on match
                 println!("found {qmatch:?}");
+                for on_match in observers.on_match.iter() {
+                    on_match.handle(MatchEvent {})?;
+                }
             }
-            // TODO(kcza): run on eof
-        }
 
-        // let Some(_vexes) = vex_store.get(src_file.lang) else {
-        //     continue;
-        // };
+            for on_close_file in observers.on_close_file.iter() {
+                on_close_file.handle(CloseFileEvent::new(path.dupe()))?;
+            }
+        }
 
         // let mut vex_irritations = Vec::new();
         // for vex in vexes {
@@ -123,7 +139,13 @@ fn check(_cmd_args: CheckCmd) -> anyhow::Result<()> {
         // }
         // irritations.push((vex.id, vex_irritations));
     }
-    // TODO(kcza): run end
+    for language_observer in language_observers.values() {
+        for observer in language_observer {
+            for on_open_project in &observer.on_open_project[..] {
+                on_open_project.handle(OpenProjectEvent::new(project_root.dupe()))?;
+            }
+        }
+    }
 
     // let max_problem_channel_size = match cmd_args.max_problems {
     //     MaxProblems::Limited(lim) => lim as usize,
