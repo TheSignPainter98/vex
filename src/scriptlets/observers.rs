@@ -42,13 +42,15 @@ pub trait Observer {
     {
         let extra = InvocationData::new(Action::Vexing(<Self::Event as Event>::TYPE));
         let module = Module::new();
-        let func = self.function().value(); // TODO(kcza): check thread safety!
+
         let print_handler = PrintHandler::new("asdf"); // TODO(kzca): what should the tag be here?
         let mut eval = Evaluator::new(&module);
         eval.set_print_handler(&print_handler);
         extra.insert_into(&mut eval);
+
+        let func = self.function().value(); // TODO(kcza): check thread safety! Can this unfrozen
+                                            // function mutate upvalues if it is a closure?
         eval.eval_function(func, &[module.heap().alloc(event)], &[])?;
-        // TODO(kcza): is this unfreeze okay?
         Ok(())
     }
 }
