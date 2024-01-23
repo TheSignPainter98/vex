@@ -13,10 +13,11 @@ mod verbosity;
 mod vex;
 mod vex_store;
 
-use std::{env, fs, process::ExitCode};
+use std::{env, fs, process::ExitCode, sync::Arc};
 
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser as _;
+use dupe::Dupe;
 use log::{info, log_enabled, trace};
 use strum::IntoEnumIterator;
 use tree_sitter::QueryCursor;
@@ -80,17 +81,20 @@ fn check(_cmd_args: CheckCmd) -> anyhow::Result<()> {
             .collect::<anyhow::Result<Vec<_>>>()?;
         walkdir(
             &ctx,
-            ctx.project_root.clone(),
+            ctx.project_root.as_ref(),
             &ignores,
             &allows,
             &mut paths,
         )?;
         paths
+            .into_iter()
+            .map(|p| Arc::<Utf8Path>::from(p.as_path()))
+            .collect::<Vec<_>>()
     };
     // TODO(kcza): run on_start
     // let mut irritations = Vec::new();
     for path in paths {
-        let Some(src_file) = SourceFile::load_if_supported(path) else {
+        let Some(src_file) = SourceFile::load_if_supported(path.dupe()) else {
             continue;
         };
         let src_file = src_file?;
@@ -167,7 +171,7 @@ fn check(_cmd_args: CheckCmd) -> anyhow::Result<()> {
 
 fn walkdir(
     ctx: &Context,
-    path: Utf8PathBuf,
+    path: &Utf8Path,
     ignores: &[CompiledFilePattern],
     allows: &[CompiledFilePattern],
     paths: &mut Vec<Utf8PathBuf>,
@@ -185,7 +189,7 @@ fn walkdir(
                 .is_some_and(|name| name.starts_with('.'));
             if hidden || ignores.iter().any(|p| p.matches_path(&entry_path)) {
                 if log_enabled!(log::Level::Info) {
-                    let ignore_path = entry_path.strip_prefix(&ctx.project_root)?;
+                    let ignore_path = entry_path.strip_prefix(ctx.project_root.as_ref())?;
                     let dir_marker = if metadata.is_dir() { "/" } else { "" };
                     info!("ignoring /{ignore_path}{dir_marker}");
                 }
@@ -195,11 +199,11 @@ fn walkdir(
 
         if metadata.is_symlink() {
             if log_enabled!(log::Level::Info) {
-                let symlink_path = entry_path.strip_prefix(&ctx.project_root)?;
+                let symlink_path = entry_path.strip_prefix(ctx.project_root.as_ref())?;
                 info!("ignoring /{symlink_path} (symlink)");
             }
         } else if metadata.is_dir() {
-            walkdir(ctx, entry_path, ignores, allows, paths)?;
+            walkdir(ctx, &entry_path, ignores, allows, paths)?;
         } else if metadata.is_file() {
             paths.push(entry_path);
         } else {

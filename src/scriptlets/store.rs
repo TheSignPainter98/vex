@@ -42,7 +42,7 @@ impl PreinitingStore {
 
             if metadata.is_symlink() {
                 if log_enabled!(log::Level::Info) {
-                    let symlink_path = entry_path.strip_prefix(&ctx.project_root)?;
+                    let symlink_path = entry_path.strip_prefix(ctx.project_root.as_ref())?;
                     info!("ignoring /{symlink_path} (symlink)");
                 }
                 continue;
@@ -57,7 +57,7 @@ impl PreinitingStore {
             }
             if !entry_path.extension().is_some_and(|ext| ext == "star") {
                 if log_enabled!(log::Level::Info) {
-                    let unknown_path = entry_path.strip_prefix(&ctx.project_root)?;
+                    let unknown_path = entry_path.strip_prefix(ctx.project_root.as_ref())?;
                     info!("ignoring /{unknown_path} (expected `.star` extension)");
                 }
                 continue;

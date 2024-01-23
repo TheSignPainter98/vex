@@ -7,18 +7,20 @@ use std::env;
 use std::fs::File;
 use std::io::{BufWriter, ErrorKind, Read, Write};
 use std::ops::Deref;
+use std::sync::Arc;
 
 use crate::error::Error;
 
 #[derive(Debug)]
 pub struct Context {
-    pub project_root: Utf8PathBuf,
+    pub project_root: Arc<Utf8Path>,
     pub manifest: Manifest,
 }
 
 impl Context {
     pub fn acquire() -> anyhow::Result<Self> {
         let (project_root, raw_data) = Manifest::acquire_file()?;
+        let project_root = Arc::from(project_root);
         let data = toml_edit::de::from_str(&raw_data)?;
         Ok(Context {
             project_root,
