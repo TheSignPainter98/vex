@@ -8,7 +8,7 @@ use starlark::{
     eval::Evaluator,
     values::{
         AllocFrozenValue, AllocValue, Demand, Freeze, Freezer, FrozenHeap, FrozenValue, Heap,
-        ProvidesStaticType, StarlarkValue, Trace, Tracer, Value, ValueLike,
+        OwnedFrozenValue, ProvidesStaticType, StarlarkValue, Trace, Tracer, Value, ValueLike,
     },
 };
 use starlark_derive::{starlark_value, NoSerialize};
@@ -19,8 +19,11 @@ use crate::{
     scriptlets::{
         action::Action,
         event::EventType,
-        handlers::{OnEndHandler, OnEofHandler, OnMatchHandler, OnStartHandler},
-        ScriptletHandlerData,
+        observers::{
+            CloseFileObserver, CloseProjectObserver, MatchObserver, OpenFileObserver,
+            OpenProjectObserver,
+        },
+        ScriptletObserverData,
     },
     supported_language::SupportedLanguage,
 };
@@ -63,18 +66,19 @@ impl Display for InvocationData {
 }
 
 #[derive(Debug, Trace, Default, ProvidesStaticType, NoSerialize, Allocative)]
-pub struct HandlerDataBuilder<'v> {
+pub struct ObserverDataBuilder<'v> {
     #[allocative(skip)]
     pub lang: RefCell<Option<RawSupportedLanguage<'v>>>,
     #[allocative(skip)]
     pub query: RefCell<Option<RawQuery<'v>>>,
-    pub on_start: RefCell<Vec<Value<'v>>>,
+    pub on_open_project: RefCell<Vec<Value<'v>>>,
+    pub on_open_file: RefCell<Vec<Value<'v>>>,
     pub on_match: RefCell<Vec<Value<'v>>>,
-    pub on_eof: RefCell<Vec<Value<'v>>>,
-    pub on_end: RefCell<Vec<Value<'v>>>,
+    pub on_close_file: RefCell<Vec<Value<'v>>>,
+    pub on_close_project: RefCell<Vec<Value<'v>>>,
 }
 
-impl<'v> HandlerDataBuilder<'v> {
+impl<'v> ObserverDataBuilder<'v> {
     pub fn new() -> Self {
         Self::default()
     }
@@ -102,36 +106,43 @@ impl<'v> HandlerDataBuilder<'v> {
 
     pub fn add_observer(&self, event: EventType, handler: Value<'v>) {
         match event {
-            EventType::Start => self.on_start.borrow_mut().push(handler),
+            EventType::OpenProject => self.on_open_project.borrow_mut().push(handler),
+            EventType::OpenFile => self.on_open_file.borrow_mut().push(handler),
             EventType::Match => self.on_match.borrow_mut().push(handler),
-            EventType::EoF => self.on_eof.borrow_mut().push(handler),
-            EventType::End => self.on_end.borrow_mut().push(handler),
+            EventType::CloseFile => self.on_close_file.borrow_mut().push(handler),
+            EventType::CloseProject => self.on_close_project.borrow_mut().push(handler),
         }
     }
 }
 
 #[starlark_value(type = "HandlerDataBuilder")]
-impl<'v> StarlarkValue<'v> for HandlerDataBuilder<'v> {
+impl<'v> StarlarkValue<'v> for ObserverDataBuilder<'v> {
     fn provide(&'v self, demand: &mut Demand<'_, 'v>) {
         demand.provide_value(self)
     }
 }
 
-impl<'v> Freeze for HandlerDataBuilder<'v> {
-    type Frozen = FrozenHandlerDataBuilder;
+impl<'v> Freeze for ObserverDataBuilder<'v> {
+    type Frozen = FrozenObserverDataBuilder;
 
     fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
-        let HandlerDataBuilder {
+        let ObserverDataBuilder {
             lang,
             query,
-            on_start,
+            on_open_project,
+            on_open_file,
             on_match,
-            on_eof,
-            on_end,
+            on_close_file,
+            on_close_project,
         } = self;
         let lang = lang.into_inner().map(|e| e.to_string());
         let query = query.into_inner().map(|e| e.to_string());
-        let on_start = on_start
+        let on_open_project = on_open_project
+            .into_inner()
+            .into_iter()
+            .map(|v| v.freeze(freezer))
+            .collect::<anyhow::Result<_>>()?;
+        let on_open_file = on_open_file
             .into_inner()
             .into_iter()
             .map(|v| v.freeze(freezer))
@@ -141,35 +152,36 @@ impl<'v> Freeze for HandlerDataBuilder<'v> {
             .into_iter()
             .map(|v| v.freeze(freezer))
             .collect::<anyhow::Result<_>>()?;
-        let on_eof = on_eof
+        let on_close_file = on_close_file
             .into_inner()
             .into_iter()
             .map(|v| v.freeze(freezer))
             .collect::<anyhow::Result<_>>()?;
-        let on_end = on_end
+        let on_close_project = on_close_project
             .into_inner()
             .into_iter()
             .map(|v| v.freeze(freezer))
             .collect::<anyhow::Result<_>>()?;
-        Ok(FrozenHandlerDataBuilder {
+        Ok(FrozenObserverDataBuilder {
             lang,
             query,
-            on_start,
+            on_open_project,
+            on_open_file,
             on_match,
-            on_eof,
-            on_end,
+            on_close_file,
+            on_close_project,
         })
     }
 }
 
-impl<'v> AllocValue<'v> for HandlerDataBuilder<'v> {
+impl<'v> AllocValue<'v> for ObserverDataBuilder<'v> {
     #[inline]
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
         heap.alloc_complex(self)
     }
 }
 
-impl<'v> Display for HandlerDataBuilder<'v> {
+impl<'v> Display for ObserverDataBuilder<'v> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Self::TYPE.fmt(f)
     }
@@ -199,16 +211,17 @@ impl<'v> Display for RawStr<'v> {
 }
 
 #[derive(Debug, ProvidesStaticType, NoSerialize, Allocative)]
-pub struct FrozenHandlerDataBuilder {
+pub struct FrozenObserverDataBuilder {
     pub lang: Option<String>,
     pub query: Option<String>,
-    pub on_start: Vec<FrozenValue>,
+    pub on_open_project: Vec<FrozenValue>,
+    pub on_open_file: Vec<FrozenValue>,
     pub on_match: Vec<FrozenValue>,
-    pub on_eof: Vec<FrozenValue>,
-    pub on_end: Vec<FrozenValue>,
+    pub on_close_file: Vec<FrozenValue>,
+    pub on_close_project: Vec<FrozenValue>,
 }
 
-impl FrozenHandlerDataBuilder {
+impl FrozenObserverDataBuilder {
     pub fn get_from(frozen_module: &FrozenModule) -> &Self {
         frozen_module
             .extra_value()
@@ -218,17 +231,24 @@ impl FrozenHandlerDataBuilder {
             .expect("FrozenModule extra has wrong type")
     }
 
-    pub fn build(&self, path: &Utf8Path) -> anyhow::Result<ScriptletHandlerData> {
+    pub fn build(&self, path: &Utf8Path) -> anyhow::Result<ScriptletObserverData> {
         let Self {
             lang,
             query,
-            on_start,
+            on_open_project,
+            on_open_file,
             on_match,
-            on_eof,
-            on_end,
+            on_close_file,
+            on_close_project,
         } = self;
 
-        if on_start.len() + on_match.len() + on_end.len() + on_end.len() == 0 {
+        if on_open_project.len()
+            + on_open_file.len()
+            + on_match.len()
+            + on_close_file.len()
+            + on_close_project.len()
+            == 0
+        {
             return Err(Error::NoCallbacks(path.to_owned()).into());
         }
 
@@ -244,62 +264,75 @@ impl FrozenHandlerDataBuilder {
             };
             Arc::new(Query::new(lang.ts_language(), &query)?)
         };
-        let on_start = Arc::new(
-            on_start
+        let on_open_project = Arc::new(
+            on_open_project
                 .iter()
                 .map(Dupe::dupe)
-                .map(OnStartHandler::new)
+                .map(OwnedFrozenValue::alloc)
+                .map(OpenProjectObserver::new)
+                .collect(),
+        );
+        let on_open_file = Arc::new(
+            on_open_file
+                .iter()
+                .map(Dupe::dupe)
+                .map(OwnedFrozenValue::alloc)
+                .map(OpenFileObserver::new)
                 .collect(),
         );
         let on_match = Arc::new(
             on_match
                 .iter()
                 .map(Dupe::dupe)
-                .map(OnMatchHandler::new)
+                .map(OwnedFrozenValue::alloc)
+                .map(MatchObserver::new)
                 .collect(),
         );
-        let on_eof = Arc::new(
-            on_eof
+        let on_close_file = Arc::new(
+            on_close_file
                 .iter()
                 .map(Dupe::dupe)
-                .map(OnEofHandler::new)
+                .map(OwnedFrozenValue::alloc)
+                .map(CloseFileObserver::new)
                 .collect(),
         );
-        let on_end = Arc::new(
-            on_end
+        let on_close_project = Arc::new(
+            on_close_project
                 .iter()
                 .map(Dupe::dupe)
-                .map(OnEndHandler::new)
+                .map(OwnedFrozenValue::alloc)
+                .map(CloseProjectObserver::new)
                 .collect(),
         );
-        Ok(ScriptletHandlerData {
+        Ok(ScriptletObserverData {
             lang,
             query,
-            on_start,
+            on_open_project,
+            on_open_file,
             on_match,
-            on_eof,
-            on_end,
+            on_close_file,
+            on_close_project,
         })
     }
 }
 
 #[starlark_value(type = "HandlerData")]
-impl<'v> StarlarkValue<'v> for FrozenHandlerDataBuilder {
-    type Canonical = HandlerDataBuilder<'v>;
+impl<'v> StarlarkValue<'v> for FrozenObserverDataBuilder {
+    type Canonical = ObserverDataBuilder<'v>;
 
     fn provide(&'v self, demand: &mut Demand<'_, 'v>) {
         demand.provide_value(self)
     }
 }
 
-impl AllocFrozenValue for FrozenHandlerDataBuilder {
+impl AllocFrozenValue for FrozenObserverDataBuilder {
     #[inline]
     fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
         heap.alloc_simple(self)
     }
 }
 
-impl Display for FrozenHandlerDataBuilder {
+impl Display for FrozenObserverDataBuilder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Self::TYPE.fmt(f)
     }

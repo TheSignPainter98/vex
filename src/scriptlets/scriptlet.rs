@@ -1,13 +1,12 @@
 use std::{collections::HashSet, fs};
 
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8PathBuf;
 use starlark::{
     analysis::AstModuleLint,
     environment::{FrozenModule, Globals, GlobalsBuilder, LibraryExtension, Module},
     errors::Lint,
     eval::Evaluator,
     syntax::{AstModule, Dialect},
-    PrintHandler,
 };
 
 use crate::{
@@ -15,9 +14,10 @@ use crate::{
     scriptlets::{
         action::Action,
         app_object::AppObject,
-        extra_data::{FrozenHandlerDataBuilder, HandlerDataBuilder, InvocationData},
+        extra_data::{FrozenObserverDataBuilder, InvocationData, ObserverDataBuilder},
+        print_handler::PrintHandler,
         store::ScriptletExports,
-        ScriptletHandlerData,
+        ScriptletObserverData,
     },
 };
 
@@ -66,7 +66,7 @@ impl PreinitingScriptlet {
             let module = Module::new();
             {
                 let extra = InvocationData::new(Action::Preiniting);
-                let print_handler = StdoutPrintHandler { path: &path };
+                let print_handler = PrintHandler::new(&path);
                 let mut eval = Evaluator::new(&module);
                 eval.set_loader(&store);
                 eval.set_print_handler(&print_handler);
@@ -121,16 +121,16 @@ impl InitingScriptlet {
                 path,
                 preinited_module,
                 inited_module: None,
-                handler_data: None,
+                observer_data: None,
             });
         };
 
         let inited_module = {
             let module = Module::new();
-            HandlerDataBuilder::new().insert_into(&module);
+            ObserverDataBuilder::new().insert_into(&module);
             {
                 let extra = InvocationData::new(Action::Initing);
-                let print_handler = StdoutPrintHandler { path: &path };
+                let print_handler = PrintHandler::new(&path);
                 let mut eval = Evaluator::new(&module);
                 eval.set_print_handler(&print_handler);
                 extra.insert_into(&mut eval);
@@ -138,13 +138,13 @@ impl InitingScriptlet {
             }
             module.freeze()?
         };
-        let handler_data = FrozenHandlerDataBuilder::get_from(&inited_module).build(&path)?;
+        let observer_data = FrozenObserverDataBuilder::get_from(&inited_module).build(&path)?;
 
         Ok(VexingScriptlet {
             path,
             preinited_module,
             inited_module: Some(inited_module),
-            handler_data: Some(handler_data),
+            observer_data: Some(observer_data),
         })
     }
 
@@ -161,23 +161,12 @@ pub struct VexingScriptlet {
     preinited_module: FrozenModule, // Keep frozen heap alive
     #[allow(unused)]
     inited_module: Option<FrozenModule>, // Keep frozen heap alive
-    handler_data: Option<ScriptletHandlerData>,
+    observer_data: Option<ScriptletObserverData>,
 }
 
 impl VexingScriptlet {
-    pub fn handler_data(&self) -> Option<&ScriptletHandlerData> {
-        self.handler_data.as_ref()
-    }
-}
-
-struct StdoutPrintHandler<'a> {
-    path: &'a Utf8Path,
-}
-
-impl<'a> PrintHandler for StdoutPrintHandler<'a> {
-    fn println(&self, text: &str) -> anyhow::Result<()> {
-        println!("{}: {text}", self.path);
-        Ok(())
+    pub fn observer_data(&self) -> Option<&ScriptletObserverData> {
+        self.observer_data.as_ref()
     }
 }
 

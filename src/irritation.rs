@@ -1,7 +1,8 @@
-use std::fmt::Display;
+use std::{fmt::Display, sync::Arc};
 
 use annotate_snippets::{Annotation, AnnotationType, Slice, Snippet};
-use camino::Utf8PathBuf;
+use camino::Utf8Path;
+use dupe::Dupe;
 use tree_sitter::QueryMatch;
 
 use crate::{logger, source_file::SourceFile, vex::Id};
@@ -11,7 +12,7 @@ pub struct Irritation {
     message: String,
     start_byte: usize,
     end_byte: usize,
-    path: Utf8PathBuf,
+    path: Arc<Utf8Path>,
 }
 
 impl Irritation {
@@ -55,7 +56,7 @@ impl Irritation {
                 .map(|cap| cap.node.end_byte())
                 .max()
                 .unwrap_or(usize::MAX),
-            path: src_file.path.clone(),
+            path: src_file.path.dupe(),
         }
     }
 }

@@ -13,10 +13,11 @@ mod verbosity;
 mod vex;
 mod vex_store;
 
-use std::{env, fs, process::ExitCode};
+use std::{env, fs, process::ExitCode, sync::Arc};
 
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser as _;
+use dupe::Dupe;
 use log::{info, log_enabled, trace};
 use strum::IntoEnumIterator;
 use tree_sitter::QueryCursor;
@@ -24,7 +25,10 @@ use tree_sitter::QueryCursor;
 use crate::{
     cli::{Args, CheckCmd, Command},
     context::{CompiledFilePattern, Context, Manifest},
-    scriptlets::PreinitingStore,
+    scriptlets::{
+        event::{CloseFileEvent, MatchEvent, OpenFileEvent, OpenProjectEvent},
+        Observer, PreinitingStore,
+    },
     source_file::SourceFile,
     supported_language::SupportedLanguage,
     verbosity::Verbosity,
@@ -60,7 +64,7 @@ fn check(_cmd_args: CheckCmd) -> anyhow::Result<()> {
     let ctx = Context::acquire()?;
     let store = PreinitingStore::new(&ctx)?.preinit()?.init()?;
 
-    let language_handlers = store.language_handlers();
+    let language_observers = store.language_observers();
     let paths = {
         let mut paths = Vec::new();
         let ignores = ctx
@@ -80,38 +84,54 @@ fn check(_cmd_args: CheckCmd) -> anyhow::Result<()> {
             .collect::<anyhow::Result<Vec<_>>>()?;
         walkdir(
             &ctx,
-            ctx.project_root.clone(),
+            ctx.project_root.as_ref(),
             &ignores,
             &allows,
             &mut paths,
         )?;
         paths
+            .into_iter()
+            .map(|p| Arc::<Utf8Path>::from(p.as_path()))
+            .collect::<Vec<_>>()
     };
-    // TODO(kcza): run on_start
+
+    let project_root = Arc::<Utf8Path>::from(ctx.project_root.clone());
+    for language_observer in language_observers.values() {
+        for observer in language_observer {
+            for on_open_project in &observer.on_open_project[..] {
+                on_open_project.handle(OpenProjectEvent::new(project_root.dupe()))?;
+            }
+        }
+    }
     // let mut irritations = Vec::new();
     for path in paths {
-        let Some(src_file) = SourceFile::load_if_supported(path) else {
+        let Some(src_file) = SourceFile::load_if_supported(path.dupe()) else {
             continue;
         };
         let src_file = src_file?;
 
         println!("linting {}...", src_file.path);
-        for handler in &language_handlers[src_file.lang] {
+        for observers in &language_observers[src_file.lang] {
+            for on_open_file in &observers.on_open_file[..] {
+                on_open_file.handle(OpenFileEvent::new(path.dupe()))?;
+            }
+
             println!("running a handler set...");
             for qmatch in QueryCursor::new().matches(
-                handler.query.as_ref(),
+                observers.query.as_ref(),
                 src_file.tree.root_node(),
                 src_file.content[..].as_bytes(),
             ) {
-                // TODO(kcza): run on match
                 println!("found {qmatch:?}");
+                for on_match in observers.on_match.iter() {
+                    on_match.handle(MatchEvent {})?;
+                }
             }
-            // TODO(kcza): run on eof
-        }
 
-        // let Some(_vexes) = vex_store.get(src_file.lang) else {
-        //     continue;
-        // };
+            for on_close_file in observers.on_close_file.iter() {
+                on_close_file.handle(CloseFileEvent::new(path.dupe()))?;
+            }
+        }
 
         // let mut vex_irritations = Vec::new();
         // for vex in vexes {
@@ -119,7 +139,13 @@ fn check(_cmd_args: CheckCmd) -> anyhow::Result<()> {
         // }
         // irritations.push((vex.id, vex_irritations));
     }
-    // TODO(kcza): run end
+    for language_observer in language_observers.values() {
+        for observer in language_observer {
+            for on_open_project in &observer.on_open_project[..] {
+                on_open_project.handle(OpenProjectEvent::new(project_root.dupe()))?;
+            }
+        }
+    }
 
     // let max_problem_channel_size = match cmd_args.max_problems {
     //     MaxProblems::Limited(lim) => lim as usize,
@@ -167,7 +193,7 @@ fn check(_cmd_args: CheckCmd) -> anyhow::Result<()> {
 
 fn walkdir(
     ctx: &Context,
-    path: Utf8PathBuf,
+    path: &Utf8Path,
     ignores: &[CompiledFilePattern],
     allows: &[CompiledFilePattern],
     paths: &mut Vec<Utf8PathBuf>,
@@ -185,7 +211,7 @@ fn walkdir(
                 .is_some_and(|name| name.starts_with('.'));
             if hidden || ignores.iter().any(|p| p.matches_path(&entry_path)) {
                 if log_enabled!(log::Level::Info) {
-                    let ignore_path = entry_path.strip_prefix(&ctx.project_root)?;
+                    let ignore_path = entry_path.strip_prefix(ctx.project_root.as_ref())?;
                     let dir_marker = if metadata.is_dir() { "/" } else { "" };
                     info!("ignoring /{ignore_path}{dir_marker}");
                 }
@@ -195,11 +221,11 @@ fn walkdir(
 
         if metadata.is_symlink() {
             if log_enabled!(log::Level::Info) {
-                let symlink_path = entry_path.strip_prefix(&ctx.project_root)?;
+                let symlink_path = entry_path.strip_prefix(ctx.project_root.as_ref())?;
                 info!("ignoring /{symlink_path} (symlink)");
             }
         } else if metadata.is_dir() {
-            walkdir(ctx, entry_path, ignores, allows, paths)?;
+            walkdir(ctx, &entry_path, ignores, allows, paths)?;
         } else if metadata.is_file() {
             paths.push(entry_path);
         } else {

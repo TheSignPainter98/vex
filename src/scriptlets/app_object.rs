@@ -15,7 +15,7 @@ use crate::{
     scriptlets::{
         action::Action,
         event::EventType,
-        extra_data::{HandlerDataBuilder, InvocationData},
+        extra_data::{InvocationData, ObserverDataBuilder},
     },
 };
 
@@ -34,7 +34,7 @@ impl AppObject {
         ) -> anyhow::Result<NoneType> {
             AppObject::check_attr_available(eval, "vex.language", &[Action::Initing])?;
 
-            HandlerDataBuilder::get_from(eval.module()).set_language(lang.into());
+            ObserverDataBuilder::get_from(eval.module()).set_language(lang.into());
 
             Ok(NoneType)
         }
@@ -47,7 +47,7 @@ impl AppObject {
             AppObject::check_attr_available(eval, "vex.query", &[Action::Initing])?;
 
             // TODO(kcza): attach the id in errors somewhere?
-            HandlerDataBuilder::get_from(eval.module()).set_query(query.into());
+            ObserverDataBuilder::get_from(eval.module()).set_query(query.into());
 
             Ok(NoneType)
         }
@@ -61,7 +61,7 @@ impl AppObject {
             AppObject::check_attr_available(eval, "vex.observe", &[Action::Initing])?;
 
             let event = event.parse()?;
-            HandlerDataBuilder::get_from(eval.module()).add_observer(event, handler);
+            ObserverDataBuilder::get_from(eval.module()).add_observer(event, handler);
 
             Ok(NoneType)
         }
@@ -75,10 +75,10 @@ impl AppObject {
                 eval,
                 "vex.warn",
                 &[
-                    Action::Vexing(EventType::Start),
+                    Action::Vexing(EventType::OpenProject),
                     Action::Vexing(EventType::Match),
-                    Action::Vexing(EventType::EoF),
-                    Action::Vexing(EventType::End),
+                    Action::Vexing(EventType::CloseFile),
+                    Action::Vexing(EventType::CloseProject),
                 ],
             )?;
 
