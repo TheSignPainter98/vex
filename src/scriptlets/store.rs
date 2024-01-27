@@ -1,6 +1,6 @@
-use std::{cell::RefCell, collections::BTreeMap, fs, iter};
+use std::{cell::RefCell, collections::BTreeMap, fs, io::ErrorKind, iter};
 
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8PathBuf;
 use dupe::Dupe;
 use enum_map::EnumMap;
 use log::{info, log_enabled};
@@ -12,15 +12,18 @@ use crate::{
     error::Error,
     scriptlets::{
         scriptlet::{InitingScriptlet, PreinitingScriptlet, VexingScriptlet},
-        ScriptletObserverData,
+        ScriptletObserverData, ScriptletPath,
     },
     supported_language::SupportedLanguage,
 };
+
+use super::PrettyPath;
+
 type StoreIndex = usize;
 
 pub struct PreinitingStore {
     dir: Utf8PathBuf,
-    path_indices: BTreeMap<Utf8PathBuf, StoreIndex>,
+    path_indices: BTreeMap<PrettyPath, StoreIndex>,
     store: Vec<PreinitingScriptlet>,
 }
 
@@ -36,7 +39,11 @@ impl PreinitingStore {
     }
 
     fn load_dir(&mut self, ctx: &Context, path: Utf8PathBuf, toplevel: bool) -> anyhow::Result<()> {
-        for entry in fs::read_dir(path)? {
+        let dir = fs::read_dir(&path).map_err(|err| match err.kind() {
+            ErrorKind::NotFound => anyhow::Error::from(Error::NoVexesDir(path.clone())),
+            _ => err.into(),
+        })?;
+        for entry in dir {
             let entry = entry?;
             let entry_path = Utf8PathBuf::try_from(entry.path())?;
             let metadata = fs::symlink_metadata(&entry_path)?;
@@ -63,22 +70,22 @@ impl PreinitingStore {
                 }
                 continue;
             }
-            self.load_file(entry_path, toplevel)?;
+            let scriptlet_path = ScriptletPath::new(&entry_path, &self.dir);
+            self.load_file(scriptlet_path, toplevel)?;
         }
 
         Ok(())
     }
 
-    fn load_file(&mut self, path: Utf8PathBuf, toplevel: bool) -> anyhow::Result<()> {
-        let stripped_path = path.strip_prefix(&self.dir)?;
-        if self.path_indices.get(stripped_path).is_some() {
+    fn load_file(&mut self, path: ScriptletPath, toplevel: bool) -> anyhow::Result<()> {
+        if self.path_indices.get(&path.pretty_path).is_some() {
             return Ok(());
         }
 
-        let scriptlet = PreinitingScriptlet::new(path.clone(), toplevel)?;
+        let scriptlet = PreinitingScriptlet::new(path.dupe(), toplevel)?;
         self.store.push(scriptlet);
         self.path_indices
-            .insert(stripped_path.into(), self.store.len() - 1);
+            .insert(path.pretty_path.dupe(), self.store.len() - 1);
 
         Ok(())
     }
@@ -87,15 +94,13 @@ impl PreinitingStore {
         self.sort();
         self.linearise_store()?;
 
-        let Self { dir, store, .. } = self;
+        let Self { store, .. } = self;
 
         let mut initing_store = Vec::with_capacity(store.len());
-        let mut loader = ScriptletExports {
-            exports: BTreeMap::new(),
-        };
+        let mut cache = PreinitedModuleCache::new();
         for scriptlet in store.into_iter() {
-            let preinited_scriptlet = scriptlet.preinit(&loader)?;
-            loader.insert(&dir, &preinited_scriptlet);
+            let preinited_scriptlet = scriptlet.preinit(&cache)?;
+            cache.cache(&preinited_scriptlet);
             initing_store.push(preinited_scriptlet);
         }
 
@@ -105,12 +110,13 @@ impl PreinitingStore {
     }
 
     fn sort(&mut self) {
-        self.store.sort_by(|s, t| s.path.cmp(&t.path));
+        self.store
+            .sort_by(|s, t| s.path.pretty_path.cmp(&t.path.pretty_path));
         self.path_indices = self
             .store
             .iter()
             .enumerate()
-            .map(|(i, s)| (s.path.strip_prefix(&self.dir).unwrap().to_path_buf(), i))
+            .map(|(i, s)| (s.path.pretty_path.dupe(), i))
             .collect();
     }
 
@@ -169,7 +175,7 @@ impl PreinitingStore {
         Ok(())
     }
 
-    fn find_cycle(&self) -> Vec<Utf8PathBuf> {
+    fn find_cycle(&self) -> Vec<PrettyPath> {
         fn undirected_dfs(
             stack: &RefCell<Vec<StoreIndex>>,
             explored: &RefCell<Vec<bool>>,
@@ -227,14 +233,7 @@ impl PreinitingStore {
         cycle
             .unwrap()
             .into_iter()
-            .map(|idx| {
-                self.store[idx]
-                    .path
-                    .to_path_buf()
-                    .strip_prefix(&self.dir)
-                    .unwrap()
-                    .to_path_buf()
-            })
+            .map(|idx| self.store[idx].path.pretty_path.dupe())
             .collect()
     }
 
@@ -245,7 +244,7 @@ impl PreinitingStore {
                 let mut adjacent = s
                     .loads()
                     .iter()
-                    .map(|m| *self.path_indices.get(m).unwrap())
+                    .map(|m| *self.path_indices.get(&m).unwrap())
                     .collect::<Vec<_>>();
                 adjacent.sort();
                 adjacent
@@ -267,25 +266,32 @@ impl PreinitingStore {
 }
 
 #[derive(Debug)]
-pub struct ScriptletExports {
-    exports: BTreeMap<String, FrozenModule>,
+pub struct PreinitedModuleCache {
+    exports: BTreeMap<PrettyPath, FrozenModule>,
 }
 
-impl ScriptletExports {
-    fn insert(&mut self, dir: &Utf8Path, scriptlet: &InitingScriptlet) {
+impl PreinitedModuleCache {
+    fn new() -> Self {
+        Self {
+            exports: BTreeMap::new(),
+        }
+    }
+
+    fn cache(&mut self, scriptlet: &InitingScriptlet) {
         self.exports.insert(
-            scriptlet.path.strip_prefix(dir).unwrap().to_string(),
+            scriptlet.path.pretty_path.dupe(),
             scriptlet.preinited_module.dupe(),
         );
     }
 }
 
-impl FileLoader for &ScriptletExports {
-    fn load(&self, module_path: &str) -> anyhow::Result<starlark::environment::FrozenModule> {
+impl FileLoader for &PreinitedModuleCache {
+    fn load(&self, path: &str) -> anyhow::Result<starlark::environment::FrozenModule> {
+        let path = PrettyPath::from(path);
         self.exports
-            .get(module_path)
+            .get(&path)
             .map(Dupe::dupe)
-            .ok_or_else(|| Error::UnknownModule(module_path.into()).into())
+            .ok_or_else(|| Error::NoSuchModule(path).into())
     }
 }
 
