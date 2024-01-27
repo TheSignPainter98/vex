@@ -2,7 +2,7 @@ use camino::Utf8PathBuf;
 use joinery::JoinableIterator;
 use strum::IntoEnumIterator;
 
-use crate::scriptlets::{action::Action, event::EventType};
+use crate::scriptlets::{action::Action, event::EventType, PrettyPath};
 
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum Error {
@@ -10,24 +10,30 @@ pub enum Error {
     AlreadyInited { found_root: Utf8PathBuf },
 
     #[error("import cycle detected: {}", .0.iter().join_with(" -> "))]
-    ImportCycle(Vec<Utf8PathBuf>),
+    ImportCycle(Vec<PrettyPath>),
 
     #[error("cannot find manifest, try running `vex init` in the project’s root")]
     ManifestNotFound,
 
     // #[error("{0} has no file name")]
     // NoFileName(Utf8PathBuf),
-    #[error("{0} declares init function")]
-    NoInit(Utf8PathBuf),
+    #[error("{0} declares no init function")]
+    NoInit(PrettyPath),
 
     #[error("{0} declares no callbacks")]
-    NoCallbacks(Utf8PathBuf),
+    NoCallbacks(PrettyPath),
 
     #[error("{0} declares no target language")]
-    NoLanguage(Utf8PathBuf),
+    NoLanguage(PrettyPath),
 
     #[error("{0} declares no query")]
-    NoQuery(Utf8PathBuf),
+    NoQuery(PrettyPath),
+
+    #[error("cannot find module {0}")]
+    NoSuchModule(PrettyPath),
+
+    #[error("cannot find vex dir {0}")]
+    NoVexesDir(Utf8PathBuf),
 
     #[error("{what} is unavailable during {}", .action.name())]
     Unavailable { what: &'static str, action: Action },
@@ -37,7 +43,4 @@ pub enum Error {
 
     #[error("unsupported language: {0}")]
     UnknownLanguage(String),
-
-    #[error("unknown starlark module: {0}")]
-    UnknownModule(Utf8PathBuf),
 }

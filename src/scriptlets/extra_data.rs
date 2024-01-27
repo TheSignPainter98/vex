@@ -1,7 +1,6 @@
 use std::{cell::RefCell, fmt::Display, sync::Arc};
 
 use allocative::Allocative;
-use camino::Utf8Path;
 use dupe::Dupe;
 use starlark::{
     environment::{FrozenModule, Module},
@@ -23,7 +22,7 @@ use crate::{
             CloseFileObserver, CloseProjectObserver, MatchObserver, OpenFileObserver,
             OpenProjectObserver,
         },
-        ScriptletObserverData,
+        ScriptletObserverData, ScriptletPath,
     },
     supported_language::SupportedLanguage,
 };
@@ -231,7 +230,7 @@ impl FrozenObserverDataBuilder {
             .expect("FrozenModule extra has wrong type")
     }
 
-    pub fn build(&self, path: &Utf8Path) -> anyhow::Result<ScriptletObserverData> {
+    pub fn build(&self, path: &ScriptletPath) -> anyhow::Result<ScriptletObserverData> {
         let Self {
             lang,
             query,
@@ -249,18 +248,18 @@ impl FrozenObserverDataBuilder {
             + on_close_project.len()
             == 0
         {
-            return Err(Error::NoCallbacks(path.to_owned()).into());
+            return Err(Error::NoCallbacks(path.pretty_path.dupe()).into());
         }
 
         let lang = {
             let Some(lang) = lang else {
-                return Err(Error::NoLanguage(path.to_owned()).into());
+                return Err(Error::NoLanguage(path.pretty_path.dupe()).into());
             };
             lang.parse::<SupportedLanguage>()?
         };
         let query = {
             let Some(query) = query else {
-                return Err(Error::NoQuery(path.to_owned()).into());
+                return Err(Error::NoQuery(path.pretty_path.dupe()).into());
             };
             Arc::new(Query::new(lang.ts_language(), &query)?)
         };

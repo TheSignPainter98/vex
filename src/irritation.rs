@@ -5,24 +5,26 @@ use camino::Utf8Path;
 use dupe::Dupe;
 use tree_sitter::QueryMatch;
 
-use crate::{logger, source_file::SourceFile, vex::Id};
+use crate::{logger, scriptlets::PrettyPath, source_file::SourceFile};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd)]
 pub struct Irritation {
-    message: String,
-    start_byte: usize,
-    end_byte: usize,
-    path: Arc<Utf8Path>,
+    pub vex_path: PrettyPath,
+    pub message: String,
+    pub start_byte: usize,
+    pub end_byte: usize,
+    pub path: Arc<Utf8Path>,
+    _private: (),
 }
 
 impl Irritation {
     #[allow(unused)]
-    fn new(vex_id: &Id, src_file: &SourceFile, nit: QueryMatch<'_, '_>) -> Self {
+    fn new(path: PrettyPath, src_file: &SourceFile, nit: QueryMatch<'_, '_>) -> Self {
         // TODO(kcza): refactor to better suit new vex.warn
         let snippet = Snippet {
             title: Some(Annotation {
-                id: Some(vex_id.as_str()),
-                label: Some(vex_id.as_str()),
+                id: Some(path.as_str()),
+                label: Some(path.as_str()),
                 annotation_type: AnnotationType::Warning,
             }),
             footer: Vec::with_capacity(0), // TODO(kcza): is vec![] a good
@@ -43,6 +45,7 @@ impl Irritation {
                 .collect(),
         };
         Self {
+            vex_path: path.dupe(),
             message: logger::render_snippet(snippet),
             start_byte: nit
                 .captures
@@ -57,6 +60,7 @@ impl Irritation {
                 .max()
                 .unwrap_or(usize::MAX),
             path: src_file.path.dupe(),
+            _private: (),
         }
     }
 }
