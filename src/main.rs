@@ -1,5 +1,9 @@
 #![deny(missing_debug_implementations)]
 
+#[cfg(test)]
+#[macro_use]
+extern crate pretty_assertions;
+
 mod cli;
 mod context;
 mod error;
@@ -12,6 +16,9 @@ mod supported_language;
 mod verbosity;
 mod vex;
 mod vex_store;
+
+#[cfg(test)]
+mod test;
 
 use std::{env, fs, process::ExitCode, sync::Arc};
 
