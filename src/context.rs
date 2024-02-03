@@ -2,12 +2,15 @@ use camino::{Utf8Path, Utf8PathBuf};
 use glob::{MatchOptions, Pattern};
 use indoc::indoc;
 use serde::{Deserialize as Deserialise, Serialize as Serialise};
+
 use std::collections::HashMap;
-use std::fs::File;
 use std::io::{BufWriter, ErrorKind, Read, Write};
 use std::ops::Deref;
 use std::sync::Arc;
-use std::{env, fs};
+use std::{
+    env,
+    fs::{self, File},
+};
 
 use crate::error::Error;
 
