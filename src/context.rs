@@ -3,11 +3,11 @@ use glob::{MatchOptions, Pattern};
 use indoc::indoc;
 use serde::{Deserialize as Deserialise, Serialize as Serialise};
 use std::collections::HashMap;
-use std::env;
 use std::fs::File;
 use std::io::{BufWriter, ErrorKind, Read, Write};
 use std::ops::Deref;
 use std::sync::Arc;
+use std::{env, fs};
 
 use crate::error::Error;
 
@@ -26,6 +26,22 @@ impl Context {
             project_root,
             manifest: data,
         })
+    }
+
+    #[cfg(test)]
+    pub fn acquire_in(dir: &Utf8Path) -> anyhow::Result<Self> {
+        let (project_root, raw_data) = Manifest::acquire_file_in(dir)?;
+        let project_root = Arc::from(project_root);
+        let data = toml_edit::de::from_str(&raw_data)?;
+        Ok(Context {
+            project_root,
+            manifest: data,
+        })
+    }
+
+    pub fn init(project_root: Utf8PathBuf) -> anyhow::Result<()> {
+        fs::create_dir_all(project_root.join(QueriesDir::default().as_str()))?;
+        Manifest::init(project_root)
     }
 
     pub fn vex_dir(&self) -> Utf8PathBuf {
@@ -63,11 +79,11 @@ pub struct Manifest {
 impl Manifest {
     const FILE_NAME: &'static str = "vex.toml";
     const DEFAULT_CONTENT: &'static str = indoc! {r#"
-        ignore = [ "/.git", "/target", ".gitignore" ]
+        ignore = [ ".git/", ".gitignore", "/target/" ]
     "#};
 
-    pub fn init(project_root: Utf8PathBuf) -> anyhow::Result<()> {
-        match Manifest::acquire_file() {
+    fn init(project_root: Utf8PathBuf) -> anyhow::Result<()> {
+        match Manifest::acquire_file_in(&project_root) {
             Ok((found_root, _)) => return Err(Error::AlreadyInited { found_root }.into()),
             Err(e)
                 if e.downcast_ref::<Error>()
@@ -89,7 +105,11 @@ impl Manifest {
     }
 
     fn acquire_file() -> anyhow::Result<(Utf8PathBuf, String)> {
-        let mut project_root = Utf8PathBuf::try_from(env::current_dir()?)?;
+        Self::acquire_file_in(&Utf8PathBuf::try_from(env::current_dir()?)?)
+    }
+
+    fn acquire_file_in(dir: &Utf8Path) -> anyhow::Result<(Utf8PathBuf, String)> {
+        let mut project_root = dir.to_path_buf();
         let mut manifest_file = loop {
             match File::open(project_root.join(Self::FILE_NAME)) {
                 Ok(f) => break f,
@@ -202,10 +222,15 @@ impl CompiledFilePattern {
 
 #[cfg(test)]
 mod test {
+    use regex::Regex;
+    use toml_edit::Document;
+
+    use crate::scriptlets::PreinitingStore;
+
     use super::*;
 
     #[test]
-    fn init() {
+    fn default_manifest_valid() {
         let init_manifest: Manifest =
             toml_edit::de::from_str(Manifest::DEFAULT_CONTENT).expect("default manifest invalid");
         assert!(init_manifest.allows.is_none());
@@ -217,7 +242,7 @@ mod test {
                 .iter()
                 .map(FilePattern::as_str)
                 .collect::<Vec<_>>(),
-            &[".git/", ".gitignore", "/target"]
+            &[".git/", ".gitignore", "/target/"]
         );
 
         let raw_manifest: Document = Manifest::DEFAULT_CONTENT.parse().unwrap();
@@ -227,5 +252,57 @@ mod test {
             formatted
         };
         assert_eq!(raw_manifest.to_string(), formatted.to_string());
+    }
+
+    #[test]
+    fn init() -> anyhow::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let tempdir_path = Utf8PathBuf::try_from(tempdir.path().to_owned())?;
+
+        // Manifest not found
+        let err = Context::acquire_in(&tempdir_path).unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "cannot find manifest, try running `vex init` in the project’s root"
+        );
+
+        Context::init(tempdir_path.clone()).unwrap();
+        let ctx = Context::acquire_in(&tempdir_path).unwrap();
+        PreinitingStore::new(&ctx)
+            .unwrap()
+            .preinit()
+            .unwrap()
+            .init()
+            .unwrap();
+
+        // Already inited
+        let re = Regex::new("^already inited in a parent directory .*").unwrap();
+        let err = Manifest::init(tempdir_path.clone()).unwrap_err();
+        assert!(
+            re.is_match(&err.to_string()),
+            "incorrect error, expected {} but got {err}",
+            re.as_str()
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn no_vexes_dir() -> anyhow::Result<()> {
+        let tempdir = tempfile::tempdir()?;
+        let tempdir_path = Utf8PathBuf::try_from(tempdir.path().to_owned())?;
+
+        File::create(tempdir_path.join("vex.toml"))?;
+
+        let re = Regex::new("^cannot find vexes directory at .*").unwrap();
+        let ctx = Context::acquire_in(&tempdir_path).unwrap();
+        let err = PreinitingStore::new(&ctx).unwrap_err();
+        assert!(
+            re.is_match(&err.to_string()),
+            "incorrect error, expected {} but got {err}",
+            re.as_str()
+        );
+
+        Ok(())
     }
 }

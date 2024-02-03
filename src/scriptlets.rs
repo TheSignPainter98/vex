@@ -9,4 +9,4 @@ mod store;
 
 pub use observers::{Observer, ScriptletObserverData};
 pub use scriptlet::{PrettyPath, ScriptletPath};
-pub use store::PreinitingStore;
+pub use store::{PreinitingStore, VexingStore};

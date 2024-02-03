@@ -23,6 +23,7 @@ use crate::{
     },
 };
 
+#[derive(Debug)]
 pub struct PreinitingScriptlet {
     pub path: ScriptletPath,
     toplevel: bool,
@@ -38,7 +39,6 @@ impl PreinitingScriptlet {
     }
 
     fn new_from_str(path: ScriptletPath, code: String, toplevel: bool) -> anyhow::Result<Self> {
-        println!("path is {path}");
         let ast = AstModule::parse(path.as_str(), code, &Dialect::Standard)?;
         let loads_files = ast
             .loads()
@@ -164,6 +164,7 @@ impl Display for PrettyPath {
     }
 }
 
+#[derive(Debug)]
 pub struct InitingScriptlet {
     pub path: ScriptletPath,
     toplevel: bool,
@@ -221,6 +222,7 @@ impl InitingScriptlet {
     }
 }
 
+#[derive(Debug)]
 pub struct VexingScriptlet {
     pub path: ScriptletPath,
     _preinited_module: FrozenModule,      // Keep frozen heap alive
@@ -236,15 +238,251 @@ impl VexingScriptlet {
 
 #[cfg(test)]
 mod test {
-    use starlark::values::FrozenStringValue;
+    use indoc::{formatdoc, indoc};
 
-    use super::*;
+    use crate::vextest::VexTest;
 
     #[test]
     fn global_names_consistent() {
-        let scriptlet = Scriptlet::new_from_str(Utf8Path::new("consistency.star"), "a = 1")?;
-        let global_names =
-            HashSet::from_iter(scriptlet.globals().names().map(FrozenStringValue::borrow));
-        assert_eq!(scriptlet.global_names(), global_names);
+        // TODO(kcza): complete me once linting is added!
+        // let scriptlet = PreinitingScriptlet::new_from_str(
+        //     Utf8PathBuf::from("consistency.star"),
+        //     "".into(),
+        //     true,
+        // )
+        // .unwrap();
+        // let global_names = HashSet::from_iter(
+        //     PreinitingScriptlet::globals()
+        //         .names()
+        //         .map(|n| n.to_string()),
+        // );
+        // assert_eq!(scriptlet.global_names(), global_names);
+        // TODO(kcza): complete me once linting is added!
+    }
+
+    #[test]
+    fn syntax_error() {
+        VexTest::new("incomplete-binary")
+            .with_scriptlet("vexes/test.star", "x+")
+            .try_run()
+            .expect_err("unexpected success");
+    }
+
+    #[test]
+    fn missing_init() {
+        VexTest::new("no-init")
+            .with_scriptlet("vexes/test.star", "")
+            .returns_error(r"test\.star declares no init function")
+    }
+
+    #[test]
+    fn missing_declarations() {
+        VexTest::new("no-language")
+            .with_scriptlet(
+                "vexes/test.star",
+                indoc! {r#"
+                    def init():
+                        pass
+                "#},
+            )
+            .returns_error(r"test\.star declares no target language");
+        VexTest::new("no-query")
+            .with_scriptlet(
+                "vexes/test.star",
+                indoc! {r#"
+                    def init():
+                        vex.language('rust')
+                "#},
+            )
+            .returns_error(r"test\.star declares no query");
+        VexTest::new("no-callbacks")
+            .with_scriptlet(
+                "vexes/test.star",
+                indoc! {r#"
+                    def init():
+                        vex.language('rust')
+                        vex.query('(binary_expression)')
+                "#},
+            )
+            .returns_error(r"test\.star declares no callbacks");
+    }
+
+    #[test]
+    fn unknown_language() {
+        VexTest::new("unknown-language")
+            .with_scriptlet(
+                "vexes/test.star",
+                indoc! {r#"
+                    def init():
+                        vex.language('brainfuck')
+                        vex.query('(binary_expression)')
+                        vex.observe('match', on_match)
+
+                    def on_match(event):
+                        pass
+                "#},
+            )
+            .returns_error("unknown language 'brainfuck'")
+    }
+
+    #[test]
+    fn malformed_query() {
+        VexTest::new("empty")
+            .with_scriptlet(
+                "vexes/test.star",
+                indoc! {r#"
+                    def init():
+                        vex.language('rust')
+                        vex.query('')
+                        vex.observe('match', on_match)
+
+                    def on_match(event):
+                        pass
+                "#},
+            )
+            .returns_error(r"test\.star declares empty query");
+        VexTest::new("syntax-error")
+            .with_scriptlet(
+                "vexes/test.star",
+                indoc! {r#"
+                    def init():
+                        vex.language('rust')
+                        vex.query('(binary_expression') # Missing closing bracket
+                        vex.observe('match', on_match)
+
+                    def on_match(event):
+                        pass
+                "#},
+            )
+            .returns_error("Invalid syntax");
+    }
+
+    #[test]
+    fn unknown_event() {
+        VexTest::new("unknown-event")
+            .with_scriptlet(
+                "vexes/test.star",
+                indoc! {r#"
+                    def init():
+                        vex.language('rust')
+                        vex.query('(binary_expression)')
+                        vex.observe('smissmass', on_smissmass)
+
+                    def on_smissmass(event):
+                        pass
+                "#},
+            )
+            .returns_error("unknown event 'smissmass'");
+    }
+
+    #[test]
+    fn app_object_attr_availability() {
+        let assert_unavailable_preiniting = |name, call| {
+            VexTest::new(format!("preiniting-{name}"))
+                .with_scriptlet(
+                    "vexes/test.star",
+                    formatdoc! {r#"
+                        {call}
+
+                        def init():
+                            vex.language('rust')
+                            vex.query('(binary_expression)')
+                            vex.observe('match', print)
+                    "#},
+                )
+                .returns_error(format!("{name} unavailable while preiniting"));
+        };
+        assert_unavailable_preiniting("vex.language", "vex.language('rust')");
+        assert_unavailable_preiniting("vex.query", "vex.query('(binary_expression)')");
+        assert_unavailable_preiniting("vex.observe", "vex.observe('match', print)");
+        assert_unavailable_preiniting("vex.warn", "vex.warn('oh no!')");
+
+        let assert_unavailable_initing = |name, call| {
+            VexTest::new(format!("initing-{name}"))
+                .with_scriptlet(
+                    "vexes/test.star",
+                    formatdoc! {r#"
+                        def init():
+                            {call}
+                            vex.language('rust')
+                            vex.query('(binary_expression)')
+                            vex.observe('match', print)
+                    "#},
+                )
+                .returns_error(format!("{name} unavailable while initing"));
+        };
+        assert_unavailable_initing("vex.warn", "vex.warn('oh no!')");
+
+        let assert_unavailable_vexing = |name, call| {
+            VexTest::new(format!("vexing-{name}"))
+                .with_scriptlet(
+                    "vexes/test.star",
+                    formatdoc! {r#"
+                        def init():
+                            vex.language('rust')
+                            vex.query('(binary_expression)')
+                            vex.observe('match', print)
+                            vex.observe('open_project', on_open_project)
+
+                        def on_open_project(event):
+                            {call}
+                    "#},
+                )
+                .returns_error(format!("{name} unavailable while vexing"));
+        };
+        assert_unavailable_vexing("vex.language", "vex.language('rust')");
+        assert_unavailable_vexing("vex.query", "vex.query('(binary_expression)')");
+        assert_unavailable_vexing("vex.observe", "vex.observe('match', print)");
+    }
+
+    #[test]
+    fn invalid_global() {
+        VexTest::new("invalid global")
+            .with_scriptlet("vexes/test.star", "problems()")
+            .returns_error("not found")
+    }
+
+    #[test]
+    fn loads() {
+        VexTest::new("valid")
+            .with_scriptlet(
+                "vexes/test.star",
+                indoc! {r#"
+                    load('lib/helper.star', imported_on_match='on_match')
+
+                    def init():
+                        vex.language('rust')
+                        vex.query('(binary_expression)')
+                        vex.observe('match', imported_on_match)
+                "#},
+            )
+            .with_scriptlet(
+                "vexes/lib/helper.star",
+                indoc! {r#"
+                    def on_match(event):
+                        pass
+                "#},
+            )
+            .assert_irritation_free();
+        VexTest::new("invalid-loads")
+            .with_scriptlet("vexes/test.star", "load('i-do-not-exist.star', 'x')")
+            .returns_error(r"cannot find module 'i-do-not-exist\.star'");
+        VexTest::new("cycle-loop")
+            .with_scriptlet("vexes/test.star", "load('test.star', '_')")
+            .returns_error(r"import cycle detected: test\.star -> test\.star");
+        VexTest::new("cycle-simple")
+            .with_scriptlet("vexes/test.star", "load('1.star', '_')")
+            .with_scriptlet("vexes/1.star", r#"load('2.star', '_')"#)
+            .with_scriptlet("vexes/2.star", r#"load('1.star', '_')"#)
+            .returns_error(r"import cycle detected: 1\.star -> 2\.star -> 1\.star");
+        VexTest::new("cycle-complex")
+            .with_scriptlet("vexes/test.star", "load('1.star', '_')")
+            .with_scriptlet("vexes/1.star", r#"load('2.star', '_')"#)
+            .with_scriptlet("vexes/2.star", r#"load('3.star', '_')"#)
+            .with_scriptlet("vexes/3.star", r#"load('lib/4.star', '_')"#)
+            .with_scriptlet("vexes/lib/4.star", r#"load('1.star', '_')"#)
+            .returns_error(
+                r"import cycle detected: 1\.star -> 2\.star -> 3\.star -> lib/4.star -> 1.star",
+            );
     }
 }

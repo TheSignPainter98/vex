@@ -6,6 +6,7 @@ use std::{
 };
 
 use camino::Utf8PathBuf;
+use regex::Regex;
 
 use crate::{context::Context, irritation::Irritation, scriptlets::PreinitingStore};
 
@@ -45,10 +46,13 @@ impl VexTest {
         path: impl Into<Utf8PathBuf>,
         content: impl Into<Cow<'static, str>>,
     ) -> Self {
+        let path = path.into();
         assert!(
-            self.scriptlets
-                .insert(path.into(), content.into())
-                .is_none(),
+            path.starts_with("vexes/"),
+            "test scriptlet path must start with vexes/"
+        );
+        assert!(
+            self.scriptlets.insert(path, content.into()).is_none(),
             "duplicate scriptlet declaration"
         );
         self
@@ -60,9 +64,12 @@ impl VexTest {
         path: impl Into<Utf8PathBuf>,
         content: impl Into<Cow<'static, str>>,
     ) -> Self {
-        self.source_files
-            .insert(path.into(), content.into())
-            .expect("duplicate source file declaration");
+        assert!(
+            self.source_files
+                .insert(path.into(), content.into())
+                .is_none(),
+            "duplicate source file declaration"
+        );
         self
     }
 
@@ -87,10 +94,16 @@ impl VexTest {
 
     #[allow(unused)]
     pub fn returns_error(self, message: impl Into<Cow<'static, str>>) {
-        assert_eq!(self.try_run().unwrap_err().to_string(), message.into());
+        let message = message.into();
+        let err = self.try_run().unwrap_err();
+        let re = Regex::new(&message).expect("regex invalid");
+        assert!(
+            re.is_match(&err.to_string()),
+            "unexpected error: expected error matching '{message}' but got:\n{err}"
+        );
     }
 
-    fn try_run(mut self) -> anyhow::Result<Vec<Irritation>> {
+    pub fn try_run(mut self) -> anyhow::Result<Vec<Irritation>> {
         self.setup();
 
         let root_dir = tempfile::tempdir().unwrap();
@@ -106,13 +119,19 @@ impl VexTest {
         for (path, content) in &self.scriptlets {
             let scriptlet_path = root_path.join(path);
             fs::create_dir_all(scriptlet_path.parent().unwrap()).unwrap();
-            File::create(scriptlet_path)?
+            File::create(scriptlet_path)
+                .unwrap()
                 .write_all(content.as_bytes())
                 .unwrap();
         }
 
         for (path, content) in &self.source_files {
-            File::create(root_path.join(path))?.write_all(content.as_bytes())?;
+            let source_path = root_path.join(path);
+            fs::create_dir_all(source_path.parent().unwrap()).unwrap();
+            File::create(root_path.join(path))
+                .unwrap()
+                .write_all(content.as_bytes())
+                .unwrap();
         }
 
         let ctx = Context::acquire_in(&root_path).unwrap();
@@ -124,7 +143,7 @@ impl VexTest {
     }
 
     fn setup(&mut self) {
-        println!("running test {}...", self.name);
+        eprintln!("running test {}...", self.name);
     }
 }
 

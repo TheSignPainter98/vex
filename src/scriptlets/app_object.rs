@@ -82,8 +82,8 @@ impl AppObject {
                 ],
             )?;
 
-            todo!();
-            // Ok(NoneType)
+            // TODO(kcza): complete me!
+            Ok(NoneType)
         }
     }
 

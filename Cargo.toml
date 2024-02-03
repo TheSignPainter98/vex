@@ -33,3 +33,4 @@ tree-sitter-rust = "0.20.4"
 
 [dev-dependencies]
 pretty_assertions = "1.4.0"
+regex = "1.10.3"
