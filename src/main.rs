@@ -1,5 +1,9 @@
 #![deny(missing_debug_implementations)]
 
+#[cfg(test)]
+#[macro_use]
+extern crate pretty_assertions;
+
 mod cli;
 mod context;
 mod error;
@@ -11,7 +15,9 @@ mod source_file;
 mod supported_language;
 mod verbosity;
 mod vex;
-mod vex_store;
+
+#[cfg(test)]
+mod vextest;
 
 use std::{env, fs, process::ExitCode, sync::Arc};
 
@@ -24,10 +30,11 @@ use tree_sitter::QueryCursor;
 
 use crate::{
     cli::{Args, CheckCmd, Command},
-    context::{CompiledFilePattern, Context, Manifest},
+    context::{CompiledFilePattern, Context},
+    irritation::Irritation,
     scriptlets::{
         event::{CloseFileEvent, MatchEvent, OpenFileEvent, OpenProjectEvent},
-        Observer, PreinitingStore,
+        Observer, PreinitingStore, VexingStore,
     },
     source_file::SourceFile,
     supported_language::SupportedLanguage,
@@ -64,6 +71,29 @@ fn check(_cmd_args: CheckCmd) -> anyhow::Result<()> {
     let ctx = Context::acquire()?;
     let store = PreinitingStore::new(&ctx)?.preinit()?.init()?;
 
+    let irritations = vex(&ctx, &store)?;
+    println!("Got irritations: {irritations:?}");
+
+    // if let MaxProblems::Limited(max_problems) = cmd_args.max_problems {
+    //     problems.truncate(max_problems as usize);
+    // }
+    // problems.sort();
+    // for problem in &problems {
+    //     if log_enabled!(log::Level::Warn) {
+    //         warn!(target: "vex", custom = true; "{problem}");
+    //     }
+    // }
+    // if log_enabled!(log::Level::Info) {
+    //     info!(
+    //         "scanned {} and found {}",
+    //         Plural::new(npaths, "path", "paths"),
+    //         Plural::new(problems.len(), "problem", "problems"),
+    //     );
+    // }
+    Ok(())
+}
+
+fn vex(ctx: &Context, store: &VexingStore) -> anyhow::Result<Vec<Irritation>> {
     let language_observers = store.language_observers();
     let paths = {
         let mut paths = Vec::new();
@@ -171,24 +201,8 @@ fn check(_cmd_args: CheckCmd) -> anyhow::Result<()> {
     //     }
     // }
     //
-    // if let MaxProblems::Limited(max_problems) = cmd_args.max_problems {
-    //     problems.truncate(max_problems as usize);
-    // }
-    // problems.sort();
-    // for problem in &problems {
-    //     if log_enabled!(log::Level::Warn) {
-    //         warn!(target: "vex", custom = true; "{problem}");
-    //     }
-    // }
-    // if log_enabled!(log::Level::Info) {
-    //     info!(
-    //         "scanned {} and found {}",
-    //         Plural::new(npaths, "path", "paths"),
-    //         Plural::new(problems.len(), "problem", "problems"),
-    //     );
-    // }
 
-    Ok(())
+    Ok(vec![])
 }
 
 fn walkdir(
@@ -238,5 +252,5 @@ fn walkdir(
 
 fn init() -> anyhow::Result<()> {
     let cwd = Utf8PathBuf::try_from(env::current_dir()?)?;
-    Manifest::init(cwd)
+    Context::init(cwd)
 }

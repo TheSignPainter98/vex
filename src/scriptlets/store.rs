@@ -21,6 +21,7 @@ use super::PrettyPath;
 
 type StoreIndex = usize;
 
+#[derive(Debug)]
 pub struct PreinitingStore {
     dir: Utf8PathBuf,
     path_indices: BTreeMap<PrettyPath, StoreIndex>,
@@ -57,7 +58,8 @@ impl PreinitingStore {
             }
 
             if metadata.is_dir() {
-                return self.load_dir(ctx, entry_path, false);
+                self.load_dir(ctx, entry_path, false)?;
+                continue;
             }
 
             if !metadata.is_file() {
@@ -91,6 +93,7 @@ impl PreinitingStore {
     }
 
     pub fn preinit(mut self) -> anyhow::Result<InitingStore> {
+        self.check_loads()?;
         self.sort();
         self.linearise_store()?;
 
@@ -107,6 +110,19 @@ impl PreinitingStore {
         Ok(InitingStore {
             store: initing_store,
         })
+    }
+
+    fn check_loads(&self) -> anyhow::Result<()> {
+        // TODO(kcza): use relative loads
+        let mut unknown_loads = self.store.iter().flat_map(|s| {
+            s.loads()
+                .iter()
+                .filter(|l| self.path_indices.get(l).is_none())
+        });
+        if let Some(unknown_module) = unknown_loads.next() {
+            return Err(Error::NoSuchModule(unknown_module.dupe()).into());
+        }
+        Ok(())
     }
 
     fn sort(&mut self) {
@@ -295,6 +311,7 @@ impl FileLoader for &PreinitedModuleCache {
     }
 }
 
+#[derive(Debug)]
 pub struct InitingStore {
     store: Vec<InitingScriptlet>,
 }
@@ -314,6 +331,7 @@ impl InitingStore {
     }
 }
 
+#[derive(Debug)]
 pub struct VexingStore {
     #[allow(unused)]
     store: Vec<VexingScriptlet>,

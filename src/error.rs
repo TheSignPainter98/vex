@@ -9,6 +9,9 @@ pub enum Error {
     #[error("already inited in a parent directory {found_root}")]
     AlreadyInited { found_root: Utf8PathBuf },
 
+    #[error("{0} declares empty query")]
+    EmptyQuery(PrettyPath),
+
     #[error("import cycle detected: {}", .0.iter().join_with(" -> "))]
     ImportCycle(Vec<PrettyPath>),
 
@@ -26,21 +29,24 @@ pub enum Error {
     #[error("{0} declares no target language")]
     NoLanguage(PrettyPath),
 
+    #[error("{0} declares no match observer")]
+    NoMatch(PrettyPath),
+
     #[error("{0} declares no query")]
     NoQuery(PrettyPath),
 
-    #[error("cannot find module {0}")]
+    #[error("cannot find module '{0}'")]
     NoSuchModule(PrettyPath),
 
-    #[error("cannot find vex dir {0}")]
+    #[error("cannot find vexes directory at {0}")]
     NoVexesDir(Utf8PathBuf),
 
-    #[error("{what} is unavailable during {}", .action.name())]
+    #[error("{what} unavailable while {}", .action.name())]
     Unavailable { what: &'static str, action: Action },
 
     #[error("unknown event '{0}', expected one of: {}", EventType::iter().join_with(", "))]
     UnknownEvent(String),
 
-    #[error("unsupported language: {0}")]
+    #[error("unknown language '{0}'")]
     UnknownLanguage(String),
 }
