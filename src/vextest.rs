@@ -6,6 +6,7 @@ use std::{
 };
 
 use camino::Utf8PathBuf;
+use indoc::indoc;
 use regex::Regex;
 
 use crate::{context::Context, irritation::Irritation, scriptlets::PreinitingStore};
@@ -46,16 +47,26 @@ impl VexTest {
         path: impl Into<Utf8PathBuf>,
         content: impl Into<Cow<'static, str>>,
     ) -> Self {
+        self.add_scriptlet(path, content);
+        self
+    }
+
+    fn add_scriptlet(
+        &mut self,
+        path: impl Into<Utf8PathBuf>,
+        content: impl Into<Cow<'static, str>>,
+    ) {
         let path = path.into();
+        let content = content.into();
+
         assert!(
             path.starts_with("vexes/"),
             "test scriptlet path must start with vexes/"
         );
         assert!(
-            self.scriptlets.insert(path, content.into()).is_none(),
+            self.scriptlets.insert(path, content).is_none(),
             "duplicate scriptlet declaration"
         );
-        self
     }
 
     #[allow(unused)]
@@ -144,6 +155,36 @@ impl VexTest {
 
     fn setup(&mut self) {
         eprintln!("running test {}...", self.name);
+
+        self.add_scriptlet(
+            "vexes/check.star",
+            indoc! {r#"
+                check = {}
+
+                # Placate error checker
+                def init():
+                    vex.language('rust')
+                    vex.query('(binary_expression)')
+                    vex.observe('match', lambda x: x)
+
+                def check_eq(left, right):
+                    if left != right:
+                        fail('assertion failed: %r != %r' % (left, right))
+                check['eq'] = check_eq
+
+                def check_hasattr(obj, attr):
+                    if not hasattr(obj, attr):
+                        fail('assertion failed: %r.%v does not exist' % (obj, attr))
+                check['hasattr'] = check_hasattr
+
+                def check_in(obj, what):
+                    if what not in obj:
+                        fail('assertion failed: %r not in %r' % (what, obj))
+                check['in'] = check_in
+
+                check
+            "#},
+        )
     }
 }
 

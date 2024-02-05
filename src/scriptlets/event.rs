@@ -1,17 +1,16 @@
-use std::{fmt::Display, str::FromStr, sync::Arc};
+use std::{fmt::Display, str::FromStr};
 
 use allocative::Allocative;
-use camino::Utf8Path;
 use derive_new::new;
 use dupe::Dupe;
 use starlark::{
     starlark_simple_value,
     values::{NoSerialize, ProvidesStaticType, StarlarkValue},
 };
-use starlark_derive::starlark_value;
+use starlark_derive::{starlark_attrs, starlark_value, StarlarkAttrs};
 use strum::EnumIter;
 
-use crate::error::Error;
+use crate::{error::Error, scriptlets::PrettyPath};
 
 pub trait Event {
     const TYPE: EventType;
@@ -60,10 +59,21 @@ impl Display for EventType {
     }
 }
 
-#[derive(new, Clone, Debug, Dupe, PartialEq, Eq, ProvidesStaticType, NoSerialize, Allocative)]
+#[derive(
+    new,
+    Clone,
+    Debug,
+    Dupe,
+    PartialEq,
+    Eq,
+    ProvidesStaticType,
+    NoSerialize,
+    Allocative,
+    StarlarkAttrs,
+)]
 pub struct OpenProjectEvent {
     #[allocative(skip)]
-    project_root: Arc<Utf8Path>,
+    path: PrettyPath,
 }
 starlark_simple_value!(OpenProjectEvent);
 
@@ -72,7 +82,9 @@ impl Event for OpenProjectEvent {
 }
 
 #[starlark_value(type = "OpenProjectEvent")]
-impl<'v> StarlarkValue<'v> for OpenProjectEvent {}
+impl<'v> StarlarkValue<'v> for OpenProjectEvent {
+    starlark_attrs!();
+}
 
 impl Display for OpenProjectEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -80,10 +92,21 @@ impl Display for OpenProjectEvent {
     }
 }
 
-#[derive(new, Clone, Debug, Dupe, PartialEq, Eq, ProvidesStaticType, NoSerialize, Allocative)]
+#[derive(
+    new,
+    Clone,
+    Debug,
+    Dupe,
+    PartialEq,
+    Eq,
+    ProvidesStaticType,
+    NoSerialize,
+    Allocative,
+    StarlarkAttrs,
+)]
 pub struct OpenFileEvent {
     #[allocative(skip)]
-    path: Arc<Utf8Path>,
+    path: PrettyPath,
 }
 starlark_simple_value!(OpenFileEvent);
 
@@ -92,7 +115,9 @@ impl Event for OpenFileEvent {
 }
 
 #[starlark_value(type = "OpenFileEvent")]
-impl<'v> StarlarkValue<'v> for OpenFileEvent {}
+impl<'v> StarlarkValue<'v> for OpenFileEvent {
+    starlark_attrs!();
+}
 
 impl Display for OpenFileEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -100,8 +125,22 @@ impl Display for OpenFileEvent {
     }
 }
 
-#[derive(new, Clone, Debug, Dupe, PartialEq, Eq, ProvidesStaticType, NoSerialize, Allocative)]
-pub struct MatchEvent {}
+#[derive(
+    new,
+    Clone,
+    Debug,
+    Dupe,
+    PartialEq,
+    Eq,
+    ProvidesStaticType,
+    NoSerialize,
+    Allocative,
+    StarlarkAttrs,
+)]
+pub struct MatchEvent {
+    #[allocative(skip)]
+    path: PrettyPath,
+}
 starlark_simple_value!(MatchEvent);
 
 impl Event for MatchEvent {
@@ -109,7 +148,9 @@ impl Event for MatchEvent {
 }
 
 #[starlark_value(type = "MatchEvent")]
-impl<'v> StarlarkValue<'v> for MatchEvent {}
+impl<'v> StarlarkValue<'v> for MatchEvent {
+    starlark_attrs!();
+}
 
 impl Display for MatchEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -117,10 +158,21 @@ impl Display for MatchEvent {
     }
 }
 
-#[derive(new, Clone, Debug, Dupe, PartialEq, Eq, ProvidesStaticType, NoSerialize, Allocative)]
+#[derive(
+    new,
+    Clone,
+    Debug,
+    Dupe,
+    PartialEq,
+    Eq,
+    ProvidesStaticType,
+    NoSerialize,
+    Allocative,
+    StarlarkAttrs,
+)]
 pub struct CloseFileEvent {
     #[allocative(skip)]
-    path: Arc<Utf8Path>,
+    path: PrettyPath,
 }
 starlark_simple_value!(CloseFileEvent);
 
@@ -129,7 +181,9 @@ impl Event for CloseFileEvent {
 }
 
 #[starlark_value(type = "CloseFileEvent")]
-impl<'v> StarlarkValue<'v> for CloseFileEvent {}
+impl<'v> StarlarkValue<'v> for CloseFileEvent {
+    starlark_attrs!();
+}
 
 impl Display for CloseFileEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -137,10 +191,21 @@ impl Display for CloseFileEvent {
     }
 }
 
-#[derive(new, Clone, Debug, Dupe, PartialEq, Eq, ProvidesStaticType, NoSerialize, Allocative)]
+#[derive(
+    new,
+    Clone,
+    Debug,
+    Dupe,
+    PartialEq,
+    Eq,
+    ProvidesStaticType,
+    NoSerialize,
+    Allocative,
+    StarlarkAttrs,
+)]
 pub struct CloseProjectEvent {
     #[allocative(skip)]
-    project_root: Arc<Utf8Path>,
+    path: PrettyPath,
 }
 starlark_simple_value!(CloseProjectEvent);
 
@@ -149,10 +214,85 @@ impl Event for CloseProjectEvent {
 }
 
 #[starlark_value(type = "CloseProjectEvent")]
-impl<'v> StarlarkValue<'v> for CloseProjectEvent {}
+impl<'v> StarlarkValue<'v> for CloseProjectEvent {
+    starlark_attrs!();
+}
 
 impl Display for CloseProjectEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         <Self as StarlarkValue>::TYPE.fmt(f)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use indoc::formatdoc;
+
+    use crate::vextest::VexTest;
+
+    fn test_event_common_properties(event_name: &'static str, type_name: &'static str) {
+        VexTest::new("type-name")
+            .with_scriptlet(
+                "vexes/test.star",
+                formatdoc! {r#"
+                    load('check.star', 'check')
+
+                    def init():
+                        vex.language('rust')
+                        vex.query('(binary_expression) @bin_expr')
+                        vex.observe('match', lambda x: x) # Make the error checker happy.
+                        vex.observe('{event_name}', on_{event_name})
+
+                    def on_{event_name}(event):
+                        check['eq'](type(event), '{type_name}')
+                "#},
+            )
+            .assert_irritation_free();
+        VexTest::new("common-attrs")
+            .with_scriptlet(
+                "vexes/test.star",
+                formatdoc! {r#"
+                    load('check.star', 'check')
+
+                    def init():
+                        vex.language('rust')
+                        vex.query('(binary_expression) @bin_expr')
+                        vex.observe('match', lambda x: x) # Make the error checker happy.
+                        vex.observe('{event_name}', on_{event_name})
+
+                    def on_{event_name}(event):
+                        check['hasattr'](event, 'path')
+                        if 'project' in '{event_name}':
+                            check['in'](str(event.path), '/')
+                        else:
+                            check['eq'](event.path, 'src/main.rs')
+                "#},
+            )
+            .assert_irritation_free();
+    }
+
+    #[test]
+    fn on_open_project_event() {
+        test_event_common_properties("open_project", "OpenProjectEvent");
+    }
+
+    #[test]
+    fn on_open_file_event() {
+        test_event_common_properties("open_file", "OpenFileEvent");
+    }
+
+    #[test]
+    fn on_match_event() {
+        test_event_common_properties("match", "MatchEvent");
+    }
+
+    #[test]
+    fn on_close_file_event() {
+        test_event_common_properties("close_file", "CloseFileEvent");
+    }
+
+    #[test]
+    fn on_close_project_event() {
+        test_event_common_properties("close_project", "CloseProjectEvent");
     }
 }

@@ -1,7 +1,6 @@
-use std::{fmt::Display, sync::Arc};
+use std::fmt::Display;
 
 use annotate_snippets::{Annotation, AnnotationType, Slice, Snippet};
-use camino::Utf8Path;
 use dupe::Dupe;
 use tree_sitter::QueryMatch;
 
@@ -13,7 +12,7 @@ pub struct Irritation {
     pub message: String,
     pub start_byte: usize,
     pub end_byte: usize,
-    pub path: Arc<Utf8Path>,
+    pub path: PrettyPath,
     _private: (),
 }
 

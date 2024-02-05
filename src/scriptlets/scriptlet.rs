@@ -1,5 +1,6 @@
-use std::{collections::HashSet, fmt::Display, fs, sync::Arc};
+use std::{collections::HashSet, fmt::Display, fs, ops::Deref, sync::Arc};
 
+use allocative::Allocative;
 use anyhow::Context;
 use camino::Utf8Path;
 use dupe::Dupe;
@@ -8,8 +9,11 @@ use starlark::{
     environment::{FrozenModule, Globals, GlobalsBuilder, LibraryExtension, Module},
     errors::Lint,
     eval::Evaluator,
+    starlark_simple_value,
     syntax::{AstModule, Dialect},
+    values::StarlarkValue,
 };
+use starlark_derive::{starlark_value, NoSerialize, ProvidesStaticType};
 
 use crate::{
     error::Error,
@@ -137,10 +141,27 @@ impl Display for ScriptletPath {
     }
 }
 
-#[derive(Clone, Debug, Dupe, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct PrettyPath(Arc<Utf8Path>);
+#[derive(
+    Clone,
+    Debug,
+    Dupe,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Allocative,
+    NoSerialize,
+    ProvidesStaticType,
+)]
+pub struct PrettyPath(#[allocative(skip)] Arc<Utf8Path>);
+starlark_simple_value!(PrettyPath);
 
 impl PrettyPath {
+    pub fn new(path: &Utf8Path) -> Self {
+        Self(Arc::from(path))
+    }
+
     pub fn as_str(&self) -> &str {
         self.as_ref()
     }
@@ -158,11 +179,22 @@ impl AsRef<str> for PrettyPath {
     }
 }
 
+impl Deref for PrettyPath {
+    type Target = Utf8Path;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.as_ref()
+    }
+}
+
 impl Display for PrettyPath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.0.fmt(f)
     }
 }
+
+#[starlark_value(type = "Path")]
+impl<'v> StarlarkValue<'v> for PrettyPath {}
 
 #[derive(Debug)]
 pub struct InitingScriptlet {
