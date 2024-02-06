@@ -12,6 +12,7 @@ mod logger;
 mod plural;
 mod scriptlets;
 mod source_file;
+mod source_path;
 mod supported_language;
 mod verbosity;
 mod vex;
@@ -25,7 +26,6 @@ use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser as _;
 use dupe::Dupe;
 use log::{info, log_enabled, trace};
-use scriptlets::PrettyPath;
 use strum::IntoEnumIterator;
 use tree_sitter::QueryCursor;
 
@@ -34,10 +34,12 @@ use crate::{
     context::{CompiledFilePattern, Context},
     irritation::Irritation,
     scriptlets::{
+        event::CloseProjectEvent,
         event::{CloseFileEvent, MatchEvent, OpenFileEvent, OpenProjectEvent},
         Observer, PreinitingStore, VexingStore,
     },
     source_file::SourceFile,
+    source_path::SourcePath,
     supported_language::SupportedLanguage,
     verbosity::Verbosity,
 };
@@ -122,7 +124,7 @@ fn vex(ctx: &Context, store: &VexingStore) -> anyhow::Result<Vec<Irritation>> {
         )?;
         paths
             .into_iter()
-            .map(|p| PrettyPath::new(&p))
+            .map(|p| SourcePath::new(&p, &ctx.project_root))
             .collect::<Vec<_>>()
     };
 
@@ -135,7 +137,7 @@ fn vex(ctx: &Context, store: &VexingStore) -> anyhow::Result<Vec<Irritation>> {
     }
     // let mut irritations = Vec::new();
     for path in paths {
-        let Some(src_file) = SourceFile::load_if_supported(path.dupe()) else {
+        let Some(src_file) = SourceFile::load_if_supported(path) else {
             continue;
         };
         let src_file = src_file?;
@@ -143,7 +145,7 @@ fn vex(ctx: &Context, store: &VexingStore) -> anyhow::Result<Vec<Irritation>> {
         println!("linting {}...", src_file.path);
         for observers in &language_observers[src_file.lang] {
             for on_open_file in &observers.on_open_file[..] {
-                on_open_file.handle(OpenFileEvent::new(path.dupe()))?;
+                on_open_file.handle(OpenFileEvent::new(src_file.path.pretty_path.dupe()))?;
             }
 
             println!("running a handler set...");
@@ -154,12 +156,12 @@ fn vex(ctx: &Context, store: &VexingStore) -> anyhow::Result<Vec<Irritation>> {
             ) {
                 println!("found {qmatch:?}");
                 for on_match in observers.on_match.iter() {
-                    on_match.handle(MatchEvent::new(path.dupe()))?;
+                    on_match.handle(MatchEvent::new(src_file.path.pretty_path.dupe()))?;
                 }
             }
 
             for on_close_file in observers.on_close_file.iter() {
-                on_close_file.handle(CloseFileEvent::new(path.dupe()))?;
+                on_close_file.handle(CloseFileEvent::new(src_file.path.pretty_path.dupe()))?;
             }
         }
 
@@ -171,8 +173,8 @@ fn vex(ctx: &Context, store: &VexingStore) -> anyhow::Result<Vec<Irritation>> {
     }
     for language_observer in language_observers.values() {
         for observer in language_observer {
-            for on_open_project in &observer.on_open_project[..] {
-                on_open_project.handle(OpenProjectEvent::new(ctx.project_root.dupe()))?;
+            for on_close_project in &observer.on_close_project[..] {
+                on_close_project.handle(CloseProjectEvent::new(ctx.project_root.dupe()))?;
             }
         }
     }

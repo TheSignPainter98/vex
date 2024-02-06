@@ -22,8 +22,9 @@ use crate::{
             CloseFileObserver, CloseProjectObserver, MatchObserver, OpenFileObserver,
             OpenProjectObserver,
         },
-        ScriptletObserverData, ScriptletPath,
+        ScriptletObserverData,
     },
+    source_path::SourcePath,
     supported_language::SupportedLanguage,
 };
 
@@ -230,7 +231,7 @@ impl FrozenObserverDataBuilder {
             .expect("FrozenModule extra has wrong type")
     }
 
-    pub fn build(&self, path: &ScriptletPath) -> anyhow::Result<ScriptletObserverData> {
+    pub fn build(&self, path: &SourcePath) -> anyhow::Result<ScriptletObserverData> {
         let Self {
             lang,
             query,

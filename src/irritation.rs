@@ -4,7 +4,7 @@ use annotate_snippets::{Annotation, AnnotationType, Slice, Snippet};
 use dupe::Dupe;
 use tree_sitter::QueryMatch;
 
-use crate::{logger, scriptlets::PrettyPath, source_file::SourceFile};
+use crate::{logger, source_file::SourceFile, source_path::PrettyPath};
 
 #[derive(Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -58,7 +58,7 @@ impl Irritation {
                 .map(|cap| cap.node.end_byte())
                 .max()
                 .unwrap_or(usize::MAX),
-            path: src_file.path.dupe(),
+            path: src_file.path.pretty_path.dupe(),
         }
     }
 }

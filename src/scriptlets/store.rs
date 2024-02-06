@@ -12,12 +12,11 @@ use crate::{
     error::Error,
     scriptlets::{
         scriptlet::{InitingScriptlet, PreinitingScriptlet, VexingScriptlet},
-        ScriptletObserverData, ScriptletPath,
+        ScriptletObserverData,
     },
+    source_path::{PrettyPath, SourcePath},
     supported_language::SupportedLanguage,
 };
-
-use super::PrettyPath;
 
 type StoreIndex = usize;
 
@@ -72,14 +71,14 @@ impl PreinitingStore {
                 }
                 continue;
             }
-            let scriptlet_path = ScriptletPath::new(&entry_path, &self.dir);
+            let scriptlet_path = SourcePath::new(&entry_path, &self.dir);
             self.load_file(scriptlet_path, toplevel)?;
         }
 
         Ok(())
     }
 
-    fn load_file(&mut self, path: ScriptletPath, toplevel: bool) -> anyhow::Result<()> {
+    fn load_file(&mut self, path: SourcePath, toplevel: bool) -> anyhow::Result<()> {
         if self.path_indices.get(&path.pretty_path).is_some() {
             return Ok(());
         }

@@ -10,7 +10,7 @@ use starlark::{
 use starlark_derive::{starlark_attrs, starlark_value, StarlarkAttrs};
 use strum::EnumIter;
 
-use crate::{error::Error, scriptlets::PrettyPath};
+use crate::{error::Error, source_path::PrettyPath};
 
 pub trait Event {
     const TYPE: EventType;
@@ -226,11 +226,37 @@ impl Display for CloseProjectEvent {
 
 #[cfg(test)]
 mod test {
-    use indoc::formatdoc;
+    use indoc::{formatdoc, indoc};
 
     use crate::vextest::VexTest;
 
     fn test_event_common_properties(event_name: &'static str, type_name: &'static str) {
+        VexTest::new("is-triggered")
+            .with_scriptlet(
+                "vexes/test.star",
+                formatdoc! {r#"
+                    load('check.star', 'check')
+
+                    def init():
+                        vex.language('rust')
+                        vex.query('(binary_expression) @bin_expr')
+                        vex.observe('match', lambda x: x) # Make the error checker happy.
+                        vex.observe('{event_name}', on_{event_name})
+
+                    def on_{event_name}(event):
+                        fail('error-marker')
+                "#},
+            )
+            .with_source_file(
+                "src/main.rs",
+                indoc! {r#"
+                    fn main() {
+                        let x = 1 + 2;
+                        println("{x}");
+                    }
+                "#},
+            )
+            .returns_error("error-marker");
         VexTest::new("type-name")
             .with_scriptlet(
                 "vexes/test.star",
@@ -265,7 +291,16 @@ mod test {
                         if 'project' in '{event_name}':
                             check['is_path'](str(event.path))
                         else:
-                            check['eq'](event.path, 'src/main.rs')
+                            check['eq'](str(event.path), 'src/main.rs')
+                "#},
+            )
+            .with_source_file(
+                "src/main.rs",
+                indoc! {r#"
+                    fn main() {
+                        let x = 1 + 2;
+                        println("{x}");
+                    }
                 "#},
             )
             .assert_irritation_free();

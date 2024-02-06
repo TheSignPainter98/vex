@@ -4,18 +4,18 @@ use anyhow::Context;
 use log::{log_enabled, trace};
 use tree_sitter::{Parser, Tree};
 
-use crate::{scriptlets::PrettyPath, supported_language::SupportedLanguage};
+use crate::{source_path::SourcePath, supported_language::SupportedLanguage};
 
 pub struct SourceFile {
-    pub path: PrettyPath,
+    pub path: SourcePath,
     pub content: String,
     pub tree: Tree,
     pub lang: SupportedLanguage,
 }
 
 impl SourceFile {
-    pub fn load_if_supported(path: PrettyPath) -> Option<anyhow::Result<Self>> {
-        let Some(extension) = path.extension() else {
+    pub fn load_if_supported(path: SourcePath) -> Option<anyhow::Result<Self>> {
+        let Some(extension) = path.abs_path.extension() else {
             if log_enabled!(log::Level::Trace) {
                 trace!("ignoring {path} (no file extension)");
             }
@@ -30,8 +30,8 @@ impl SourceFile {
         Some(Self::load(path, lang))
     }
 
-    fn load(path: PrettyPath, lang: SupportedLanguage) -> anyhow::Result<Self> {
-        let content = fs::read_to_string(path.as_ref())?;
+    fn load(path: SourcePath, lang: SupportedLanguage) -> anyhow::Result<Self> {
+        let content = fs::read_to_string(path.abs_path.as_ref())?;
         let tree = {
             let mut parser = Parser::new();
             parser
