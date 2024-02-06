@@ -37,7 +37,7 @@ pub struct PreinitingScriptlet {
 
 impl PreinitingScriptlet {
     pub fn new(path: ScriptletPath, toplevel: bool) -> anyhow::Result<Self> {
-        let code = fs::read_to_string(&path.abs_path.as_str())
+        let code = fs::read_to_string(path.abs_path.as_str())
             .with_context(|| format!("could not read {path}"))?;
         Self::new_from_str(path, code, toplevel)
     }
@@ -98,7 +98,7 @@ impl PreinitingScriptlet {
     }
 
     fn global_names(&self) -> HashSet<String> {
-        HashSet::from_iter(["vex".to_string()].into_iter())
+        HashSet::from_iter(["vex".to_string()])
     }
 
     pub fn loads(&self) -> &HashSet<PrettyPath> {

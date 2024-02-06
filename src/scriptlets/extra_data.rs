@@ -254,7 +254,7 @@ impl FrozenObserverDataBuilder {
             if query.is_empty() {
                 return Err(Error::EmptyQuery(path.pretty_path.dupe()).into());
             }
-            Arc::new(Query::new(lang.ts_language(), &query)?)
+            Arc::new(Query::new(lang.ts_language(), query)?)
         };
 
         if on_open_project.is_empty()

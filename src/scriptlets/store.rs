@@ -138,7 +138,7 @@ impl PreinitingStore {
 
     /// Topographically order the store
     fn linearise_store(&mut self) -> anyhow::Result<()> {
-        fn directed_dfs<'s>(
+        fn directed_dfs(
             linearised: &mut Vec<StoreIndex>,
             explored: &RefCell<Vec<bool>>,
             loads: &[Vec<StoreIndex>],
@@ -203,9 +203,9 @@ impl PreinitingStore {
                     stack
                         .borrow()
                         .iter()
-                        .map(|n| *n)
+                        .copied()
                         .skip_while(|n| *n != node)
-                        .chain([node].into_iter())
+                        .chain([node])
                         .collect(),
                 );
             }
@@ -260,7 +260,7 @@ impl PreinitingStore {
                 let mut adjacent = s
                     .loads()
                     .iter()
-                    .map(|m| *self.path_indices.get(&m).unwrap())
+                    .map(|m| *self.path_indices.get(m).unwrap())
                     .collect::<Vec<_>>();
                 adjacent.sort();
                 adjacent
@@ -269,7 +269,7 @@ impl PreinitingStore {
     }
 
     fn get_loaded_by_edges(&self, load_edges: &[Vec<StoreIndex>]) -> Vec<Vec<StoreIndex>> {
-        let mut ret = iter::repeat_with(|| vec![])
+        let mut ret = iter::repeat_with(Vec::new)
             .take(self.store.len())
             .collect::<Vec<_>>();
         load_edges
