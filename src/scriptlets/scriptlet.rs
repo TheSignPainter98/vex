@@ -514,7 +514,7 @@ mod test {
             .with_scriptlet("vexes/3.star", r#"load('lib/4.star', '_')"#)
             .with_scriptlet("vexes/lib/4.star", r#"load('1.star', '_')"#)
             .returns_error(
-                r"import cycle detected: 1\.star -> 2\.star -> 3\.star -> lib/4.star -> 1.star",
+                r"import cycle detected: 1\.star -> 2\.star -> 3\.star -> lib(/|\\)4.star -> 1.star",
             );
     }
 }
