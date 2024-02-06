@@ -19,12 +19,13 @@ mod vex;
 #[cfg(test)]
 mod vextest;
 
-use std::{env, fs, process::ExitCode, sync::Arc};
+use std::{env, fs, process::ExitCode};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser as _;
 use dupe::Dupe;
 use log::{info, log_enabled, trace};
+use scriptlets::PrettyPath;
 use strum::IntoEnumIterator;
 use tree_sitter::QueryCursor;
 
@@ -121,15 +122,14 @@ fn vex(ctx: &Context, store: &VexingStore) -> anyhow::Result<Vec<Irritation>> {
         )?;
         paths
             .into_iter()
-            .map(|p| Arc::<Utf8Path>::from(p.as_path()))
+            .map(|p| PrettyPath::new(&p))
             .collect::<Vec<_>>()
     };
 
-    let project_root = Arc::<Utf8Path>::from(ctx.project_root.clone());
     for language_observer in language_observers.values() {
         for observer in language_observer {
             for on_open_project in &observer.on_open_project[..] {
-                on_open_project.handle(OpenProjectEvent::new(project_root.dupe()))?;
+                on_open_project.handle(OpenProjectEvent::new(ctx.project_root.dupe()))?;
             }
         }
     }
@@ -154,7 +154,7 @@ fn vex(ctx: &Context, store: &VexingStore) -> anyhow::Result<Vec<Irritation>> {
             ) {
                 println!("found {qmatch:?}");
                 for on_match in observers.on_match.iter() {
-                    on_match.handle(MatchEvent {})?;
+                    on_match.handle(MatchEvent::new(path.dupe()))?;
                 }
             }
 
@@ -172,7 +172,7 @@ fn vex(ctx: &Context, store: &VexingStore) -> anyhow::Result<Vec<Irritation>> {
     for language_observer in language_observers.values() {
         for observer in language_observer {
             for on_open_project in &observer.on_open_project[..] {
-                on_open_project.handle(OpenProjectEvent::new(project_root.dupe()))?;
+                on_open_project.handle(OpenProjectEvent::new(ctx.project_root.dupe()))?;
             }
         }
     }
