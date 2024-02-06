@@ -114,7 +114,7 @@ fn vex(ctx: &Context, store: &VexingStore) -> anyhow::Result<Vec<Irritation>> {
             .map(|allow| allow.compile(&ctx.project_root))
             .collect::<anyhow::Result<Vec<_>>>()?;
         walkdir(
-            &ctx,
+            ctx,
             ctx.project_root.as_ref(),
             &ignores,
             &allows,

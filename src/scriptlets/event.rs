@@ -263,7 +263,7 @@ mod test {
                     def on_{event_name}(event):
                         check['hasattr'](event, 'path')
                         if 'project' in '{event_name}':
-                            check['in'](str(event.path), '/')
+                            check['is_path'](str(event.path))
                         else:
                             check['eq'](event.path, 'src/main.rs')
                 "#},

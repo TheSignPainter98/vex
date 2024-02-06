@@ -182,6 +182,12 @@ impl VexTest {
                         fail('assertion failed: %r not in %r' % (what, obj))
                 check['in'] = check_in
 
+                def check_is_path(to_check):
+                    str_to_check = str(to_check)
+                    if '/' not in str_to_check and '\\' not in str_to_check:
+                        fail('assertion failed: %r is not a path' % to_check)
+                check['is_path'] = check_is_path
+
                 check
             "#},
         )

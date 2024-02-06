@@ -6,14 +6,14 @@ use tree_sitter::QueryMatch;
 
 use crate::{logger, scriptlets::PrettyPath, source_file::SourceFile};
 
-#[derive(Debug, PartialEq, Eq, PartialOrd)]
+#[derive(Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Irritation {
     pub vex_path: PrettyPath,
     pub message: String,
     pub start_byte: usize,
     pub end_byte: usize,
     pub path: PrettyPath,
-    _private: (),
 }
 
 impl Irritation {
@@ -59,7 +59,6 @@ impl Irritation {
                 .max()
                 .unwrap_or(usize::MAX),
             path: src_file.path.dupe(),
-            _private: (),
         }
     }
 }
@@ -71,6 +70,12 @@ impl Ord for Irritation {
             other.start_byte,
             other.end_byte,
         ))
+    }
+}
+
+impl PartialOrd for Irritation {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
 
