@@ -6,24 +6,24 @@ use serde::{Deserialize as Deserialise, Serialize as Serialise};
 use std::collections::HashMap;
 use std::io::{BufWriter, ErrorKind, Read, Write};
 use std::ops::Deref;
-use std::sync::Arc;
 use std::{
     env,
     fs::{self, File},
 };
 
 use crate::error::Error;
+use crate::scriptlets::PrettyPath;
 
 #[derive(Debug)]
 pub struct Context {
-    pub project_root: Arc<Utf8Path>,
+    pub project_root: PrettyPath,
     pub manifest: Manifest,
 }
 
 impl Context {
     pub fn acquire() -> anyhow::Result<Self> {
         let (project_root, raw_data) = Manifest::acquire_file()?;
-        let project_root = Arc::from(project_root);
+        let project_root = PrettyPath::new(&project_root);
         let data = toml_edit::de::from_str(&raw_data)?;
         Ok(Context {
             project_root,
@@ -34,7 +34,7 @@ impl Context {
     #[cfg(test)]
     pub fn acquire_in(dir: &Utf8Path) -> anyhow::Result<Self> {
         let (project_root, raw_data) = Manifest::acquire_file_in(dir)?;
-        let project_root = Arc::from(project_root);
+        let project_root = PrettyPath::new(&project_root);
         let data = toml_edit::de::from_str(&raw_data)?;
         Ok(Context {
             project_root,

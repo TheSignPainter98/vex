@@ -126,11 +126,10 @@ fn vex(ctx: &Context, store: &VexingStore) -> anyhow::Result<Vec<Irritation>> {
             .collect::<Vec<_>>()
     };
 
-    let project_root = PrettyPath::new(&ctx.project_root);
     for language_observer in language_observers.values() {
         for observer in language_observer {
             for on_open_project in &observer.on_open_project[..] {
-                on_open_project.handle(OpenProjectEvent::new(project_root.dupe()))?;
+                on_open_project.handle(OpenProjectEvent::new(ctx.project_root.dupe()))?;
             }
         }
     }
@@ -173,7 +172,7 @@ fn vex(ctx: &Context, store: &VexingStore) -> anyhow::Result<Vec<Irritation>> {
     for language_observer in language_observers.values() {
         for observer in language_observer {
             for on_open_project in &observer.on_open_project[..] {
-                on_open_project.handle(OpenProjectEvent::new(project_root.dupe()))?;
+                on_open_project.handle(OpenProjectEvent::new(ctx.project_root.dupe()))?;
             }
         }
     }

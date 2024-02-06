@@ -163,7 +163,7 @@ impl PrettyPath {
     }
 
     pub fn as_str(&self) -> &str {
-        self.as_ref()
+        self.0.as_str()
     }
 }
 
@@ -173,9 +173,9 @@ impl From<&str> for PrettyPath {
     }
 }
 
-impl AsRef<str> for PrettyPath {
-    fn as_ref(&self) -> &str {
-        self.0.as_str()
+impl AsRef<Utf8Path> for PrettyPath {
+    fn as_ref(&self) -> &Utf8Path {
+        &self.0
     }
 }
 
