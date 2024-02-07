@@ -2,7 +2,10 @@ use camino::Utf8PathBuf;
 use joinery::JoinableIterator;
 use strum::IntoEnumIterator;
 
-use crate::scriptlets::{action::Action, event::EventType, PrettyPath};
+use crate::{
+    scriptlets::{action::Action, event::EventType},
+    source_path::PrettyPath,
+};
 
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum Error {

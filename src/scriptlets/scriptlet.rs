@@ -1,19 +1,14 @@
-use std::{collections::HashSet, fmt::Display, fs, ops::Deref, sync::Arc};
+use std::{collections::HashSet, fs};
 
-use allocative::Allocative;
 use anyhow::Context;
-use camino::Utf8Path;
 use dupe::Dupe;
 use starlark::{
     analysis::AstModuleLint,
     environment::{FrozenModule, Globals, GlobalsBuilder, LibraryExtension, Module},
     errors::Lint,
     eval::Evaluator,
-    starlark_simple_value,
     syntax::{AstModule, Dialect},
-    values::StarlarkValue,
 };
-use starlark_derive::{starlark_value, NoSerialize, ProvidesStaticType};
 
 use crate::{
     error::Error,
@@ -25,24 +20,25 @@ use crate::{
         store::PreinitedModuleCache,
         ScriptletObserverData,
     },
+    source_path::{PrettyPath, SourcePath},
 };
 
 #[derive(Debug)]
 pub struct PreinitingScriptlet {
-    pub path: ScriptletPath,
+    pub path: SourcePath,
     toplevel: bool,
     ast: AstModule,
     loads_files: HashSet<PrettyPath>,
 }
 
 impl PreinitingScriptlet {
-    pub fn new(path: ScriptletPath, toplevel: bool) -> anyhow::Result<Self> {
+    pub fn new(path: SourcePath, toplevel: bool) -> anyhow::Result<Self> {
         let code = fs::read_to_string(path.abs_path.as_str())
             .with_context(|| format!("could not read {path}"))?;
         Self::new_from_str(path, code, toplevel)
     }
 
-    fn new_from_str(path: ScriptletPath, code: String, toplevel: bool) -> anyhow::Result<Self> {
+    fn new_from_str(path: SourcePath, code: String, toplevel: bool) -> anyhow::Result<Self> {
         let ast = AstModule::parse(path.as_str(), code, &Dialect::Standard)?;
         let loads_files = ast
             .loads()
@@ -106,99 +102,9 @@ impl PreinitingScriptlet {
     }
 }
 
-#[derive(Clone, Debug, Dupe)]
-pub struct ScriptletPath {
-    abs_path: Arc<Utf8Path>,
-    pub pretty_path: PrettyPath,
-}
-
-impl ScriptletPath {
-    pub fn new(path: &Utf8Path, vex_dir: &Utf8Path) -> Self {
-        Self {
-            abs_path: path.into(),
-            pretty_path: PrettyPath(
-                path.strip_prefix(vex_dir)
-                    .expect("vex not in vexes dir")
-                    .into(),
-            ),
-        }
-    }
-
-    pub fn as_str(&self) -> &str {
-        self.pretty_path.as_str()
-    }
-}
-
-impl AsRef<str> for ScriptletPath {
-    fn as_ref(&self) -> &str {
-        self.pretty_path.as_str()
-    }
-}
-
-impl Display for ScriptletPath {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.pretty_path.fmt(f)
-    }
-}
-
-#[derive(
-    Clone,
-    Debug,
-    Dupe,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    Allocative,
-    NoSerialize,
-    ProvidesStaticType,
-)]
-pub struct PrettyPath(#[allocative(skip)] Arc<Utf8Path>);
-starlark_simple_value!(PrettyPath);
-
-impl PrettyPath {
-    pub fn new(path: &Utf8Path) -> Self {
-        Self(Arc::from(path))
-    }
-
-    pub fn as_str(&self) -> &str {
-        self.0.as_str()
-    }
-}
-
-impl From<&str> for PrettyPath {
-    fn from(value: &str) -> Self {
-        Self(Utf8Path::new(value).into())
-    }
-}
-
-impl AsRef<Utf8Path> for PrettyPath {
-    fn as_ref(&self) -> &Utf8Path {
-        &self.0
-    }
-}
-
-impl Deref for PrettyPath {
-    type Target = Utf8Path;
-
-    fn deref(&self) -> &Self::Target {
-        self.0.as_ref()
-    }
-}
-
-impl Display for PrettyPath {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-#[starlark_value(type = "Path")]
-impl<'v> StarlarkValue<'v> for PrettyPath {}
-
 #[derive(Debug)]
 pub struct InitingScriptlet {
-    pub path: ScriptletPath,
+    pub path: SourcePath,
     toplevel: bool,
     pub preinited_module: FrozenModule,
 }
@@ -256,7 +162,7 @@ impl InitingScriptlet {
 
 #[derive(Debug)]
 pub struct VexingScriptlet {
-    pub path: ScriptletPath,
+    pub path: SourcePath,
     _preinited_module: FrozenModule,      // Keep frozen heap alive
     _inited_module: Option<FrozenModule>, // Keep frozen heap alive
     observer_data: Option<ScriptletObserverData>,

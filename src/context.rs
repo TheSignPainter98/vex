@@ -12,7 +12,7 @@ use std::{
 };
 
 use crate::error::Error;
-use crate::scriptlets::PrettyPath;
+use crate::source_path::PrettyPath;
 
 #[derive(Debug)]
 pub struct Context {

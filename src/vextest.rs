@@ -103,7 +103,6 @@ impl VexTest {
             });
     }
 
-    #[allow(unused)]
     pub fn returns_error(self, message: impl Into<Cow<'static, str>>) {
         let message = message.into();
         let err = self.try_run().unwrap_err();
