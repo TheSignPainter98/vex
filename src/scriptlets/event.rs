@@ -294,7 +294,6 @@ mod test {
                             expected = ['src/main.rs', 'src\\main.rs']
                             if str(event.path) not in expected:
                                 fail('assertion failed: got path %r but expected one of %r' % (event.path, ', '.join(expected)))
-                            check['eq'](str(event.path), 'src/main.rs')
                 "#},
             )
             .with_source_file(
