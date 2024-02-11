@@ -24,7 +24,7 @@ use crate::{
         },
         ScriptletObserverData,
     },
-    source_path::SourcePath,
+    source_path::PrettyPath,
     supported_language::SupportedLanguage,
 };
 
@@ -65,8 +65,9 @@ impl Display for InvocationData {
     }
 }
 
-#[derive(Debug, Trace, Default, ProvidesStaticType, NoSerialize, Allocative)]
+#[derive(Debug, Trace, ProvidesStaticType, NoSerialize, Allocative)]
 pub struct ObserverDataBuilder<'v> {
+    pub path: PrettyPath,
     #[allocative(skip)]
     pub lang: RefCell<Option<RawSupportedLanguage<'v>>>,
     #[allocative(skip)]
@@ -79,8 +80,17 @@ pub struct ObserverDataBuilder<'v> {
 }
 
 impl<'v> ObserverDataBuilder<'v> {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(path: PrettyPath) -> Self {
+        Self {
+            path,
+            lang: RefCell::new(None),
+            query: RefCell::new(None),
+            on_open_project: RefCell::new(vec![]),
+            on_open_file: RefCell::new(vec![]),
+            on_match: RefCell::new(vec![]),
+            on_close_file: RefCell::new(vec![]),
+            on_close_project: RefCell::new(vec![]),
+        }
     }
 
     pub fn insert_into(self, module: &'v Module) {
@@ -127,6 +137,7 @@ impl<'v> Freeze for ObserverDataBuilder<'v> {
 
     fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         let ObserverDataBuilder {
+            path,
             lang,
             query,
             on_open_project,
@@ -163,6 +174,7 @@ impl<'v> Freeze for ObserverDataBuilder<'v> {
             .map(|v| v.freeze(freezer))
             .collect::<anyhow::Result<_>>()?;
         Ok(FrozenObserverDataBuilder {
+            path,
             lang,
             query,
             on_open_project,
@@ -212,6 +224,7 @@ impl<'v> Display for RawStr<'v> {
 
 #[derive(Debug, ProvidesStaticType, NoSerialize, Allocative)]
 pub struct FrozenObserverDataBuilder {
+    pub path: PrettyPath,
     pub lang: Option<String>,
     pub query: Option<String>,
     pub on_open_project: Vec<FrozenValue>,
@@ -231,8 +244,9 @@ impl FrozenObserverDataBuilder {
             .expect("FrozenModule extra has wrong type")
     }
 
-    pub fn build(&self, path: &SourcePath) -> anyhow::Result<ScriptletObserverData> {
+    pub fn build(&self) -> anyhow::Result<ScriptletObserverData> {
         let Self {
+            path,
             lang,
             query,
             on_open_project,
@@ -242,18 +256,19 @@ impl FrozenObserverDataBuilder {
             on_close_project,
         } = self;
 
+        let path = path.dupe();
         let lang = {
             let Some(lang) = lang else {
-                return Err(Error::NoLanguage(path.pretty_path.dupe()).into());
+                return Err(Error::NoLanguage(path).into());
             };
             lang.parse::<SupportedLanguage>()?
         };
         let query = {
             let Some(query) = query else {
-                return Err(Error::NoQuery(path.pretty_path.dupe()).into());
+                return Err(Error::NoQuery(path).into());
             };
             if query.is_empty() {
-                return Err(Error::EmptyQuery(path.pretty_path.dupe()).into());
+                return Err(Error::EmptyQuery(path).into());
             }
             Arc::new(Query::new(lang.ts_language(), query)?)
         };
@@ -264,10 +279,10 @@ impl FrozenObserverDataBuilder {
             && on_close_file.is_empty()
             && on_close_project.is_empty()
         {
-            return Err(Error::NoCallbacks(path.pretty_path.dupe()).into());
+            return Err(Error::NoCallbacks(path).into());
         }
         if on_match.is_empty() {
-            return Err(Error::NoMatch(path.pretty_path.dupe()).into());
+            return Err(Error::NoMatch(path).into());
         }
         let on_open_project = Arc::new(
             on_open_project
@@ -310,6 +325,7 @@ impl FrozenObserverDataBuilder {
                 .collect(),
         );
         Ok(ScriptletObserverData {
+            path,
             lang,
             query,
             on_open_project,

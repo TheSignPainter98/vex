@@ -17,11 +17,13 @@ use crate::{
         extra_data::InvocationData,
         print_handler::PrintHandler,
     },
+    source_path::PrettyPath,
     supported_language::SupportedLanguage,
 };
 
 #[derive(Clone, Debug, Dupe)]
 pub struct ScriptletObserverData {
+    pub path: PrettyPath,
     pub lang: SupportedLanguage,
     pub query: Arc<Query>,
     pub on_open_project: Arc<Vec<OpenProjectObserver>>,
@@ -36,14 +38,14 @@ pub trait Observer {
 
     fn function(&self) -> &OwnedFrozenValue;
 
-    fn handle(&self, event: Self::Event) -> anyhow::Result<()>
+    fn handle(&self, path: &PrettyPath, event: Self::Event) -> anyhow::Result<()>
     where
         Self::Event: for<'v> StarlarkValue<'v> + for<'v> AllocValue<'v> + Event,
     {
         let extra = InvocationData::new(Action::Vexing(<Self::Event as Event>::TYPE));
         let module = Module::new();
 
-        let print_handler = PrintHandler::new("asdf"); // TODO(kzca): what should the tag be here?
+        let print_handler = PrintHandler::new(path.as_str());
         let mut eval = Evaluator::new(&module);
         eval.set_print_handler(&print_handler);
         extra.insert_into(&mut eval);
