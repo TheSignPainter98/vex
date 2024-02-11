@@ -329,10 +329,11 @@ mod test {
 
     #[test]
     fn equals() {
-        PathTest::new("equals").path("src/main.rs").run(indoc! {r#"
+        let path = "src/main.rs";
+        PathTest::new("equals").path(path).run(formatdoc! {r#"
             check['eq'](path, path)
-            check['neq'](path, '')
-            check['neq']('', path)
+            check['neq'](path, '{path}')
+            check['neq']('{path}', path)
         "#});
     }
 
@@ -392,7 +393,7 @@ mod test {
         }
 
         {
-            const PATH: &'static str = "src/foo/bar/baz/main.rs";
+            const PATH: &str = "src/foo/bar/baz/main.rs";
             let n = 1 + PATH.chars().filter(|c| *c == '/').count() as i64;
             for index in (-2 * n..-n).chain(n..2 * n) {
                 let expected = Regex::new("Index `-?[0-9]+` is out of bound").unwrap();
