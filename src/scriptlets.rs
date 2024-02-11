@@ -9,3 +9,6 @@ mod store;
 
 pub use observers::{Observer, ScriptletObserverData};
 pub use store::{PreinitingStore, VexingStore};
+
+#[cfg(test)]
+pub use print_handler::PrintHandler;

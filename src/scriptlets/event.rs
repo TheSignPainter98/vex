@@ -235,17 +235,19 @@ mod test {
             .with_scriptlet(
                 "vexes/test.star",
                 formatdoc! {r#"
-                    load('check.star', 'check')
+                        load('{check_path}', 'check')
 
-                    def init():
-                        vex.language('rust')
-                        vex.query('(binary_expression) @bin_expr')
-                        vex.observe('match', lambda x: x) # Make the error checker happy.
-                        vex.observe('{event_name}', on_{event_name})
+                        def init():
+                            vex.language('rust')
+                            vex.query('(binary_expression) @bin_expr')
+                            vex.observe('match', lambda x: x) # Make the error checker happy.
+                            vex.observe('{event_name}', on_{event_name})
 
-                    def on_{event_name}(event):
-                        fail('error-marker')
-                "#},
+                        def on_{event_name}(event):
+                            fail('error-marker')
+                    "#,
+                    check_path = VexTest::CHECK_STARLARK_PATH,
+                },
             )
             .with_source_file(
                 "src/main.rs",
@@ -261,40 +263,42 @@ mod test {
             .with_scriptlet(
                 "vexes/test.star",
                 formatdoc! {r#"
-                    load('check.star', 'check')
+                        load('{check_path}', 'check')
 
-                    def init():
-                        vex.language('rust')
-                        vex.query('(binary_expression) @bin_expr')
-                        vex.observe('match', lambda x: x) # Make the error checker happy.
-                        vex.observe('{event_name}', on_{event_name})
+                        def init():
+                            vex.language('rust')
+                            vex.query('(binary_expression) @bin_expr')
+                            vex.observe('match', lambda x: x) # Make the error checker happy.
+                            vex.observe('{event_name}', on_{event_name})
 
-                    def on_{event_name}(event):
-                        check['eq'](type(event), '{type_name}')
-                "#},
+                        def on_{event_name}(event):
+                            check['eq'](type(event), '{type_name}')
+                    "#,
+                    check_path = VexTest::CHECK_STARLARK_PATH,
+                },
             )
             .assert_irritation_free();
         VexTest::new("common-attrs")
             .with_scriptlet(
                 "vexes/test.star",
                 formatdoc! {r#"
-                    load('check.star', 'check')
+                        load('{check_path}', 'check')
 
-                    def init():
-                        vex.language('rust')
-                        vex.query('(binary_expression) @bin_expr')
-                        vex.observe('match', lambda x: x) # Make the error checker happy.
-                        vex.observe('{event_name}', on_{event_name})
+                        def init():
+                            vex.language('rust')
+                            vex.query('(binary_expression) @bin_expr')
+                            vex.observe('match', lambda x: x) # Make the error checker happy.
+                            vex.observe('{event_name}', on_{event_name})
 
-                    def on_{event_name}(event):
-                        check['hasattr'](event, 'path')
-                        if 'project' in '{event_name}':
-                            check['is_path'](str(event.path))
-                        else:
-                            expected = ['src/main.rs', 'src\\main.rs']
-                            if str(event.path) not in expected:
-                                fail('assertion failed: got path %r but expected one of %r' % (event.path, ', '.join(expected)))
-                "#},
+                        def on_{event_name}(event):
+                            check['hasattr'](event, 'path')
+                            if 'project' in '{event_name}':
+                                check['is_path'](str(event.path))
+                            else:
+                                check['in'](str(event.path), ['src/main.rs', 'src\\main.rs'])
+                    "#,
+                    check_path = VexTest::CHECK_STARLARK_PATH,
+                },
             )
             .with_source_file(
                 "src/main.rs",
