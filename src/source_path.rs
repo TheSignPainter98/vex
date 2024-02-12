@@ -437,8 +437,8 @@ mod test {
                 errs = []
                 def eq(start, stop, stride, a, b):
                     if a != b:
-                        errs.append(('?? [%r:%r:%r]' % (start, stop, stride), a, b))
-                        print('!! %r, %r, %r' % (start, stop, stride), a, b)
+                        errs.append(('[%r:%r:%r]' % (start, stop, stride), a, b))
+                        print('%r, %r, %r' % (start, stop, stride), a, b)
                 def test(start, stop, stride):
                     if stride == 0:
                         return
@@ -471,8 +471,7 @@ mod test {
                 for err in errs:
                     print(*err)
                 if len(errs):
-                    print('encountered %d problems' % len(errs))
-                    fail('come take a lookie, lookie... come take a lookie here')
+                    fail('encountered %d problems' % len(errs))
             "#});
         {
             let expected = "Index `0` is out of bound";
