@@ -11,16 +11,16 @@ use regex::Regex;
 
 use crate::{context::Context, irritation::Irritation, scriptlets::PreinitingStore};
 
-pub struct VexTest {
-    name: Cow<'static, str>,
+pub struct VexTest<'s> {
+    name: Cow<'s, str>,
     bare: bool,
-    manifest_content: Option<Cow<'static, str>>,
-    scriptlets: BTreeMap<Utf8PathBuf, Cow<'static, str>>,
-    source_files: BTreeMap<Utf8PathBuf, Cow<'static, str>>,
+    manifest_content: Option<Cow<'s, str>>,
+    scriptlets: BTreeMap<Utf8PathBuf, Cow<'s, str>>,
+    source_files: BTreeMap<Utf8PathBuf, Cow<'s, str>>,
 }
 
-impl VexTest {
-    pub fn new(name: impl Into<Cow<'static, str>>) -> Self {
+impl<'s> VexTest<'s> {
+    pub fn new(name: impl Into<Cow<'s, str>>) -> Self {
         Self {
             name: name.into(),
             bare: false,
@@ -37,7 +37,7 @@ impl VexTest {
     }
 
     #[allow(unused)]
-    pub fn with_manifest(mut self, content: impl Into<Cow<'static, str>>) -> Self {
+    pub fn with_manifest(mut self, content: impl Into<Cow<'s, str>>) -> Self {
         self.manifest_content = Some(content.into());
         self
     }
@@ -45,17 +45,13 @@ impl VexTest {
     pub fn with_scriptlet(
         mut self,
         path: impl Into<Utf8PathBuf>,
-        content: impl Into<Cow<'static, str>>,
+        content: impl Into<Cow<'s, str>>,
     ) -> Self {
         self.add_scriptlet(path, content);
         self
     }
 
-    fn add_scriptlet(
-        &mut self,
-        path: impl Into<Utf8PathBuf>,
-        content: impl Into<Cow<'static, str>>,
-    ) {
+    fn add_scriptlet(&mut self, path: impl Into<Utf8PathBuf>, content: impl Into<Cow<'s, str>>) {
         let path = path.into();
         let content = content.into();
 
@@ -73,7 +69,7 @@ impl VexTest {
     pub fn with_source_file(
         mut self,
         path: impl Into<Utf8PathBuf>,
-        content: impl Into<Cow<'static, str>>,
+        content: impl Into<Cow<'s, str>>,
     ) -> Self {
         assert!(
             self.source_files
@@ -154,43 +150,50 @@ impl VexTest {
 
     fn setup(&mut self) {
         eprintln!("running test {}...", self.name);
-
-        self.add_scriptlet(
-            "vexes/check.star",
-            indoc! {r#"
-                check = {}
-
-                # Placate error checker
-                def init():
-                    vex.language('rust')
-                    vex.query('(binary_expression)')
-                    vex.observe('match', lambda x: x)
-
-                def check_eq(left, right):
-                    if left != right:
-                        fail('assertion failed: %r != %r' % (left, right))
-                check['eq'] = check_eq
-
-                def check_hasattr(obj, attr):
-                    if not hasattr(obj, attr):
-                        fail('assertion failed: %r.%v does not exist' % (obj, attr))
-                check['hasattr'] = check_hasattr
-
-                def check_in(obj, what):
-                    if what not in obj:
-                        fail('assertion failed: %r not in %r' % (what, obj))
-                check['in'] = check_in
-
-                def check_is_path(to_check):
-                    str_to_check = str(to_check)
-                    if '/' not in str_to_check and '\\' not in str_to_check:
-                        fail('assertion failed: %r is not a path' % to_check)
-                check['is_path'] = check_is_path
-
-                check
-            "#},
-        )
+        self.add_scriptlet(VexTest::CHECK_FS_PATH, VexTest::CHECK_SRC)
     }
+
+    pub const CHECK_STARLARK_PATH: &'static str = "lib/check.star";
+    pub const CHECK_FS_PATH: &'static str = "vexes/lib/check.star";
+    pub const CHECK_SRC: &'static str = indoc! {r#"
+        check = {}
+
+        def check_true(x):
+            check_eq(x, True)
+        check['true'] = check_true
+
+        def check_false(x):
+            check_eq(x, False)
+        check['false'] = check_false
+
+        def check_eq(left, right):
+            if left != right:
+                fail('assertion failed: %r != %r' % (left, right))
+        check['eq'] = check_eq
+
+        def check_neq(left, right):
+            if left == right:
+                fail('assertion failed: %r != %r' % (left, right))
+        check['neq'] = check_neq
+
+        def check_hasattr(obj, attr):
+            if not hasattr(obj, attr):
+                fail('assertion failed: %r.%v does not exist' % (obj, attr))
+        check['hasattr'] = check_hasattr
+
+        def check_in(what, expected):
+            if what not in expected:
+                fail('assertion failed: %r not in %r' % (what, expected))
+        check['in'] = check_in
+
+        def check_is_path(to_check):
+            str_to_check = str(to_check)
+            if '/' not in str_to_check and '\\' not in str_to_check:
+                fail('assertion failed: %r is not a path' % to_check)
+        check['is_path'] = check_is_path
+
+        check
+    "#};
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

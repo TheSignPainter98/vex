@@ -1536,6 +1536,7 @@ dependencies = [
  "glob",
  "indoc",
  "joinery",
+ "lazy_static",
  "log",
  "num-traits",
  "pretty_assertions",
