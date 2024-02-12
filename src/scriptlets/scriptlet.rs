@@ -132,7 +132,7 @@ impl InitingScriptlet {
 
         let inited_module = {
             let module = Module::new();
-            ObserverDataBuilder::new().insert_into(&module);
+            ObserverDataBuilder::new(path.pretty_path.dupe()).insert_into(&module);
             {
                 let extra = InvocationData::new(Action::Initing);
                 let print_handler = PrintHandler::new(&path);
@@ -143,7 +143,7 @@ impl InitingScriptlet {
             }
             module.freeze()?
         };
-        let observer_data = FrozenObserverDataBuilder::get_from(&inited_module).build(&path)?;
+        let observer_data = FrozenObserverDataBuilder::get_from(&inited_module).build()?;
 
         Ok(VexingScriptlet {
             path,

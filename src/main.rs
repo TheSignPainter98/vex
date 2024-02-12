@@ -128,11 +128,12 @@ fn vex(ctx: &Context, store: &VexingStore) -> anyhow::Result<Vec<Irritation>> {
             .collect::<Vec<_>>()
     };
 
-    for language_observer in language_observers.values() {
-        for observer in language_observer {
-            for on_open_project in &observer.on_open_project[..] {
-                on_open_project.handle(OpenProjectEvent::new(ctx.project_root.dupe()))?;
-            }
+    for observer in language_observers.values().flatten() {
+        for on_open_project in &observer.on_open_project[..] {
+            on_open_project.handle(
+                &observer.path,
+                OpenProjectEvent::new(ctx.project_root.dupe()),
+            )?;
         }
     }
     // let mut irritations = Vec::new();
@@ -143,25 +144,34 @@ fn vex(ctx: &Context, store: &VexingStore) -> anyhow::Result<Vec<Irritation>> {
         let src_file = src_file?;
 
         println!("linting {}...", src_file.path);
-        for observers in &language_observers[src_file.lang] {
-            for on_open_file in &observers.on_open_file[..] {
-                on_open_file.handle(OpenFileEvent::new(src_file.path.pretty_path.dupe()))?;
+        for observer in &language_observers[src_file.lang] {
+            for on_open_file in &observer.on_open_file[..] {
+                on_open_file.handle(
+                    &observer.path,
+                    OpenFileEvent::new(src_file.path.pretty_path.dupe()),
+                )?;
             }
 
             println!("running a handler set...");
             for qmatch in QueryCursor::new().matches(
-                observers.query.as_ref(),
+                observer.query.as_ref(),
                 src_file.tree.root_node(),
                 src_file.content[..].as_bytes(),
             ) {
                 println!("found {qmatch:?}");
-                for on_match in observers.on_match.iter() {
-                    on_match.handle(MatchEvent::new(src_file.path.pretty_path.dupe()))?;
+                for on_match in &observer.on_match[..] {
+                    on_match.handle(
+                        &observer.path,
+                        MatchEvent::new(src_file.path.pretty_path.dupe()),
+                    )?;
                 }
             }
 
-            for on_close_file in observers.on_close_file.iter() {
-                on_close_file.handle(CloseFileEvent::new(src_file.path.pretty_path.dupe()))?;
+            for on_close_file in &observer.on_close_file[..] {
+                on_close_file.handle(
+                    &observer.path,
+                    CloseFileEvent::new(src_file.path.pretty_path.dupe()),
+                )?;
             }
         }
 
@@ -174,7 +184,10 @@ fn vex(ctx: &Context, store: &VexingStore) -> anyhow::Result<Vec<Irritation>> {
     for language_observer in language_observers.values() {
         for observer in language_observer {
             for on_close_project in &observer.on_close_project[..] {
-                on_close_project.handle(CloseProjectEvent::new(ctx.project_root.dupe()))?;
+                on_close_project.handle(
+                    &observer.path,
+                    CloseProjectEvent::new(ctx.project_root.dupe()),
+                )?;
             }
         }
     }
