@@ -192,7 +192,7 @@ impl<'v> StarlarkValue<'v> for PrettyPath {
         let stop = stop.and_then(Value::unpack_i32);
         let stride = stride.and_then(Value::unpack_i32).unwrap_or(1);
         if stride == 0 {
-            todo!("reject me!");
+            return Err(ValueError::IndexOutOfBound(stride).into());
         }
 
         if stride > 0 {
@@ -473,6 +473,17 @@ mod test {
                 if len(errs):
                     print('encountered %d problems' % len(errs))
                     fail('come take a lookie, lookie... come take a lookie here')
-            "#})
+            "#});
+        {
+            let expected = "Index `0` is out of bound";
+            let err = PathTest::new("zero-stride")
+                .path("src/foo/bar/baz/main.rs")
+                .try_run("path[::0]")
+                .unwrap_err();
+            assert!(
+                err.to_string().contains(expected),
+                "unexpected error: expected {expected:?} but got {err}"
+            );
+        }
     }
 }
