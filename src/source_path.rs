@@ -86,8 +86,8 @@ impl PrettyPath {
             }
 
             if let Some(other) = other.unpack_str() {
-                let str = this.0.as_str();
-                return Ok(str == other || str.replace('/', "\\") == other);
+                let this_str = this.0.as_str();
+                return Ok(this_str == other || this_str.replace('/', "\\") == other);
             }
 
             Ok(false)
