@@ -199,6 +199,10 @@ impl<'v> StarlarkValue<'v> for PrettyPath {
             let normalise_index = |idx: i32| if idx < 0 { idx + n } else { idx }.clamp(0, n);
             let low = start.map(normalise_index).unwrap_or(0);
             let high = stop.map(normalise_index).unwrap_or(n);
+            if high <= low {
+                // Empty result fast path.
+                return Ok(heap.alloc(AllocList::<[i32; 0]>([])));
+            }
             Ok(heap.alloc(AllocList(
                 self.components()
                     .enumerate()
@@ -213,9 +217,9 @@ impl<'v> StarlarkValue<'v> for PrettyPath {
             let high = start.map(normalise_index).unwrap_or(n - 1);
             let low = stop.map(normalise_index).unwrap_or(-1);
             if high <= low {
+                // Empty result fast path.
                 return Ok(heap.alloc(AllocList::<[i32; 0]>([])));
             }
-
             Ok(heap.alloc(AllocList(
                 self.components()
                     .rev()
