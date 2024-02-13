@@ -24,6 +24,7 @@ use std::{env, fs, process::ExitCode};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser as _;
+use cli::DumpCmd;
 use dupe::Dupe;
 use log::{info, log_enabled, trace};
 use strum::IntoEnumIterator;
@@ -52,6 +53,7 @@ fn main() -> anyhow::Result<ExitCode> {
         Command::ListLanguages => list_languages(),
         Command::ListLints => list_lints(),
         Command::Check(cmd_args) => check(cmd_args),
+        Command::Dump(dump_args) => dump(dump_args),
         Command::Init => init(),
     }?;
 
@@ -261,6 +263,20 @@ fn walkdir(
             panic!("unreachable");
         }
     }
+
+    Ok(())
+}
+
+fn dump(dump_args: DumpCmd) -> anyhow::Result<()> {
+    let ctx = Context::acquire()?;
+
+    let src_path = SourcePath::new(&dump_args.path.canonicalize_utf8()?, &ctx.project_root);
+    let Some(src_file) = SourceFile::load_if_supported(src_path) else {
+        return Ok(()); // Load already logs.
+    };
+    let src_file = src_file?;
+
+    println!("{}", src_file.tree.root_node().to_sexp());
 
     Ok(())
 }

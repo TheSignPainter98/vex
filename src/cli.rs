@@ -1,5 +1,6 @@
 use std::fmt::Display;
 
+use camino::Utf8PathBuf;
 use clap::{
     builder::{StringValueParser, TypedValueParser},
     ArgAction, Parser, Subcommand,
@@ -35,6 +36,8 @@ pub enum Command {
     ListLints,
 
     Check(CheckCmd),
+
+    Dump(DumpCmd),
 
     Init,
 }
@@ -116,4 +119,9 @@ impl Display for MaxProblems {
             Self::Limited(l) => l.fmt(f),
         }
     }
+}
+
+#[derive(Debug, Default, Parser)]
+pub struct DumpCmd {
+    pub path: Utf8PathBuf,
 }
