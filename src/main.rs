@@ -49,7 +49,7 @@ fn main() -> anyhow::Result<ExitCode> {
     let args = Args::parse();
     logger::init(Verbosity::try_from(args.verbosity_level)?)?;
 
-    match args.command.unwrap_or_default() {
+    match args.command {
         Command::ListLanguages => list_languages(),
         Command::ListLints => list_lints(),
         Command::Check(cmd_args) => check(cmd_args),

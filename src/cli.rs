@@ -17,7 +17,7 @@ use clap::{
 // #[warn(missing_docs)]
 pub struct Args {
     #[command(subcommand)]
-    pub command: Option<Command>,
+    pub command: Command,
 
     #[arg(short, value_name="level", action=ArgAction::Count, value_name="level", global=true)]
     pub verbosity_level: u8,
@@ -27,7 +27,14 @@ pub struct Args {
     pub help: Option<bool>,
 }
 
-#[derive(Debug, Subcommand)]
+#[cfg(test)]
+impl Args {
+    fn command(&self) -> &Command {
+        &self.command
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Subcommand)]
 pub enum Command {
     #[command(name = "languages")]
     ListLanguages,
@@ -42,13 +49,24 @@ pub enum Command {
     Init,
 }
 
-impl Default for Command {
-    fn default() -> Self {
-        Self::Check(CheckCmd::default())
+#[cfg(test)]
+impl Command {
+    fn as_check_cmd(&self) -> Option<&CheckCmd> {
+        match self {
+            Self::Check(c) => Some(c),
+            _ => None,
+        }
+    }
+
+    fn as_dump_cmd(&self) -> Option<&DumpCmd> {
+        match self {
+            Self::Dump(d) => Some(d),
+            _ => None,
+        }
     }
 }
 
-#[derive(Debug, Default, Parser)]
+#[derive(Debug, Default, PartialEq, Eq, Parser)]
 pub struct CheckCmd {
     // #[arg(long, default_value_t = MaxConcurrentFileLimit::default(), value_parser = MaxConcurrentFileLimit::parser())]
     // pub max_concurrent_files: MaxConcurrentFileLimit,
@@ -79,7 +97,7 @@ pub struct CheckCmd {
 //     }
 // }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MaxProblems {
     Unlimited,
     Limited(u32),
@@ -121,7 +139,130 @@ impl Display for MaxProblems {
     }
 }
 
-#[derive(Debug, Default, Parser)]
+#[derive(Debug, Default, PartialEq, Eq, Parser)]
 pub struct DumpCmd {
     pub path: Utf8PathBuf,
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn no_default() {
+        Args::try_parse_from(&["vex"]).unwrap_err();
+    }
+
+    #[test]
+    fn verbosity_level() {
+        const CMD: &str = "check";
+        assert_eq!(
+            Args::try_parse_from(&["vex", CMD]).unwrap().verbosity_level,
+            0
+        );
+        assert_eq!(
+            Args::try_parse_from(&["vex", "-v", CMD])
+                .unwrap()
+                .verbosity_level,
+            1
+        );
+        assert_eq!(
+            Args::try_parse_from(&["vex", "-vv", CMD])
+                .unwrap()
+                .verbosity_level,
+            2
+        );
+        assert_eq!(
+            Args::try_parse_from(&["vex", "-vv", CMD])
+                .unwrap()
+                .verbosity_level,
+            2
+        );
+    }
+
+    #[test]
+    fn list_languages() {
+        assert_eq!(
+            Args::try_parse_from(&["vex", "languages"])
+                .unwrap()
+                .command(),
+            &Command::ListLanguages,
+        );
+    }
+
+    #[test]
+    fn list_lints() {
+        assert_eq!(
+            Args::try_parse_from(&["vex", "lints"]).unwrap().command(),
+            &Command::ListLints,
+        );
+    }
+
+    mod check {
+        use super::*;
+
+        #[test]
+        fn default() {
+            let args = Args::try_parse_from(&["vex", "check"]).unwrap();
+            let cmd = args.command();
+            assert!(matches!(cmd, Command::Check(_)));
+
+            let check_cmd = cmd.as_check_cmd().unwrap();
+            assert_eq!(check_cmd.max_problems, MaxProblems::Limited(100));
+        }
+
+        #[test]
+        fn finite_max_problems() {
+            let args = Args::try_parse_from(&["vex", "check", "--max-problems", "1000"]).unwrap();
+            let cmd = args.command();
+            assert!(matches!(cmd, Command::Check(_)));
+
+            let check_cmd = cmd.as_check_cmd().unwrap();
+            assert_eq!(check_cmd.max_problems, MaxProblems::Limited(1000));
+        }
+
+        #[test]
+        fn infinite_max_problems() {
+            let args =
+                Args::try_parse_from(&["vex", "check", "--max-problems", "unlimited"]).unwrap();
+            let cmd = args.command();
+            assert!(matches!(cmd, Command::Check(_)));
+
+            let check_cmd = cmd.as_check_cmd().unwrap();
+            assert_eq!(check_cmd.max_problems, MaxProblems::Unlimited);
+        }
+    }
+
+    mod dump {
+        use super::*;
+
+        #[test]
+        fn requires_path() {
+            Args::try_parse_from(&["vex", "dump"]).unwrap_err();
+        }
+
+        #[test]
+        fn relative_path() {
+            const PATH: &str = "./src/main.rs";
+            let args = Args::try_parse_from(&["vex", "dump", PATH]).unwrap();
+            let dump_cmd = args.command().as_dump_cmd().unwrap();
+            assert_eq!(dump_cmd.path, PATH);
+        }
+
+        #[test]
+        fn absolute_path() {
+            const PATH: &str = "/src/main.rs";
+            let args = Args::try_parse_from(&["vex", "dump", PATH]).unwrap();
+            let dump_cmd = args.command().as_dump_cmd().unwrap();
+            assert_eq!(dump_cmd.path, PATH);
+        }
+    }
+
+    #[test]
+    fn init() {
+        assert_eq!(
+            Args::try_parse_from(&["vex", "init"]).unwrap().command(),
+            &Command::Init,
+        );
+    }
 }
