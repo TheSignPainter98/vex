@@ -28,6 +28,13 @@ impl SourcePath {
         }
     }
 
+    pub fn new_absolute(path: &Utf8Path) -> Self {
+        Self {
+            abs_path: path.into(),
+            pretty_path: PrettyPath::new(path),
+        }
+    }
+
     pub fn as_str(&self) -> &str {
         self.pretty_path.as_str()
     }

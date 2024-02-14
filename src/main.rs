@@ -268,9 +268,7 @@ fn walkdir(
 }
 
 fn dump(dump_args: DumpCmd) -> anyhow::Result<()> {
-    let ctx = Context::acquire()?;
-
-    let src_path = SourcePath::new(&dump_args.path.canonicalize_utf8()?, &ctx.project_root);
+    let src_path = SourcePath::new_absolute(&dump_args.path.canonicalize_utf8()?);
     let Some(src_file) = SourceFile::load_if_supported(src_path) else {
         return Ok(()); // Load already logs.
     };
