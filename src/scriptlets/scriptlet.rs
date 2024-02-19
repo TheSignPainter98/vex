@@ -1,6 +1,5 @@
 use std::{collections::HashSet, fs};
 
-use anyhow::Context;
 use dupe::Dupe;
 use starlark::{
     analysis::AstModuleLint,
@@ -11,7 +10,8 @@ use starlark::{
 };
 
 use crate::{
-    error::Error,
+    error::{Error, IOAction},
+    result::Result,
     scriptlets::{
         action::Action,
         app_object::AppObject,
@@ -32,14 +32,18 @@ pub struct PreinitingScriptlet {
 }
 
 impl PreinitingScriptlet {
-    pub fn new(path: SourcePath, toplevel: bool) -> anyhow::Result<Self> {
-        let code = fs::read_to_string(path.abs_path.as_str())
-            .with_context(|| format!("could not read {path}"))?;
+    pub fn new(path: SourcePath, toplevel: bool) -> Result<Self> {
+        let code = fs::read_to_string(path.abs_path.as_str()).map_err(|cause| Error::IO {
+            path: path.pretty_path.dupe(),
+            action: IOAction::Read,
+            cause,
+        })?;
         Self::new_from_str(path, code, toplevel)
     }
 
-    fn new_from_str(path: SourcePath, code: String, toplevel: bool) -> anyhow::Result<Self> {
-        let ast = AstModule::parse(path.as_str(), code, &Dialect::Standard)?;
+    fn new_from_str(path: SourcePath, code: String, toplevel: bool) -> Result<Self> {
+        let ast =
+            AstModule::parse(path.as_str(), code, &Dialect::Standard).map_err(Error::starlark)?;
         let loads_files = ast
             .loads()
             .into_iter()
@@ -58,7 +62,7 @@ impl PreinitingScriptlet {
         self.ast.lint(Some(&self.global_names()))
     }
 
-    pub fn preinit(self, cache: &PreinitedModuleCache) -> anyhow::Result<InitingScriptlet> {
+    pub fn preinit(self, cache: &PreinitedModuleCache) -> Result<InitingScriptlet> {
         let Self {
             path,
             ast,
@@ -76,9 +80,9 @@ impl PreinitingScriptlet {
                 eval.set_print_handler(&print_handler);
                 extra.insert_into(&mut eval);
                 let globals = Self::globals();
-                eval.eval_module(ast, &globals)?;
+                eval.eval_module(ast, &globals).map_err(Error::starlark)?;
             }
-            module.freeze()?
+            module.freeze().map_err(Error::starlark)?
         };
         Ok(InitingScriptlet {
             path,
@@ -110,14 +114,17 @@ pub struct InitingScriptlet {
 }
 
 impl InitingScriptlet {
-    pub fn init(self) -> anyhow::Result<VexingScriptlet> {
+    pub fn init(self) -> Result<VexingScriptlet> {
         let Self {
             path,
             toplevel,
             preinited_module,
         } = self;
 
-        let Some(init) = preinited_module.get_option("init")? else {
+        let Some(init) = preinited_module
+            .get_option("init")
+            .map_err(Error::starlark)?
+        else {
             if toplevel {
                 return Err(Error::NoInit(path.pretty_path.dupe()).into());
             }
@@ -139,9 +146,10 @@ impl InitingScriptlet {
                 let mut eval = Evaluator::new(&module);
                 eval.set_print_handler(&print_handler);
                 extra.insert_into(&mut eval);
-                eval.eval_function(init.value(), &[], &[])?;
+                eval.eval_function(init.value(), &[], &[])
+                    .map_err(Error::starlark)?;
             }
-            module.freeze()?
+            module.freeze().map_err(Error::starlark)?
         };
         let observer_data = FrozenObserverDataBuilder::get_from(&inited_module).build()?;
 

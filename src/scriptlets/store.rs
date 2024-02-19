@@ -9,7 +9,8 @@ use strum::IntoEnumIterator;
 
 use crate::{
     context::Context,
-    error::Error,
+    error::{Error, IOAction},
+    result::Result,
     scriptlets::{
         scriptlet::{InitingScriptlet, PreinitingScriptlet, VexingScriptlet},
         ScriptletObserverData,
@@ -28,7 +29,7 @@ pub struct PreinitingStore {
 }
 
 impl PreinitingStore {
-    pub fn new(ctx: &Context) -> anyhow::Result<Self> {
+    pub fn new(ctx: &Context) -> Result<Self> {
         let mut ret = Self {
             dir: ctx.vex_dir(),
             path_indices: BTreeMap::new(),
@@ -38,15 +39,27 @@ impl PreinitingStore {
         Ok(ret)
     }
 
-    fn load_dir(&mut self, ctx: &Context, path: Utf8PathBuf, toplevel: bool) -> anyhow::Result<()> {
+    fn load_dir(&mut self, ctx: &Context, path: Utf8PathBuf, toplevel: bool) -> Result<()> {
         let dir = fs::read_dir(&path).map_err(|err| match err.kind() {
-            ErrorKind::NotFound => anyhow::Error::from(Error::NoVexesDir(path.clone())),
-            _ => err.into(),
+            ErrorKind::NotFound => Error::NoVexesDir(path.clone()),
+            _ => Error::IO {
+                path: PrettyPath::new(&path),
+                action: IOAction::Read,
+                cause: err,
+            },
         })?;
         for entry in dir {
-            let entry = entry?;
+            let entry = entry.map_err(|cause| Error::IO {
+                path: PrettyPath::new(&path),
+                action: IOAction::Read,
+                cause,
+            })?;
             let entry_path = Utf8PathBuf::try_from(entry.path())?;
-            let metadata = fs::symlink_metadata(&entry_path)?;
+            let metadata = fs::symlink_metadata(&entry_path).map_err(|cause| Error::IO {
+                path: PrettyPath::new(&entry_path),
+                action: IOAction::Read,
+                cause,
+            })?;
 
             if metadata.is_symlink() {
                 if log_enabled!(log::Level::Info) {
@@ -78,7 +91,7 @@ impl PreinitingStore {
         Ok(())
     }
 
-    fn load_file(&mut self, path: SourcePath, toplevel: bool) -> anyhow::Result<()> {
+    fn load_file(&mut self, path: SourcePath, toplevel: bool) -> Result<()> {
         if self.path_indices.get(&path.pretty_path).is_some() {
             return Ok(());
         }
@@ -91,7 +104,7 @@ impl PreinitingStore {
         Ok(())
     }
 
-    pub fn preinit(mut self) -> anyhow::Result<InitingStore> {
+    pub fn preinit(mut self) -> Result<InitingStore> {
         self.check_loads()?;
         self.sort();
         self.linearise_store()?;
@@ -111,7 +124,7 @@ impl PreinitingStore {
         })
     }
 
-    fn check_loads(&self) -> anyhow::Result<()> {
+    fn check_loads(&self) -> Result<()> {
         // TODO(kcza): use relative loads
         let mut unknown_loads = self.store.iter().flat_map(|s| {
             s.loads()
@@ -136,7 +149,7 @@ impl PreinitingStore {
     }
 
     /// Topographically order the store
-    fn linearise_store(&mut self) -> anyhow::Result<()> {
+    fn linearise_store(&mut self) -> Result<()> {
         fn directed_dfs(
             linearised: &mut Vec<StoreIndex>,
             explored: &RefCell<Vec<bool>>,
@@ -316,12 +329,12 @@ pub struct InitingStore {
 }
 
 impl InitingStore {
-    pub fn init(self) -> anyhow::Result<VexingStore> {
+    pub fn init(self) -> Result<VexingStore> {
         let Self { store } = self;
         let store = store
             .into_iter()
             .map(InitingScriptlet::init)
-            .collect::<anyhow::Result<_>>()?;
+            .collect::<Result<_>>()?;
         Ok(VexingStore { store })
     }
 

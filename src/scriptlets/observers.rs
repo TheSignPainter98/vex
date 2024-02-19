@@ -10,6 +10,8 @@ use starlark::{
 use tree_sitter::Query;
 
 use crate::{
+    error::Error,
+    result::Result,
     scriptlets::{
         action::Action,
         event::Event,
@@ -38,7 +40,7 @@ pub trait Observer {
 
     fn function(&self) -> &OwnedFrozenValue;
 
-    fn handle(&self, path: &PrettyPath, event: Self::Event) -> anyhow::Result<()>
+    fn handle(&self, path: &PrettyPath, event: Self::Event) -> Result<()>
     where
         Self::Event: for<'v> StarlarkValue<'v> + for<'v> AllocValue<'v> + Event,
     {
@@ -52,7 +54,8 @@ pub trait Observer {
 
         let func = self.function().value(); // TODO(kcza): check thread safety! Can this unfrozen
                                             // function mutate upvalues if it is a closure?
-        eval.eval_function(func, &[module.heap().alloc(event)], &[])?;
+        eval.eval_function(func, &[module.heap().alloc(event)], &[])
+            .map_err(Error::starlark)?;
         Ok(())
     }
 }

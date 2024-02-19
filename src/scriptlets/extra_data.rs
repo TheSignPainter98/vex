@@ -15,6 +15,7 @@ use tree_sitter::Query;
 
 use crate::{
     error::Error,
+    result::Result,
     scriptlets::{
         action::Action,
         event::EventType,
@@ -244,7 +245,7 @@ impl FrozenObserverDataBuilder {
             .expect("FrozenModule extra has wrong type")
     }
 
-    pub fn build(&self) -> anyhow::Result<ScriptletObserverData> {
+    pub fn build(&self) -> Result<ScriptletObserverData> {
         let Self {
             path,
             lang,

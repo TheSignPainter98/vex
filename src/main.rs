@@ -10,6 +10,7 @@ mod error;
 mod irritation;
 mod logger;
 mod plural;
+mod result;
 mod scriptlets;
 mod source_file;
 mod source_path;
@@ -33,19 +34,22 @@ use tree_sitter::QueryCursor;
 use crate::{
     cli::{Args, CheckCmd, Command},
     context::{CompiledFilePattern, Context},
+    error::{Error, IOAction},
     irritation::Irritation,
+    result::Result,
     scriptlets::{
         event::CloseProjectEvent,
         event::{CloseFileEvent, MatchEvent, OpenFileEvent, OpenProjectEvent},
         Observer, PreinitingStore, VexingStore,
     },
     source_file::SourceFile,
-    source_path::SourcePath,
+    source_path::{PrettyPath, SourcePath},
     supported_language::SupportedLanguage,
     verbosity::Verbosity,
 };
 
-fn main() -> anyhow::Result<ExitCode> {
+// TODO(kcza): move the subcommands to separate files
+fn main() -> Result<ExitCode> {
     let args = Args::parse();
     logger::init(Verbosity::try_from(args.verbosity_level)?)?;
 
@@ -60,19 +64,19 @@ fn main() -> anyhow::Result<ExitCode> {
     Ok(logger::report())
 }
 
-fn list_languages() -> anyhow::Result<()> {
+fn list_languages() -> Result<()> {
     SupportedLanguage::iter().for_each(|lang| println!("{}", lang));
     Ok(())
 }
 
-fn list_lints() -> anyhow::Result<()> {
+fn list_lints() -> Result<()> {
     let ctx = Context::acquire()?;
     let store = PreinitingStore::new(&ctx)?.preinit()?;
     store.vexes().for_each(|vex| println!("{}", vex.path));
     Ok(())
 }
 
-fn check(_cmd_args: CheckCmd) -> anyhow::Result<()> {
+fn check(_cmd_args: CheckCmd) -> Result<()> {
     let ctx = Context::acquire()?;
     let store = PreinitingStore::new(&ctx)?.preinit()?.init()?;
 
@@ -98,7 +102,7 @@ fn check(_cmd_args: CheckCmd) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn vex(ctx: &Context, store: &VexingStore) -> anyhow::Result<Vec<Irritation>> {
+fn vex(ctx: &Context, store: &VexingStore) -> Result<Vec<Irritation>> {
     let language_observers = store.language_observers();
     let paths = {
         let mut paths = Vec::new();
@@ -109,14 +113,14 @@ fn vex(ctx: &Context, store: &VexingStore) -> anyhow::Result<Vec<Irritation>> {
             .0
             .into_iter()
             .map(|ignore| ignore.compile(&ctx.project_root))
-            .collect::<anyhow::Result<Vec<_>>>()?;
+            .collect::<Result<Vec<_>>>()?;
         let allows = ctx
             .allows
             .clone()
             .unwrap_or_default()
             .into_iter()
             .map(|allow| allow.compile(&ctx.project_root))
-            .collect::<anyhow::Result<Vec<_>>>()?;
+            .collect::<Result<Vec<_>>>()?;
         walkdir(
             ctx,
             ctx.project_root.as_ref(),
@@ -140,10 +144,18 @@ fn vex(ctx: &Context, store: &VexingStore) -> anyhow::Result<Vec<Irritation>> {
     }
     // let mut irritations = Vec::new();
     for path in paths {
-        let Some(src_file) = SourceFile::load_if_supported(path) else {
-            continue;
+        let src_file = match SourceFile::load(path.dupe()) {
+            Ok(f) => f,
+            Err(e) if e.is_recoverable() => {
+                if log_enabled!(log::Level::Trace) {
+                    trace!("ignoring {path}: {e}");
+                }
+                continue;
+            }
+            Err(e) => {
+                return Err(e);
+            }
         };
-        let src_file = src_file?;
 
         println!("linting {}...", src_file.path);
         for observer in &language_observers[src_file.lang] {
@@ -228,14 +240,27 @@ fn walkdir(
     ignores: &[CompiledFilePattern],
     allows: &[CompiledFilePattern],
     paths: &mut Vec<Utf8PathBuf>,
-) -> anyhow::Result<()> {
+) -> Result<()> {
     if log_enabled!(log::Level::Trace) {
         trace!("walking {path}");
     }
-    for entry in fs::read_dir(path)? {
-        let entry = entry?;
+    let entries = fs::read_dir(path).map_err(|cause| Error::IO {
+        path: PrettyPath::new(&path),
+        action: IOAction::Read,
+        cause,
+    })?;
+    for entry in entries {
+        let entry = entry.map_err(|cause| Error::IO {
+            path: PrettyPath::new(&path),
+            action: IOAction::Read,
+            cause,
+        })?;
         let entry_path = Utf8PathBuf::try_from(entry.path())?;
-        let metadata = fs::symlink_metadata(&entry_path)?;
+        let metadata = fs::symlink_metadata(&entry_path).map_err(|cause| Error::IO {
+            path: PrettyPath::new(&entry_path),
+            action: IOAction::Read,
+            cause,
+        })?;
         if !allows.iter().any(|p| p.matches_path(&entry_path)) {
             let hidden = entry_path
                 .file_name()
@@ -267,19 +292,136 @@ fn walkdir(
     Ok(())
 }
 
-fn dump(dump_args: DumpCmd) -> anyhow::Result<()> {
-    let src_path = SourcePath::new_absolute(&dump_args.path.canonicalize_utf8()?);
-    let Some(src_file) = SourceFile::load_if_supported(src_path) else {
-        return Ok(()); // Load already logs.
-    };
-    let src_file = src_file?;
+fn dump(dump_args: DumpCmd) -> Result<()> {
+    let src_path =
+        SourcePath::new_absolute(&dump_args.path.canonicalize_utf8().map_err(|e| Error::IO {
+            path: PrettyPath::new(Utf8Path::new(&dump_args.path)),
+            action: IOAction::Read,
+            cause: e,
+        })?);
+    let src_file = SourceFile::load(src_path)?;
+    if src_file.tree.root_node().has_error() {
+        return Err(Error::Unparseable {
+            path: PrettyPath::new(Utf8Path::new(&dump_args.path)),
+            language: src_file.lang,
+        }
+        .into());
+    }
 
     println!("{}", src_file.tree.root_node().to_sexp());
 
     Ok(())
 }
 
-fn init() -> anyhow::Result<()> {
-    let cwd = Utf8PathBuf::try_from(env::current_dir()?)?;
+fn init() -> Result<()> {
+    let cwd = Utf8PathBuf::try_from(env::current_dir().map_err(|cause| Error::IO {
+        path: PrettyPath::new(Utf8Path::new(".")),
+        action: IOAction::Read,
+        cause,
+    })?)?;
     Context::init(cwd)
+}
+
+#[cfg(test)]
+mod test {
+    use std::{fs::File, io::Write};
+
+    use indoc::indoc;
+    use tempfile::TempDir;
+
+    use super::*;
+
+    struct TestFile {
+        _dir: TempDir,
+        path: Utf8PathBuf,
+    }
+
+    impl TestFile {
+        fn new(path: impl AsRef<str>, content: impl AsRef<[u8]>) -> TestFile {
+            let dir = tempfile::tempdir().unwrap();
+            let file_path = Utf8PathBuf::try_from(dir.path().to_path_buf())
+                .unwrap()
+                .join(path.as_ref());
+
+            fs::create_dir_all(file_path.parent().unwrap()).unwrap();
+            File::create(&file_path)
+                .unwrap()
+                .write_all(content.as_ref())
+                .unwrap();
+
+            TestFile {
+                _dir: dir,
+                path: file_path,
+            }
+        }
+    }
+
+    #[test]
+    fn dump_valid_file() {
+        let test_file = TestFile::new(
+            "path/to/file.rs",
+            indoc! {r#"
+                fn add(a: i32, b: i32) -> i32 {
+                    a + b
+                }
+            "#},
+        );
+
+        let args = Args::try_parse_from(&["vex", "dump", test_file.path.as_str()]).unwrap();
+        let cmd = args.command.into_dump_cmd().unwrap();
+        dump(cmd).unwrap();
+    }
+
+    #[test]
+    fn dump_nonexistent_file() {
+        let file_path = "/i/do/not/exist.rs";
+        let args = Args::try_parse_from(&["vex", "dump", file_path]).unwrap();
+        let cmd = args.command.into_dump_cmd().unwrap();
+        let err = dump(cmd).unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "cannot read /i/do/not/exist.rs: No such file or directory (os error 2)"
+        );
+    }
+
+    #[test]
+    fn dump_invalid_file() {
+        let test_file = TestFile::new(
+            "src/file.rs",
+            indoc! {r#"
+                i am not valid a valid rust file!
+            "#},
+        );
+        let args = Args::try_parse_from(&["vex", "dump", test_file.path.as_str()]).unwrap();
+        let cmd = args.command.into_dump_cmd().unwrap();
+        let err = dump(cmd).unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            format!("cannot parse {} as rust", test_file.path)
+        );
+    }
+
+    #[test]
+    fn no_extension() {
+        let test_file = TestFile::new("no-extension", "");
+        let args = Args::try_parse_from(&["vex", "dump", test_file.path.as_str()]).unwrap();
+        let cmd = args.command.into_dump_cmd().unwrap();
+        let err = dump(cmd).unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            format!("{} has no file extension", test_file.path)
+        );
+    }
+
+    #[test]
+    fn unknown_extension() {
+        let test_file = TestFile::new("file.unknown-extension", "");
+        let args = Args::try_parse_from(&["vex", "dump", test_file.path.as_str()]).unwrap();
+        let cmd = args.command.into_dump_cmd().unwrap();
+        let err = dump(cmd).unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            format!("unknown extension 'unknown-extension'")
+        );
+    }
 }

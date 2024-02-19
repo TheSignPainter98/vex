@@ -6,6 +6,8 @@ use clap::{
     ArgAction, Parser, Subcommand,
 };
 
+use crate::error::Error;
+
 #[derive(Debug, Parser)]
 #[command(
     author,
@@ -29,8 +31,8 @@ pub struct Args {
 
 #[cfg(test)]
 impl Args {
-    fn command(&self) -> &Command {
-        &self.command
+    fn into_command(self) -> Command {
+        self.command
     }
 }
 
@@ -51,14 +53,14 @@ pub enum Command {
 
 #[cfg(test)]
 impl Command {
-    fn as_check_cmd(&self) -> Option<&CheckCmd> {
+    pub fn into_check_cmd(self) -> Option<CheckCmd> {
         match self {
             Self::Check(c) => Some(c),
             _ => None,
         }
     }
 
-    fn as_dump_cmd(&self) -> Option<&DumpCmd> {
+    pub fn into_dump_cmd(self) -> Option<DumpCmd> {
         match self {
             Self::Dump(d) => Some(d),
             _ => None,
@@ -81,7 +83,7 @@ pub struct CheckCmd {
 //
 // impl MaxConcurrentFileLimit {
 //     fn parser() -> impl TypedValueParser {
-//         StringValueParser::new().try_map(|s| Ok::<_, anyhow::Error>(Self(s.parse()?)))
+//         StringValueParser::new().try_map(|s| Ok::<_, Error>(Self(s.parse()?)))
 //     }
 // }
 //
@@ -111,7 +113,7 @@ impl MaxProblems {
             }
 
             let max: u32 = s.parse()?;
-            Ok::<_, anyhow::Error>(Self::Limited(max))
+            Ok::<_, Error>(Self::Limited(max))
         })
     }
 
@@ -185,16 +187,18 @@ mod test {
         assert_eq!(
             Args::try_parse_from(&["vex", "languages"])
                 .unwrap()
-                .command(),
-            &Command::ListLanguages,
+                .into_command(),
+            Command::ListLanguages,
         );
     }
 
     #[test]
     fn list_lints() {
         assert_eq!(
-            Args::try_parse_from(&["vex", "lints"]).unwrap().command(),
-            &Command::ListLints,
+            Args::try_parse_from(&["vex", "lints"])
+                .unwrap()
+                .into_command(),
+            Command::ListLints,
         );
     }
 
@@ -204,20 +208,20 @@ mod test {
         #[test]
         fn default() {
             let args = Args::try_parse_from(&["vex", "check"]).unwrap();
-            let cmd = args.command();
+            let cmd = args.into_command();
             assert!(matches!(cmd, Command::Check(_)));
 
-            let check_cmd = cmd.as_check_cmd().unwrap();
+            let check_cmd = cmd.into_check_cmd().unwrap();
             assert_eq!(check_cmd.max_problems, MaxProblems::Limited(100));
         }
 
         #[test]
         fn finite_max_problems() {
             let args = Args::try_parse_from(&["vex", "check", "--max-problems", "1000"]).unwrap();
-            let cmd = args.command();
+            let cmd = args.into_command();
             assert!(matches!(cmd, Command::Check(_)));
 
-            let check_cmd = cmd.as_check_cmd().unwrap();
+            let check_cmd = cmd.into_check_cmd().unwrap();
             assert_eq!(check_cmd.max_problems, MaxProblems::Limited(1000));
         }
 
@@ -225,10 +229,10 @@ mod test {
         fn infinite_max_problems() {
             let args =
                 Args::try_parse_from(&["vex", "check", "--max-problems", "unlimited"]).unwrap();
-            let cmd = args.command();
+            let cmd = args.into_command();
             assert!(matches!(cmd, Command::Check(_)));
 
-            let check_cmd = cmd.as_check_cmd().unwrap();
+            let check_cmd = cmd.into_check_cmd().unwrap();
             assert_eq!(check_cmd.max_problems, MaxProblems::Unlimited);
         }
     }
@@ -245,7 +249,7 @@ mod test {
         fn relative_path() {
             const PATH: &str = "./src/main.rs";
             let args = Args::try_parse_from(&["vex", "dump", PATH]).unwrap();
-            let dump_cmd = args.command().as_dump_cmd().unwrap();
+            let dump_cmd = args.into_command().into_dump_cmd().unwrap();
             assert_eq!(dump_cmd.path, PATH);
         }
 
@@ -253,7 +257,7 @@ mod test {
         fn absolute_path() {
             const PATH: &str = "/src/main.rs";
             let args = Args::try_parse_from(&["vex", "dump", PATH]).unwrap();
-            let dump_cmd = args.command().as_dump_cmd().unwrap();
+            let dump_cmd = args.into_command().into_dump_cmd().unwrap();
             assert_eq!(dump_cmd.path, PATH);
         }
     }
@@ -261,8 +265,10 @@ mod test {
     #[test]
     fn init() {
         assert_eq!(
-            Args::try_parse_from(&["vex", "init"]).unwrap().command(),
-            &Command::Init,
+            Args::try_parse_from(&["vex", "init"])
+                .unwrap()
+                .into_command(),
+            Command::Init,
         );
     }
 }
