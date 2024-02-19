@@ -366,7 +366,7 @@ mod test {
             "#},
         );
 
-        let args = Args::try_parse_from(&["vex", "dump", test_file.path.as_str()]).unwrap();
+        let args = Args::try_parse_from(["vex", "dump", test_file.path.as_str()]).unwrap();
         let cmd = args.command.into_dump_cmd().unwrap();
         dump(cmd).unwrap();
     }
@@ -374,7 +374,7 @@ mod test {
     #[test]
     fn dump_nonexistent_file() {
         let file_path = "/i/do/not/exist.rs";
-        let args = Args::try_parse_from(&["vex", "dump", file_path]).unwrap();
+        let args = Args::try_parse_from(["vex", "dump", file_path]).unwrap();
         let cmd = args.command.into_dump_cmd().unwrap();
         let err = dump(cmd).unwrap_err();
         assert_eq!(
@@ -391,7 +391,7 @@ mod test {
                 i am not valid a valid rust file!
             "#},
         );
-        let args = Args::try_parse_from(&["vex", "dump", test_file.path.as_str()]).unwrap();
+        let args = Args::try_parse_from(["vex", "dump", test_file.path.as_str()]).unwrap();
         let cmd = args.command.into_dump_cmd().unwrap();
         let err = dump(cmd).unwrap_err();
         assert_eq!(
@@ -403,7 +403,7 @@ mod test {
     #[test]
     fn no_extension() {
         let test_file = TestFile::new("no-extension", "");
-        let args = Args::try_parse_from(&["vex", "dump", test_file.path.as_str()]).unwrap();
+        let args = Args::try_parse_from(["vex", "dump", test_file.path.as_str()]).unwrap();
         let cmd = args.command.into_dump_cmd().unwrap();
         let err = dump(cmd).unwrap_err();
         assert_eq!(
@@ -415,7 +415,7 @@ mod test {
     #[test]
     fn unknown_extension() {
         let test_file = TestFile::new("file.unknown-extension", "");
-        let args = Args::try_parse_from(&["vex", "dump", test_file.path.as_str()]).unwrap();
+        let args = Args::try_parse_from(["vex", "dump", test_file.path.as_str()]).unwrap();
         let cmd = args.command.into_dump_cmd().unwrap();
         let err = dump(cmd).unwrap_err();
         assert_eq!(

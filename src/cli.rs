@@ -152,30 +152,30 @@ mod test {
 
     #[test]
     fn no_default() {
-        Args::try_parse_from(&["vex"]).unwrap_err();
+        Args::try_parse_from(["vex"]).unwrap_err();
     }
 
     #[test]
     fn verbosity_level() {
         const CMD: &str = "check";
         assert_eq!(
-            Args::try_parse_from(&["vex", CMD]).unwrap().verbosity_level,
+            Args::try_parse_from(["vex", CMD]).unwrap().verbosity_level,
             0
         );
         assert_eq!(
-            Args::try_parse_from(&["vex", "-v", CMD])
+            Args::try_parse_from(["vex", "-v", CMD])
                 .unwrap()
                 .verbosity_level,
             1
         );
         assert_eq!(
-            Args::try_parse_from(&["vex", "-vv", CMD])
+            Args::try_parse_from(["vex", "-vv", CMD])
                 .unwrap()
                 .verbosity_level,
             2
         );
         assert_eq!(
-            Args::try_parse_from(&["vex", "-vv", CMD])
+            Args::try_parse_from(["vex", "-vv", CMD])
                 .unwrap()
                 .verbosity_level,
             2
@@ -185,7 +185,7 @@ mod test {
     #[test]
     fn list_languages() {
         assert_eq!(
-            Args::try_parse_from(&["vex", "languages"])
+            Args::try_parse_from(["vex", "languages"])
                 .unwrap()
                 .into_command(),
             Command::ListLanguages,
@@ -195,7 +195,7 @@ mod test {
     #[test]
     fn list_lints() {
         assert_eq!(
-            Args::try_parse_from(&["vex", "lints"])
+            Args::try_parse_from(["vex", "lints"])
                 .unwrap()
                 .into_command(),
             Command::ListLints,
@@ -207,7 +207,7 @@ mod test {
 
         #[test]
         fn default() {
-            let args = Args::try_parse_from(&["vex", "check"]).unwrap();
+            let args = Args::try_parse_from(["vex", "check"]).unwrap();
             let cmd = args.into_command();
             assert!(matches!(cmd, Command::Check(_)));
 
@@ -217,7 +217,7 @@ mod test {
 
         #[test]
         fn finite_max_problems() {
-            let args = Args::try_parse_from(&["vex", "check", "--max-problems", "1000"]).unwrap();
+            let args = Args::try_parse_from(["vex", "check", "--max-problems", "1000"]).unwrap();
             let cmd = args.into_command();
             assert!(matches!(cmd, Command::Check(_)));
 
@@ -228,7 +228,7 @@ mod test {
         #[test]
         fn infinite_max_problems() {
             let args =
-                Args::try_parse_from(&["vex", "check", "--max-problems", "unlimited"]).unwrap();
+                Args::try_parse_from(["vex", "check", "--max-problems", "unlimited"]).unwrap();
             let cmd = args.into_command();
             assert!(matches!(cmd, Command::Check(_)));
 
@@ -242,13 +242,13 @@ mod test {
 
         #[test]
         fn requires_path() {
-            Args::try_parse_from(&["vex", "dump"]).unwrap_err();
+            Args::try_parse_from(["vex", "dump"]).unwrap_err();
         }
 
         #[test]
         fn relative_path() {
             const PATH: &str = "./src/main.rs";
-            let args = Args::try_parse_from(&["vex", "dump", PATH]).unwrap();
+            let args = Args::try_parse_from(["vex", "dump", PATH]).unwrap();
             let dump_cmd = args.into_command().into_dump_cmd().unwrap();
             assert_eq!(dump_cmd.path, PATH);
         }
@@ -256,7 +256,7 @@ mod test {
         #[test]
         fn absolute_path() {
             const PATH: &str = "/src/main.rs";
-            let args = Args::try_parse_from(&["vex", "dump", PATH]).unwrap();
+            let args = Args::try_parse_from(["vex", "dump", PATH]).unwrap();
             let dump_cmd = args.into_command().into_dump_cmd().unwrap();
             assert_eq!(dump_cmd.path, PATH);
         }
@@ -265,7 +265,7 @@ mod test {
     #[test]
     fn init() {
         assert_eq!(
-            Args::try_parse_from(&["vex", "init"])
+            Args::try_parse_from(["vex", "init"])
                 .unwrap()
                 .into_command(),
             Command::Init,
