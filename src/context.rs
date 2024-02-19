@@ -94,8 +94,8 @@ impl Manifest {
 
     fn init(project_root: Utf8PathBuf) -> Result<()> {
         match Manifest::acquire_file_in(&project_root) {
-            Ok((found_root, _)) => return Err(Error::AlreadyInited { found_root }.into()),
-            Err(e) if matches!(e, Error::ManifestNotFound) => {}
+            Ok((found_root, _)) => return Err(Error::AlreadyInited { found_root }),
+            Err(Error::ManifestNotFound) => {}
             Err(e) => return Err(e),
         }
 
@@ -139,7 +139,7 @@ impl Manifest {
                 Err(e) if e.kind() == ErrorKind::NotFound => {}
                 Err(e) => {
                     return Err(Error::IO {
-                        path: PrettyPath::new(&Utf8Path::new(Self::FILE_NAME)),
+                        path: PrettyPath::new(Utf8Path::new(Self::FILE_NAME)),
                         action: IOAction::Read,
                         cause: e,
                     })

@@ -260,16 +260,16 @@ impl FrozenObserverDataBuilder {
         let path = path.dupe();
         let lang = {
             let Some(lang) = lang else {
-                return Err(Error::NoLanguage(path).into());
+                return Err(Error::NoLanguage(path));
             };
             lang.parse::<SupportedLanguage>()?
         };
         let query = {
             let Some(query) = query else {
-                return Err(Error::NoQuery(path).into());
+                return Err(Error::NoQuery(path));
             };
             if query.is_empty() {
-                return Err(Error::EmptyQuery(path).into());
+                return Err(Error::EmptyQuery(path));
             }
             Arc::new(Query::new(lang.ts_language(), query)?)
         };
@@ -280,10 +280,10 @@ impl FrozenObserverDataBuilder {
             && on_close_file.is_empty()
             && on_close_project.is_empty()
         {
-            return Err(Error::NoCallbacks(path).into());
+            return Err(Error::NoCallbacks(path));
         }
         if on_match.is_empty() {
-            return Err(Error::NoMatch(path).into());
+            return Err(Error::NoMatch(path));
         }
         let on_open_project = Arc::new(
             on_open_project

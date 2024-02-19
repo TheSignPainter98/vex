@@ -43,7 +43,7 @@ impl FromStr for SupportedLanguage {
     fn from_str(s: &str) -> Result<Self> {
         match s {
             "rust" => Ok(Self::Rust),
-            _ => Err(Error::UnknownLanguage(s.to_string()).into()),
+            _ => Err(Error::UnknownLanguage(s.to_string())),
         }
     }
 }

@@ -126,7 +126,7 @@ impl InitingScriptlet {
             .map_err(Error::starlark)?
         else {
             if toplevel {
-                return Err(Error::NoInit(path.pretty_path.dupe()).into());
+                return Err(Error::NoInit(path.pretty_path.dupe()));
             }
             // Non-toplevel scriptlets may be helper libraries.
             return Ok(VexingScriptlet {

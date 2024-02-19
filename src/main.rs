@@ -245,13 +245,13 @@ fn walkdir(
         trace!("walking {path}");
     }
     let entries = fs::read_dir(path).map_err(|cause| Error::IO {
-        path: PrettyPath::new(&path),
+        path: PrettyPath::new(path),
         action: IOAction::Read,
         cause,
     })?;
     for entry in entries {
         let entry = entry.map_err(|cause| Error::IO {
-            path: PrettyPath::new(&path),
+            path: PrettyPath::new(path),
             action: IOAction::Read,
             cause,
         })?;
@@ -304,8 +304,7 @@ fn dump(dump_args: DumpCmd) -> Result<()> {
         return Err(Error::Unparseable {
             path: PrettyPath::new(Utf8Path::new(&dump_args.path)),
             language: src_file.lang,
-        }
-        .into());
+        });
     }
 
     println!("{}", src_file.tree.root_node().to_sexp());

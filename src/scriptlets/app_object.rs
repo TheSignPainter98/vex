@@ -98,8 +98,7 @@ impl AppObject {
             return Err(Error::ActionUnavailable {
                 what: attr_path,
                 action: curr_action,
-            }
-            .into());
+            });
         }
         Ok(())
     }

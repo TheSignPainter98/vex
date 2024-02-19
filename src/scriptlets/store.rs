@@ -132,7 +132,7 @@ impl PreinitingStore {
                 .filter(|l| self.path_indices.get(l).is_none())
         });
         if let Some(unknown_module) = unknown_loads.next() {
-            return Err(Error::NoSuchModule(unknown_module.dupe()).into());
+            return Err(Error::NoSuchModule(unknown_module.dupe()));
         }
         Ok(())
     }
@@ -189,16 +189,16 @@ impl PreinitingStore {
                 node,
             );
         }
+        // Presence of an import cycle will prevent some nodes entering the
+        // linearisation.
         if linearised.len() != self.store.len() {
-            // Presence of an import cycle will prevent some nodes entering the
-            // linearisation.
-            return Err(Error::ImportCycle(self.find_cycle()).into());
+            return Err(Error::ImportCycle(self.find_cycle()));
         }
-        linearised.into_iter().enumerate().for_each(|(i, j)| {
-            if i < j {
-                self.store.swap(i, j)
-            }
-        });
+        linearised
+            .into_iter()
+            .enumerate()
+            .filter(|(i, j)| i < j)
+            .for_each(|(i, j)| self.store.swap(i, j));
 
         Ok(())
     }
