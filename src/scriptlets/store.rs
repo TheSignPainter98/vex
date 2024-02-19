@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::BTreeMap, fs, io::ErrorKind, iter};
+use std::{collections::BTreeMap, fs, io::ErrorKind, iter};
 
 use camino::Utf8PathBuf;
 use dupe::Dupe;
@@ -139,19 +139,16 @@ impl PreinitingStore {
     fn linearise_store(&mut self) -> anyhow::Result<()> {
         fn directed_dfs(
             linearised: &mut Vec<StoreIndex>,
-            explored: &RefCell<Vec<bool>>,
+            explored: &mut Vec<bool>,
             loads: &[Vec<StoreIndex>],
             loaded_by: &[Vec<StoreIndex>],
             node: StoreIndex,
         ) {
-            {
-                let explored = explored.borrow();
-                if !loads[node].iter().all(|n| explored[*n]) {
-                    return;
-                }
+            if !loads[node].iter().all(|n| explored[*n]) {
+                return;
             }
 
-            explored.borrow_mut()[node] = true;
+            explored[node] = true;
             linearised.push(node);
             for m in &loaded_by[node] {
                 directed_dfs(linearised, explored, loads, loaded_by, *m);
@@ -161,16 +158,16 @@ impl PreinitingStore {
         let load_edges = self.get_load_edges();
         let loaded_by_edges = self.get_loaded_by_edges(&load_edges);
         let n = self.store.len();
-        let explored = RefCell::new(vec![false; n]);
+        let mut explored = vec![false; n];
         let mut linearised = Vec::with_capacity(n);
         for node in 0..n {
-            if explored.borrow_mut()[node] {
+            if explored[node] {
                 continue;
             }
 
             directed_dfs(
                 &mut linearised,
-                &explored,
+                &mut explored,
                 &load_edges,
                 &loaded_by_edges,
                 node,
@@ -192,15 +189,14 @@ impl PreinitingStore {
 
     fn find_cycle(&self) -> Vec<PrettyPath> {
         fn undirected_dfs(
-            stack: &RefCell<Vec<StoreIndex>>,
-            explored: &RefCell<Vec<bool>>,
+            stack: &mut Vec<StoreIndex>,
+            explored: &mut Vec<bool>,
             edges: &[Vec<StoreIndex>],
             node: StoreIndex,
         ) -> Option<Vec<StoreIndex>> {
-            if stack.borrow().contains(&node) {
+            if stack.contains(&node) {
                 return Some(
                     stack
-                        .borrow()
                         .iter()
                         .copied()
                         .skip_while(|n| *n != node)
@@ -209,24 +205,24 @@ impl PreinitingStore {
                 );
             }
 
-            if explored.borrow()[node] {
+            if explored[node] {
                 return None;
             }
-            explored.borrow_mut()[node] = true;
+            explored[node] = true;
 
-            stack.borrow_mut().push(node);
+            stack.push(node);
             for next in &edges[node] {
                 let r = undirected_dfs(stack, explored, edges, *next);
                 if r.is_some() {
                     return r;
                 }
             }
-            stack.borrow_mut().pop();
+            stack.pop();
 
             None
         }
 
-        let stack = RefCell::new(vec![]);
+        let mut stack = vec![];
         let edges = {
             let mut edges = self.get_load_edges();
             self.get_loaded_by_edges(&edges)
@@ -236,10 +232,10 @@ impl PreinitingStore {
             edges
         };
         let n = self.store.len();
-        let explored = RefCell::new(vec![false; n]);
+        let mut explored = vec![false; n];
         let mut cycle = None;
         for node in 0..n {
-            let c = undirected_dfs(&stack, &explored, &edges, node);
+            let c = undirected_dfs(&mut stack, &mut explored, &edges, node);
             if c.is_some() {
                 cycle = c;
                 break;
