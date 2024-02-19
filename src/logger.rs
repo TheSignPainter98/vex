@@ -3,7 +3,7 @@ use std::{process::ExitCode, sync::Mutex};
 use annotate_snippets::{AnnotationType, Renderer, Snippet};
 use log::{kv::Key, Level, Log, Metadata, Record};
 
-use crate::{verbosity::Verbosity, result::Result};
+use crate::{result::Result, verbosity::Verbosity};
 
 static NUM_ERRS: Mutex<u32> = Mutex::new(0);
 static NUM_WARNINGS: Mutex<u32> = Mutex::new(0);
