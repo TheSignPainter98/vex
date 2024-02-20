@@ -1,10 +1,14 @@
 use std::fs;
 
-use anyhow::Context;
-use log::{log_enabled, trace};
+use dupe::Dupe;
 use tree_sitter::{Parser, Tree};
 
-use crate::{source_path::SourcePath, supported_language::SupportedLanguage};
+use crate::{
+    error::{Error, IOAction},
+    result::Result,
+    source_path::SourcePath,
+    supported_language::SupportedLanguage,
+};
 
 pub struct SourceFile {
     pub path: SourcePath,
@@ -14,32 +18,24 @@ pub struct SourceFile {
 }
 
 impl SourceFile {
-    pub fn load_if_supported(path: SourcePath) -> Option<anyhow::Result<Self>> {
+    pub fn load(path: SourcePath) -> Result<Self> {
         let Some(extension) = path.abs_path.extension() else {
-            if log_enabled!(log::Level::Trace) {
-                trace!("ignoring {path} (no file extension)");
-            }
-            return None;
+            return Err(Error::NoExtension(path.pretty_path.dupe()));
         };
-        let Some(lang) = SupportedLanguage::try_from_extension(extension) else {
-            if log_enabled!(log::Level::Trace) {
-                trace!("ignoring {path} (no known language)");
-            }
-            return None;
-        };
-        Some(Self::load(path, lang))
-    }
-
-    fn load(path: SourcePath, lang: SupportedLanguage) -> anyhow::Result<Self> {
-        let content = fs::read_to_string(path.abs_path.as_ref())?;
+        let lang = SupportedLanguage::try_from_extension(extension)?;
+        let content = fs::read_to_string(path.abs_path.as_ref()).map_err(|cause| Error::IO {
+            path: path.pretty_path.dupe(),
+            action: IOAction::Read,
+            cause,
+        })?;
         let tree = {
             let mut parser = Parser::new();
             parser
                 .set_language(lang.ts_language())
-                .with_context(|| format!("failed to load {} grammar", lang.name()))?;
+                .map_err(Error::Language)?;
             parser
                 .parse(&content, None)
-                .with_context(|| format!("failed to parse {path}"))?
+                .expect("unexpected parser failure")
         };
         Ok(Self {
             path,

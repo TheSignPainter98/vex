@@ -11,7 +11,8 @@ use std::{
     fs::{self, File},
 };
 
-use crate::error::Error;
+use crate::error::{Error, IOAction};
+use crate::result::Result;
 use crate::source_path::PrettyPath;
 
 #[derive(Debug)]
@@ -21,7 +22,7 @@ pub struct Context {
 }
 
 impl Context {
-    pub fn acquire() -> anyhow::Result<Self> {
+    pub fn acquire() -> Result<Self> {
         let (project_root, raw_data) = Manifest::acquire_file()?;
         let project_root = PrettyPath::new(&project_root);
         let data = toml_edit::de::from_str(&raw_data)?;
@@ -32,7 +33,7 @@ impl Context {
     }
 
     #[cfg(test)]
-    pub fn acquire_in(dir: &Utf8Path) -> anyhow::Result<Self> {
+    pub fn acquire_in(dir: &Utf8Path) -> Result<Self> {
         let (project_root, raw_data) = Manifest::acquire_file_in(dir)?;
         let project_root = PrettyPath::new(&project_root);
         let data = toml_edit::de::from_str(&raw_data)?;
@@ -42,8 +43,14 @@ impl Context {
         })
     }
 
-    pub fn init(project_root: Utf8PathBuf) -> anyhow::Result<()> {
-        fs::create_dir_all(project_root.join(QueriesDir::default().as_str()))?;
+    pub fn init(project_root: Utf8PathBuf) -> Result<()> {
+        fs::create_dir_all(project_root.join(QueriesDir::default().as_str())).map_err(|cause| {
+            Error::IO {
+                path: PrettyPath::new(&project_root),
+                action: IOAction::Write,
+                cause,
+            }
+        })?;
         Manifest::init(project_root)
     }
 
@@ -85,39 +92,58 @@ impl Manifest {
         ignore = [ ".git/", ".gitignore", "/target/" ]
     "#};
 
-    fn init(project_root: Utf8PathBuf) -> anyhow::Result<()> {
+    fn init(project_root: Utf8PathBuf) -> Result<()> {
         match Manifest::acquire_file_in(&project_root) {
-            Ok((found_root, _)) => return Err(Error::AlreadyInited { found_root }.into()),
-            Err(e)
-                if e.downcast_ref::<Error>()
-                    .map(|e| e != &Error::ManifestNotFound)
-                    .unwrap_or(true) =>
-            {
-                return Err(e)
-            }
-            _ => {}
+            Ok((found_root, _)) => return Err(Error::AlreadyInited { found_root }),
+            Err(Error::ManifestNotFound) => {}
+            Err(e) => return Err(e),
         }
 
+        let file_path = project_root.join(Self::FILE_NAME);
         let file = File::options()
             .write(true)
             .create_new(true)
-            .open(project_root.join(Self::FILE_NAME))?;
+            .open(&file_path)
+            .map_err(|cause| Error::IO {
+                path: PrettyPath::new(&file_path),
+                action: IOAction::Write,
+                cause,
+            })?;
         let mut writer = BufWriter::new(file);
-        writer.write_all(Self::DEFAULT_CONTENT.as_bytes())?;
+        writer
+            .write_all(Self::DEFAULT_CONTENT.as_bytes())
+            .map_err(|cause| Error::IO {
+                path: PrettyPath::new(&file_path),
+                action: IOAction::Write,
+                cause,
+            })?;
         Ok(())
     }
 
-    fn acquire_file() -> anyhow::Result<(Utf8PathBuf, String)> {
-        Self::acquire_file_in(&Utf8PathBuf::try_from(env::current_dir()?)?)
+    // TODO(kcza): rename this to acquire_content
+    fn acquire_file() -> Result<(Utf8PathBuf, String)> {
+        Self::acquire_file_in(&Utf8PathBuf::try_from(env::current_dir().map_err(
+            |cause| Error::IO {
+                path: PrettyPath::new(Utf8Path::new(".")),
+                action: IOAction::Read,
+                cause,
+            },
+        )?)?)
     }
 
-    fn acquire_file_in(dir: &Utf8Path) -> anyhow::Result<(Utf8PathBuf, String)> {
+    fn acquire_file_in(dir: &Utf8Path) -> Result<(Utf8PathBuf, String)> {
         let mut project_root = dir.to_path_buf();
         let mut manifest_file = loop {
             match File::open(project_root.join(Self::FILE_NAME)) {
                 Ok(f) => break f,
                 Err(e) if e.kind() == ErrorKind::NotFound => {}
-                Err(e) => return Err(e.into()),
+                Err(e) => {
+                    return Err(Error::IO {
+                        path: PrettyPath::new(Utf8Path::new(Self::FILE_NAME)),
+                        action: IOAction::Read,
+                        cause: e,
+                    })
+                }
             }
             project_root = project_root
                 .parent()
@@ -128,7 +154,13 @@ impl Manifest {
         let len_hint = manifest_file.metadata().map(|m| m.len() as usize).ok();
         let raw_data = {
             let mut manifest_raw = String::with_capacity(len_hint.unwrap_or(0));
-            manifest_file.read_to_string(&mut manifest_raw)?;
+            manifest_file
+                .read_to_string(&mut manifest_raw)
+                .map_err(|cause| Error::IO {
+                    path: PrettyPath::new(Utf8Path::new(Self::FILE_NAME)),
+                    action: IOAction::Read,
+                    cause,
+                })?;
             manifest_raw
         };
 
@@ -184,7 +216,7 @@ impl FilePattern {
         Self(pattern.into())
     }
 
-    pub fn compile(self, project_root: &Utf8Path) -> anyhow::Result<CompiledFilePattern> {
+    pub fn compile(self, project_root: &Utf8Path) -> Result<CompiledFilePattern> {
         Ok(CompiledFilePattern(Pattern::new(
             if self.0.starts_with('/') {
                 // absolute
@@ -258,8 +290,8 @@ mod test {
     }
 
     #[test]
-    fn init() -> anyhow::Result<()> {
-        let tempdir = tempfile::tempdir()?;
+    fn init() -> Result<()> {
+        let tempdir = tempfile::tempdir().unwrap();
         let tempdir_path = Utf8PathBuf::try_from(tempdir.path().to_owned())?;
 
         // Manifest not found
@@ -291,11 +323,11 @@ mod test {
     }
 
     #[test]
-    fn no_vexes_dir() -> anyhow::Result<()> {
-        let tempdir = tempfile::tempdir()?;
+    fn no_vexes_dir() -> Result<()> {
+        let tempdir = tempfile::tempdir().unwrap();
         let tempdir_path = Utf8PathBuf::try_from(tempdir.path().to_owned())?;
 
-        File::create(tempdir_path.join("vex.toml"))?;
+        File::create(tempdir_path.join("vex.toml")).unwrap();
 
         let re = Regex::new("^cannot find vexes directory at .*").unwrap();
         let ctx = Context::acquire_in(&tempdir_path).unwrap();

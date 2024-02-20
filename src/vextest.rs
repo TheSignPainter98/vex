@@ -9,7 +9,9 @@ use camino::Utf8PathBuf;
 use indoc::indoc;
 use regex::Regex;
 
-use crate::{context::Context, irritation::Irritation, scriptlets::PreinitingStore};
+use crate::{
+    context::Context, irritation::Irritation, result::Result, scriptlets::PreinitingStore,
+};
 
 pub struct VexTest<'s> {
     name: Cow<'s, str>,
@@ -109,7 +111,7 @@ impl<'s> VexTest<'s> {
         );
     }
 
-    pub fn try_run(mut self) -> anyhow::Result<Vec<Irritation>> {
+    pub fn try_run(mut self) -> Result<Vec<Irritation>> {
         self.setup();
 
         let root_dir = tempfile::tempdir().unwrap();
@@ -119,7 +121,8 @@ impl<'s> VexTest<'s> {
             let manifest_content = self.manifest_content.as_deref().unwrap_or_default();
             File::create(root_path.join("vex.toml"))
                 .unwrap()
-                .write_all(manifest_content.as_bytes())?;
+                .write_all(manifest_content.as_bytes())
+                .unwrap();
         }
 
         for (path, content) in &self.scriptlets {

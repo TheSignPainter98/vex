@@ -7,7 +7,7 @@ use enum_map::Enum;
 use strum::EnumIter;
 use tree_sitter::Language;
 
-use crate::error::Error;
+use crate::{error::Error, result::Result};
 
 #[derive(Copy, Clone, Debug, Dupe, EnumIter, Subcommand, Enum, Allocative, PartialEq, Eq)]
 pub enum SupportedLanguage {
@@ -22,10 +22,10 @@ impl SupportedLanguage {
         }
     }
 
-    pub fn try_from_extension(extension: &str) -> Option<Self> {
+    pub fn try_from_extension(extension: &str) -> Result<Self> {
         match extension {
-            "rs" => Some(Self::Rust),
-            _ => None,
+            "rs" => Ok(Self::Rust),
+            _ => Err(Error::UnknownExtension(extension.into())),
         }
     }
 
@@ -38,12 +38,12 @@ impl SupportedLanguage {
 }
 
 impl FromStr for SupportedLanguage {
-    type Err = anyhow::Error;
+    type Err = Error;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> Result<Self> {
         match s {
             "rust" => Ok(Self::Rust),
-            _ => Err(Error::UnknownLanguage(s.to_string()).into()),
+            _ => Err(Error::UnknownLanguage(s.to_string())),
         }
     }
 }

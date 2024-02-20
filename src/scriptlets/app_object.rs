@@ -12,6 +12,7 @@ use starlark_derive::starlark_value;
 
 use crate::{
     error::Error,
+    result::Result,
     scriptlets::{
         action::Action,
         event::EventType,
@@ -90,15 +91,14 @@ impl AppObject {
     fn check_attr_available(
         eval: &Evaluator<'_, '_>,
         attr_path: &'static str,
-        available_actions: &[Action],
-    ) -> anyhow::Result<()> {
+        available_actions: &'static [Action],
+    ) -> Result<()> {
         let curr_action = InvocationData::get_from(eval).action();
         if !available_actions.contains(&curr_action) {
-            return Err(Error::Unavailable {
+            return Err(Error::ActionUnavailable {
                 what: attr_path,
                 action: curr_action,
-            }
-            .into());
+            });
         }
         Ok(())
     }
@@ -114,7 +114,7 @@ impl<'v> StarlarkValue<'v> for AppObject {
 }
 
 impl Display for AppObject {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Self::NAME.fmt(f)
     }
 }
