@@ -380,7 +380,7 @@ mod test {
         if cfg!(target_os = "windows") {
             assert_eq!(
                 err.to_string(),
-                "cannot read /i/do/not/exist.rs: The system cannot find the path specified (os error 3)"
+                "cannot read /i/do/not/exist.rs: The system cannot find the path specified. (os error 3)"
             );
         } else {
             assert_eq!(
