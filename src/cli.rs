@@ -16,12 +16,12 @@ use crate::error::Error;
     disable_help_flag = true,
     disable_version_flag = true
 )]
-// #[warn(missing_docs)]
 pub struct Args {
     #[command(subcommand)]
     pub command: Command,
 
-    #[arg(short, value_name="level", action=ArgAction::Count, value_name="level", global=true)]
+    /// Use verbose output (-vv very verbose)
+    #[arg(short, action=ArgAction::Count, value_name="level", global=true)]
     pub verbosity_level: u8,
 
     /// Print help information, use `--help` for more detail
@@ -38,16 +38,21 @@ impl Args {
 
 #[derive(Debug, PartialEq, Eq, Subcommand)]
 pub enum Command {
+    /// List known languages
     #[command(name = "languages")]
     ListLanguages,
 
+    /// List defined lints
     #[command(name = "lints")]
     ListLints,
 
+    /// Run lints on project in this directory
     Check(CheckCmd),
 
+    /// Output the structure of a given file parsed by tree-sitter
     Dump(DumpCmd),
 
+    /// Create new vex project with this directory as the root
     Init,
 }
 
@@ -70,11 +75,13 @@ impl Command {
 
 #[derive(Debug, Default, PartialEq, Eq, Parser)]
 pub struct CheckCmd {
+    // Set concurrency limit
     // #[arg(long, default_value_t = MaxConcurrentFileLimit::default(), value_parser = MaxConcurrentFileLimit::parser())]
     // pub max_concurrent_files: MaxConcurrentFileLimit,
     //
     // TODO(kcza): use me!
-    #[arg(long, default_value_t = MaxProblems::default(), value_parser = MaxProblems::parser())]
+    /// Exit early after this many problems (pass `unlimited` for no max)
+    #[arg(long, default_value_t = MaxProblems::default(), value_parser = MaxProblems::parser(), value_name = "max")]
     pub max_problems: MaxProblems,
 }
 
@@ -143,6 +150,8 @@ impl Display for MaxProblems {
 
 #[derive(Debug, Default, PartialEq, Eq, Parser)]
 pub struct DumpCmd {
+    /// File whose structure will be output
+    #[arg(value_name = "path")]
     pub path: Utf8PathBuf,
 }
 
