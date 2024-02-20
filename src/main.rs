@@ -377,10 +377,17 @@ mod test {
         let args = Args::try_parse_from(["vex", "dump", file_path]).unwrap();
         let cmd = args.command.into_dump_cmd().unwrap();
         let err = dump(cmd).unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "cannot read /i/do/not/exist.rs: No such file or directory (os error 2)"
-        );
+        if cfg!(target_os = "windows") {
+            assert_eq!(
+                err.to_string(),
+                "cannot read /i/do/not/exist.rs: The system cannot find the path specified (os error 3)"
+            );
+        } else {
+            assert_eq!(
+                err.to_string(),
+                "cannot read /i/do/not/exist.rs: No such file or directory (os error 2)"
+            );
+        }
     }
 
     #[test]
@@ -407,10 +414,10 @@ mod test {
         let cmd = args.command.into_dump_cmd().unwrap();
         let err = dump(cmd).unwrap_err();
 
-        // Assertion relaxed due to strange Github Actions Macos runner path handling.
-        let expected = format!("{} has no file extension", test_file.path);
+        // Assertion relaxed due to strange Github Actions Windows and Macos runner path handling.
+        let expected = "no-extension has no file extension";
         assert!(
-            err.to_string().contains(&expected),
+            err.to_string().ends_with(&expected),
             "unexpected error: expected {expected} but got {err}"
         );
     }
