@@ -10,7 +10,9 @@ where
     S: AsRef<str>,
 {
     fn println(&self, text: &str) -> anyhow::Result<()> {
-        println!("{}: {text}", self.tag.as_ref());
+        println!("{}: {text}", self.tag.as_ref()); // TODO(kcza): move this functioality
+                                                   // into a debug builtin! Make print
+                                                   // just be bare.
         Ok(())
     }
 }

@@ -62,6 +62,11 @@ impl PreinitingScriptlet {
         self.ast.lint(Some(&self.global_names()))
     }
 
+    // #[allow(unused)]
+    // pub fn typecheck(&self, globals: &Globals, ...) -> Result<()> {
+    // // TODO(kcza): typecheck starlark before executing it!
+    // }
+
     pub fn preinit(self, cache: &PreinitedModuleCache) -> Result<InitingScriptlet> {
         let Self {
             path,

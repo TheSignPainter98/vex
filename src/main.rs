@@ -28,6 +28,7 @@ use clap::Parser as _;
 use cli::DumpCmd;
 use dupe::Dupe;
 use log::{info, log_enabled, trace};
+use starlark::environment::Module;
 use strum::IntoEnumIterator;
 use tree_sitter::QueryCursor;
 
@@ -40,7 +41,7 @@ use crate::{
     scriptlets::{
         event::CloseProjectEvent,
         event::{CloseFileEvent, MatchEvent, OpenFileEvent, OpenProjectEvent},
-        Observer, PreinitingStore, VexingStore,
+        Observer, PreinitingStore, QueryCaptures, VexingStore,
     },
     source_file::SourceFile,
     source_path::{PrettyPath, SourcePath},
@@ -146,7 +147,9 @@ fn vex(ctx: &Context, store: &VexingStore) -> Result<Vec<Irritation>> {
 
     for observer in language_observers.values().flatten() {
         for on_open_project in &observer.on_open_project[..] {
+            let handler_module = Module::new();
             on_open_project.handle(
+                &handler_module,
                 &observer.path,
                 OpenProjectEvent::new(ctx.project_root.dupe()),
             )?;
@@ -170,7 +173,9 @@ fn vex(ctx: &Context, store: &VexingStore) -> Result<Vec<Irritation>> {
         println!("linting {}...", src_file.path);
         for observer in &language_observers[src_file.lang] {
             for on_open_file in &observer.on_open_file[..] {
+                let handler_module = Module::new();
                 on_open_file.handle(
+                    &handler_module,
                     &observer.path,
                     OpenFileEvent::new(src_file.path.pretty_path.dupe()),
                 )?;
@@ -183,16 +188,21 @@ fn vex(ctx: &Context, store: &VexingStore) -> Result<Vec<Irritation>> {
                 src_file.content[..].as_bytes(),
             ) {
                 println!("found {qmatch:?}");
+                let query_match = QueryCaptures::new(&observer.query, &qmatch);
                 for on_match in &observer.on_match[..] {
+                    let handler_module = Module::new();
                     on_match.handle(
+                        &handler_module, // TODO(kcza): is this necessary??
                         &observer.path,
-                        MatchEvent::new(src_file.path.pretty_path.dupe()),
+                        MatchEvent::new(src_file.path.pretty_path.dupe(), query_match.dupe()),
                     )?;
                 }
             }
 
             for on_close_file in &observer.on_close_file[..] {
+                let handler_module = Module::new();
                 on_close_file.handle(
+                    &handler_module,
                     &observer.path,
                     CloseFileEvent::new(src_file.path.pretty_path.dupe()),
                 )?;
@@ -208,7 +218,9 @@ fn vex(ctx: &Context, store: &VexingStore) -> Result<Vec<Irritation>> {
     for language_observer in language_observers.values() {
         for observer in language_observer {
             for on_close_project in &observer.on_close_project[..] {
+                let handler_module = Module::new();
                 on_close_project.handle(
+                    &handler_module,
                     &observer.path,
                     CloseProjectEvent::new(ctx.project_root.dupe()),
                 )?;
