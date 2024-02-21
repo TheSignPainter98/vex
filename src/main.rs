@@ -49,7 +49,17 @@ use crate::{
 };
 
 // TODO(kcza): move the subcommands to separate files
-fn main() -> Result<ExitCode> {
+fn main() -> ExitCode {
+    match run() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("{e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run() -> Result<ExitCode> {
     let args = Args::parse();
     logger::init(Verbosity::try_from(args.verbosity_level)?)?;
 
