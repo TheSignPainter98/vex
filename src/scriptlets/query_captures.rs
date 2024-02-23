@@ -33,29 +33,17 @@ impl<'v> StarlarkValue<'v> for QueryCaptures<'v> {
         let Some(name) = other.unpack_starlark_str() else {
             return Ok(false);
         };
-        Ok(self
-            .query
-            .capture_names()
-            .iter()
-            .any(|cn| cn == name.as_str()))
+        Ok(self.query.capture_index_for_name(name).is_some())
     }
 
     fn at(&self, index: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         let Some(name) = index.unpack_starlark_str().map(StarlarkStr::as_str) else {
             return ValueError::unsupported_with(self, "[]", index);
         };
-        let Some(idx) = self
-            .query
-            .capture_names()
-            .iter()
-            .enumerate()
-            .find(|(_, cn)| **cn == name)
-            .map(|(i, _)| i)
-        else {
+        let Some(idx) = self.query.capture_index_for_name(name) else {
             return Err(ValueError::KeyNotFound(name.into()).into());
         };
-
-        let node = Node(&self.query_match.captures[idx].node);
+        let node = Node(&self.query_match.captures[idx as usize].node);
         Ok(heap.alloc(node))
     }
 }
