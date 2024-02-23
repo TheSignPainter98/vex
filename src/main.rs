@@ -192,7 +192,7 @@ fn vex(ctx: &Context, store: &VexingStore) -> Result<Vec<Irritation>> {
                 for on_match in &observer.on_match[..] {
                     let handler_module = Module::new();
                     on_match.handle(
-                        &handler_module, // TODO(kcza): is this necessary??
+                        &handler_module,
                         &observer.path,
                         MatchEvent::new(src_file.path.pretty_path.dupe(), query_match.dupe()),
                     )?;
