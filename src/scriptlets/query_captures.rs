@@ -29,6 +29,10 @@ impl<'v> StarlarkValue<'v> for QueryCaptures<'v> {
         demand.provide_value(self)
     }
 
+    fn length(&self) -> anyhow::Result<i32> {
+        Ok(self.query.capture_names().len() as i32)
+    }
+
     fn is_in(&self, other: Value<'v>) -> anyhow::Result<bool> {
         let Some(name) = other.unpack_starlark_str() else {
             return Ok(false);

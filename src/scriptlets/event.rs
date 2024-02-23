@@ -379,6 +379,7 @@ mod test {
 
                             captures = event.captures
                             check['type'](captures, 'QueryCaptures')
+                            check['eq'](len(captures), 1)
 
                             check['in']('bin_expr', captures)
                             bin_expr = captures['bin_expr']
