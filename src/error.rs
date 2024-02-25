@@ -1,11 +1,12 @@
 use std::{io, num, path};
 
 use camino::Utf8PathBuf;
+use derive_more::Display;
 use joinery::JoinableIterator;
 use strum::IntoEnumIterator;
 
 use crate::{
-    scriptlets::{action::Action, event::EventType},
+    scriptlets::{action::Action, event::EventType, LoadStatementModule},
     source_path::PrettyPath,
     supported_language::SupportedLanguage,
 };
@@ -33,6 +34,13 @@ pub enum Error {
 
     #[error("import cycle detected: {}", .0.iter().join_with(" -> "))]
     ImportCycle(Vec<PrettyPath>),
+
+    #[error("cannot load {module} in {path}: {reason}")]
+    InvalidLoad {
+        path: PrettyPath,
+        module: String,
+        reason: InvalidLoadReason,
+    },
 
     #[error("{0}")]
     InvalidWarnCall(&'static str),
@@ -144,11 +152,55 @@ impl From<starlark::Error> for Error {
     }
 }
 
-#[derive(Debug, strum::Display)]
+#[derive(Debug, Display)]
 pub enum IOAction {
-    #[strum(serialize = "read")]
+    #[display(fmt = "read")]
     Read,
 
-    #[strum(serialize = "write")]
+    #[display(fmt = "write")]
     Write,
+}
+
+#[derive(Debug, Display)]
+pub enum InvalidLoadReason {
+    #[display(
+        fmt = "load paths cannot contain underscores which appear at component ends, found {_0}"
+    )]
+    HasBadUnderscoresInComponent(String),
+
+    #[display(fmt = "load paths can only contain a-z, 0-9 _, . and /, found {_0}")]
+    HasForbiddenChar(char),
+
+    #[display(fmt = "load paths must have .star extension, found `{}`", _0)]
+    HasIncorrectExtension(String),
+
+    #[display(fmt = "load paths can only have path operators at the start")]
+    HasMidwayPathOperator,
+
+    #[display(fmt = "load paths cannot contain many successive dots, found {_0}")]
+    HasSuccessiveDots(String),
+
+    #[display(fmt = "load paths cannot contain successive underscores")]
+    HasSuccessiveUnderscores,
+
+    #[display(
+        fmt = "load path components must be at least {} characters, found {_0}",
+        LoadStatementModule::MIN_COMPONENT_LEN
+    )]
+    HasTooShortComponent(String),
+
+    #[display(
+        fmt = "load path stem must be at least {} characters, found {_0}",
+        LoadStatementModule::MIN_COMPONENT_LEN
+    )]
+    HasTooShortStem(String),
+
+    #[display(fmt = "load paths must not have underscores at the end of the stem, found {_0}")]
+    HasUnderscoreAtEndOfStem(String),
+
+    #[display(fmt = "load paths cannot be absolute")]
+    IsAbsolute,
+
+    #[display(fmt = "load paths must be files, not directories")]
+    IsDir,
 }

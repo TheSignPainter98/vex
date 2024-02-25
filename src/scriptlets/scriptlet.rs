@@ -1,5 +1,6 @@
 use std::{collections::HashSet, fs};
 
+use camino::{Utf8Component, Utf8Path};
 use dupe::Dupe;
 use starlark::{
     analysis::AstModuleLint,
@@ -10,7 +11,7 @@ use starlark::{
 };
 
 use crate::{
-    error::{Error, IOAction},
+    error::{Error, IOAction, InvalidLoadReason},
     result::Result,
     scriptlets::{
         action::Action,
@@ -43,6 +44,7 @@ impl PreinitingScriptlet {
 
     fn new_from_str(path: SourcePath, code: String, toplevel: bool) -> Result<Self> {
         let ast = AstModule::parse(path.as_str(), code, &Dialect::Standard)?;
+        Self::validate_loads(&ast, &path.pretty_path)?;
         let loads_files = ast
             .loads()
             .into_iter()
@@ -54,6 +56,13 @@ impl PreinitingScriptlet {
             ast,
             loads_files,
         })
+    }
+
+    fn validate_loads(ast: &AstModule, path: &PrettyPath) -> Result<()> {
+        ast.loads()
+            .iter()
+            .map(|l| LoadStatementModule(l.module_id))
+            .try_for_each(|m| m.validate(path))
     }
 
     #[allow(unused)]
@@ -106,6 +115,105 @@ impl PreinitingScriptlet {
 
     pub fn loads(&self) -> &HashSet<PrettyPath> {
         &self.loads_files
+    }
+}
+
+pub struct LoadStatementModule<'a>(&'a str);
+
+impl LoadStatementModule<'_> {
+    pub const MIN_COMPONENT_LEN: usize = 3;
+
+    pub fn validate(&self, path: &PrettyPath) -> Result<()> {
+        let self_as_path = Utf8Path::new(self.0);
+        let components = self_as_path.components().collect::<Vec<_>>();
+        let invalid_load = |reason| Error::InvalidLoad {
+            path: path.dupe(),
+            module: self.0.into(),
+            reason,
+        };
+
+        if self_as_path.has_root() {
+            return Err(invalid_load(InvalidLoadReason::IsAbsolute));
+        }
+
+        let extension = self_as_path.extension();
+        if !matches!(extension, Some("star")) {
+            return Err(invalid_load(InvalidLoadReason::HasIncorrectExtension(
+                extension.map(ToString::to_string).unwrap_or_default(),
+            )));
+        }
+
+        if let Some(too_short) = components
+            .iter()
+            .filter(|c| matches!(c, Utf8Component::Normal(_)))
+            .find(|c| c.as_str().len() < Self::MIN_COMPONENT_LEN)
+        {
+            return Err(invalid_load(InvalidLoadReason::HasTooShortComponent(
+                too_short.to_string(),
+            )));
+        }
+
+        let Some(stem) = self_as_path.file_stem() else {
+            return Err(invalid_load(InvalidLoadReason::IsDir));
+        };
+        if stem.len() < Self::MIN_COMPONENT_LEN {
+            return Err(invalid_load(InvalidLoadReason::HasTooShortStem(
+                stem.into(),
+            )));
+        }
+        if stem.ends_with('_') {
+            return Err(invalid_load(InvalidLoadReason::HasUnderscoreAtEndOfStem(
+                stem.into(),
+            )));
+        }
+
+        if let Some(forbidden_char) = self.0.chars().find(|c| match c {
+            'a'..='z' | '0'..='9' | '/' | '.' | '_' => false,
+            _ => true,
+        }) {
+            return Err(invalid_load(InvalidLoadReason::HasForbiddenChar(
+                forbidden_char,
+            )));
+        }
+
+        if let Some(idx) = self.0.find("...") {
+            let last_dot_idx = idx
+                + self.0[idx..]
+                    .chars()
+                    .enumerate()
+                    .find(|(_, c)| *c != '.')
+                    .map(|(i, _)| i)
+                    .unwrap_or(self.0.len());
+            return Err(invalid_load(InvalidLoadReason::HasSuccessiveDots(
+                self.0[idx..last_dot_idx].to_string(),
+            )));
+        }
+
+        if components
+            .iter()
+            .skip_while(|c| !matches!(c, Utf8Component::Normal(_)))
+            .skip(1)
+            .any(|c| !matches!(c, Utf8Component::Normal(_)))
+        {
+            return Err(invalid_load(InvalidLoadReason::HasMidwayPathOperator));
+        }
+
+        if self.0.contains("__") {
+            return Err(invalid_load(InvalidLoadReason::HasSuccessiveUnderscores));
+        }
+
+        if let Some(bad_underscore_component) = components
+            .iter()
+            .filter(|c| matches!(c, Utf8Component::Normal(_)))
+            .map(|c| c.as_str())
+            .find(|c| c.starts_with('_') || c.ends_with('_'))
+        {
+            return Err(invalid_load(
+                InvalidLoadReason::HasBadUnderscoresInComponent(bad_underscore_component.into()),
+            ));
+        }
+
+        Ok(())
     }
 }
 
@@ -418,24 +526,24 @@ mod test {
             )
             .assert_irritation_free();
         VexTest::new("invalid-loads")
-            .with_scriptlet("vexes/test.star", "load('i-do-not-exist.star', 'x')")
-            .returns_error(r"cannot find module 'i-do-not-exist\.star'");
+            .with_scriptlet("vexes/test.star", "load('i_do_not_exist.star', 'x')")
+            .returns_error(r"cannot find module 'i_do_not_exist\.star'");
         VexTest::new("cycle-loop")
             .with_scriptlet("vexes/test.star", "load('test.star', '_')")
             .returns_error(r"import cycle detected: test\.star -> test\.star");
         VexTest::new("cycle-simple")
-            .with_scriptlet("vexes/test.star", "load('1.star', '_')")
-            .with_scriptlet("vexes/1.star", r#"load('2.star', '_')"#)
-            .with_scriptlet("vexes/2.star", r#"load('1.star', '_')"#)
-            .returns_error(r"import cycle detected: 1\.star -> 2\.star -> 1\.star");
+            .with_scriptlet("vexes/test.star", "load('file_1.star', '_')")
+            .with_scriptlet("vexes/file_1.star", r#"load('file_2.star', '_')"#)
+            .with_scriptlet("vexes/file_2.star", r#"load('file_1.star', '_')"#)
+            .returns_error(r"import cycle detected: file_1\.star -> file_2\.star -> file_1\.star");
         VexTest::new("cycle-complex")
-            .with_scriptlet("vexes/test.star", "load('1.star', '_')")
-            .with_scriptlet("vexes/1.star", r#"load('2.star', '_')"#)
-            .with_scriptlet("vexes/2.star", r#"load('3.star', '_')"#)
-            .with_scriptlet("vexes/3.star", r#"load('lib/4.star', '_')"#)
-            .with_scriptlet("vexes/lib/4.star", r#"load('1.star', '_')"#)
+            .with_scriptlet("vexes/test.star", "load('file_1.star', '_')")
+            .with_scriptlet("vexes/file_1.star", r#"load('file_2.star', '_')"#)
+            .with_scriptlet("vexes/file_2.star", r#"load('file_3.star', '_')"#)
+            .with_scriptlet("vexes/file_3.star", r#"load('lib/file_4.star', '_')"#)
+            .with_scriptlet("vexes/lib/file_4.star", r#"load('file_1.star', '_')"#)
             .returns_error(
-                r"import cycle detected: 1\.star -> 2\.star -> 3\.star -> lib(/|\\)4.star -> 1.star",
+                r"import cycle detected: file_1\.star -> file_2\.star -> file_3\.star -> lib(/|\\)file_4.star -> file_1.star",
             );
     }
 }
