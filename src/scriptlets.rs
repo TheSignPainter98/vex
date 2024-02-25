@@ -2,6 +2,7 @@ pub mod action;
 pub mod app_object;
 pub mod event;
 mod extra_data;
+mod node;
 mod observers;
 mod print_handler;
 mod query_captures;

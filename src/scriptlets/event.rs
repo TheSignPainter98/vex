@@ -178,7 +178,7 @@ impl<'v> Freeze for MatchEvent<'v> {
     type Frozen = NoneType;
 
     fn freeze(self, _freezer: &starlark::values::Freezer) -> anyhow::Result<Self::Frozen> {
-        panic!("{} should never get frozen", <Self as StarlarkValue>::TYPE);
+        Err(Error::Unfreezable(<Self as StarlarkValue>::TYPE).into())
     }
 }
 
@@ -260,7 +260,11 @@ mod test {
 
     use crate::vextest::VexTest;
 
-    fn test_event_common_properties(event_name: &'static str, type_name: &'static str) {
+    fn test_event_common_properties(
+        event_name: &'static str,
+        type_name: &'static str,
+        attrs: &'static [&'static str],
+    ) {
         VexTest::new("is-triggered")
             .with_scriptlet(
                 "vexes/test.star",
@@ -310,7 +314,7 @@ mod test {
                 },
             )
             .assert_irritation_free();
-        VexTest::new("common-attrs")
+        VexTest::new("attrs")
             .with_scriptlet(
                 "vexes/test.star",
                 formatdoc! {r#"
@@ -324,16 +328,15 @@ mod test {
                             vex.observe('{event_name}', on_{event_name})
 
                         def on_{event_name}(event):
-                            attrs = dir(event)
-                            for attr in attrs:
-                                check['hasattr'](event, attr) # For consistency.
-                            check['in']('path', attrs)
+                            check['attrs'](event, ['{attrs_repr}'])
+
                             if 'project' in '{event_name}':
                                 check['is_path'](str(event.path))
                             else:
                                 check['in'](str(event.path), ['src/main.rs', 'src\\main.rs'])
                     "#,
                     check_path = VexTest::CHECK_STARLARK_PATH,
+                    attrs_repr = attrs.join("', '"),
                 },
             )
             .with_source_file(
@@ -350,17 +353,17 @@ mod test {
 
     #[test]
     fn on_open_project_event() {
-        test_event_common_properties("open_project", "OpenProjectEvent");
+        test_event_common_properties("open_project", "OpenProjectEvent", &["path"]);
     }
 
     #[test]
     fn on_open_file_event() {
-        test_event_common_properties("open_file", "OpenFileEvent");
+        test_event_common_properties("open_file", "OpenFileEvent", &["path"]);
     }
 
     #[test]
     fn on_match_event() {
-        test_event_common_properties("match", "MatchEvent");
+        test_event_common_properties("match", "MatchEvent", &["captures", "path"]);
 
         VexTest::new("captures")
             .with_scriptlet(
@@ -370,23 +373,11 @@ mod test {
 
                         def init():
                             vex.language('rust')
-                            vex.query('(binary_expression) @bin_expr')
+                            vex.query('(binary_expression left: (integer_literal) @l_int) @bin_expr')
                             vex.observe('match', on_match)
 
                         def on_match(event):
-                            check['dir'](event, 'captures')
-                            check['hasattr'](event, 'captures')
-
-                            captures = event.captures
-                            check['type'](captures, 'QueryCaptures')
-                            check['eq'](len(captures), 1)
-
-                            check['in']('bin_expr', captures)
-                            bin_expr = captures['bin_expr']
-                            check['type'](bin_expr, 'Node')
-                            check['true'](str(bin_expr).startswith('(')) # Looks like an s-expression
-                            check['true'](str(bin_expr).endswith(')'))   # Looks like an s-expression
-                            check['eq'](str(bin_expr), repr(bin_expr))
+                            check['attrs'](event, ['captures', 'path'])
                     "#,
                     check_path = VexTest::CHECK_STARLARK_PATH,
                 },
@@ -395,7 +386,7 @@ mod test {
                 "src/main.rs",
                 indoc! {r#"
                     fn main() {
-                        let x = 1 + 2;
+                        let x = 1 + (2 + 3);
                         println!("{x}");
                     }
                 "#},
@@ -405,11 +396,11 @@ mod test {
 
     #[test]
     fn on_close_file_event() {
-        test_event_common_properties("close_file", "CloseFileEvent");
+        test_event_common_properties("close_file", "CloseFileEvent", &["path"]);
     }
 
     #[test]
     fn on_close_project_event() {
-        test_event_common_properties("close_project", "CloseProjectEvent");
+        test_event_common_properties("close_project", "CloseProjectEvent", &["path"]);
     }
 }

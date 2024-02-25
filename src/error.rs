@@ -89,6 +89,9 @@ pub enum Error {
     #[error("{0}")]
     Toml(#[from] toml_edit::de::Error),
 
+    #[error("cannot freeze a {0}")]
+    Unfreezable(&'static str),
+
     #[error("unknown event '{0}', expected one of: {}", EventType::iter().join_with(", "))]
     UnknownEvent(String),
 
@@ -130,6 +133,7 @@ impl Error {
             | Self::Starlark { .. }
             | Self::StripPrefix(..)
             | Self::Toml(..)
+            | Self::Unfreezable(..)
             | Self::UnknownEvent(..)
             | Self::UnknownLanguage(..) => false,
             Self::IO { .. }

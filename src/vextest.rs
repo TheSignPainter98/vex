@@ -179,6 +179,17 @@ impl<'s> VexTest<'s> {
                 fail('assertion failed: %r != %r' % (left, right))
         check['neq'] = check_neq
 
+        def check_attrs(obj, attrs):
+            attrs = sorted(attrs)
+            check['eq'](dir(obj), attrs)
+            for attr in attrs:
+                check['hasattr'](obj, attr)
+                _ = getattr(obj, attr)
+            for attr in dir(obj):
+                check['hasattr'](obj, attr)
+                _ = getattr(obj, attr)
+        check['attrs'] = check_attrs
+
         def check_hasattr(obj, attr):
             if not hasattr(obj, attr):
                 fail('assertion failed: %r.%s does not exist' % (obj, attr))

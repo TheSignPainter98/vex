@@ -1,14 +1,19 @@
-use std::{fmt::Display, ops::Deref};
+use std::fmt::Display;
 
 use allocative::Allocative;
 use derive_new::new;
 use dupe::Dupe;
-use starlark::values::{
-    none::NoneType, string::StarlarkStr, AllocValue, Demand, Freeze, Heap, NoSerialize,
-    ProvidesStaticType, StarlarkValue, Trace, Value, ValueError,
+use starlark::{
+    environment::{Methods, MethodsBuilder, MethodsStatic},
+    values::{
+        none::NoneType, string::StarlarkStr, AllocValue, Demand, Freeze, Heap, NoSerialize,
+        ProvidesStaticType, StarlarkValue, Trace, Value, ValueError,
+    },
 };
-use starlark_derive::starlark_value;
-use tree_sitter::{Node as TSNode, Query, QueryMatch as TSQueryMatch};
+use starlark_derive::{starlark_module, starlark_value};
+use tree_sitter::{Query, QueryMatch as TSQueryMatch};
+
+use crate::{error::Error, scriptlets::node::Node};
 
 #[derive(new, Clone, Debug, ProvidesStaticType, NoSerialize, Allocative, Dupe)]
 pub struct QueryCaptures<'v> {
@@ -17,6 +22,32 @@ pub struct QueryCaptures<'v> {
 
     #[allocative(skip)]
     pub query_match: &'v TSQueryMatch<'v, 'v>,
+}
+
+impl QueryCaptures<'_> {
+    #[starlark_module]
+    fn methods(builder: &mut MethodsBuilder) {
+        fn keys<'v>(this: Value<'v>) -> anyhow::Result<QueryCapturesKeys<'v>> {
+            let this = this
+                .request_value::<&'v QueryCaptures>()
+                .expect("receiver has wrong type");
+            Ok(QueryCapturesKeys(this.dupe()))
+        }
+
+        fn values<'v>(this: Value<'v>) -> anyhow::Result<QueryCapturesValues<'v>> {
+            let this = this
+                .request_value::<&QueryCaptures>()
+                .expect("receiver has wrong type");
+            Ok(QueryCapturesValues(this.dupe()))
+        }
+
+        fn items<'v>(this: Value<'v>) -> anyhow::Result<QueryCapturesItems<'v>> {
+            let this = this
+                .request_value::<&QueryCaptures>()
+                .expect("receiver has wrong type");
+            Ok(QueryCapturesItems(this.dupe()))
+        }
+    }
 }
 
 unsafe impl<'v> Trace<'v> for QueryCaptures<'v> {
@@ -47,8 +78,20 @@ impl<'v> StarlarkValue<'v> for QueryCaptures<'v> {
         let Some(idx) = self.query.capture_index_for_name(name) else {
             return Err(ValueError::KeyNotFound(name.into()).into());
         };
-        let node = Node(&self.query_match.captures[idx as usize].node);
+        let node = Node::new(&self.query_match.captures[idx as usize].node);
         Ok(heap.alloc(node))
+    }
+
+    fn iterate_collect(&self, heap: &'v Heap) -> anyhow::Result<Vec<Value<'v>>> {
+        Ok(QueryCapturesKeys::iterate_collect_names(
+            self.query.capture_names(),
+            heap,
+        ))
+    }
+
+    fn get_methods() -> Option<&'static Methods> {
+        static RES: MethodsStatic = MethodsStatic::new();
+        RES.methods(QueryCaptures::methods)
     }
 }
 
@@ -62,7 +105,7 @@ impl Freeze for QueryCaptures<'_> {
     type Frozen = NoneType;
 
     fn freeze(self, _freezer: &starlark::values::Freezer) -> anyhow::Result<Self::Frozen> {
-        panic!("{} should never get frozen", Self::TYPE);
+        Err(Error::Unfreezable(Self::TYPE).into())
     }
 }
 
@@ -72,44 +115,448 @@ impl Display for QueryCaptures<'_> {
     }
 }
 
-#[derive(Clone, Debug, ProvidesStaticType, NoSerialize, Allocative, Dupe)]
-struct Node<'v>(#[allocative(skip)] &'v TSNode<'v>);
+#[derive(Debug, ProvidesStaticType, NoSerialize, Allocative, Trace)]
+struct QueryCapturesKeys<'v>(QueryCaptures<'v>);
 
-unsafe impl<'v> Trace<'v> for Node<'v> {
-    fn trace(&mut self, _tracer: &starlark::values::Tracer<'v>) {}
-}
-
-impl<'v> Deref for Node<'v> {
-    type Target = TSNode<'v>;
-
-    fn deref(&self) -> &Self::Target {
-        self.0
+impl<'v> QueryCapturesKeys<'v> {
+    fn iterate_collect_names(capture_names: &'v [String], heap: &'v Heap) -> Vec<Value<'v>> {
+        capture_names
+            .iter()
+            .map(|s| heap.alloc_str(s))
+            .map(|s| heap.alloc(s))
+            .collect()
     }
 }
 
-#[starlark_value(type = "Node")]
-impl<'v> StarlarkValue<'v> for Node<'v> {
-    fn provide(&'v self, demand: &mut Demand<'_, 'v>) {
-        demand.provide_value(self)
+#[starlark_value(type = "QueryCapturesKeys")]
+impl<'v> StarlarkValue<'v> for QueryCapturesKeys<'v> {
+    type Canonical = Self;
+
+    fn iterate_collect(&self, heap: &'v Heap) -> anyhow::Result<Vec<Value<'v>>> {
+        Ok(Self::iterate_collect_names(
+            self.0.query.capture_names(),
+            heap,
+        ))
     }
 }
 
-impl<'v> AllocValue<'v> for Node<'v> {
-    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+impl<'v> AllocValue<'v> for QueryCapturesKeys<'v> {
+    fn alloc_value(self, heap: &'v starlark::values::Heap) -> starlark::values::Value<'v> {
         heap.alloc_complex(self)
     }
 }
 
-impl Freeze for Node<'_> {
+impl Freeze for QueryCapturesKeys<'_> {
     type Frozen = NoneType;
 
     fn freeze(self, _freezer: &starlark::values::Freezer) -> anyhow::Result<Self::Frozen> {
-        panic!("{} should never get frozen", Self::TYPE);
+        Err(Error::Unfreezable(Self::TYPE).into())
     }
 }
 
-impl Display for Node<'_> {
+impl Display for QueryCapturesKeys<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.to_sexp().fmt(f)
+        write!(f, "{}.keys()", QueryCaptures::TYPE)
+    }
+}
+
+#[derive(Debug, ProvidesStaticType, NoSerialize, Allocative, Trace)]
+struct QueryCapturesValues<'v>(QueryCaptures<'v>);
+
+#[starlark_value(type = "QueryCapturesValues")]
+impl<'v> StarlarkValue<'v> for QueryCapturesValues<'v> {
+    type Canonical = Self;
+
+    fn iterate_collect(&self, heap: &'v Heap) -> anyhow::Result<Vec<Value<'v>>> {
+        Ok(self
+            .0
+            .query_match
+            .captures
+            .iter()
+            .map(|c| heap.alloc(Node::new(&c.node)))
+            .collect())
+    }
+}
+
+impl<'v> AllocValue<'v> for QueryCapturesValues<'v> {
+    fn alloc_value(self, heap: &'v starlark::values::Heap) -> starlark::values::Value<'v> {
+        heap.alloc_complex(self)
+    }
+}
+
+impl Freeze for QueryCapturesValues<'_> {
+    type Frozen = NoneType;
+
+    fn freeze(self, _freezer: &starlark::values::Freezer) -> anyhow::Result<Self::Frozen> {
+        Err(Error::Unfreezable(Self::TYPE).into())
+    }
+}
+
+impl Display for QueryCapturesValues<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}.values()", QueryCaptures::TYPE)
+    }
+}
+
+#[derive(Debug, ProvidesStaticType, NoSerialize, Allocative, Trace)]
+struct QueryCapturesItems<'v>(QueryCaptures<'v>);
+
+#[starlark_value(type = "QueryCapturesItems")]
+impl<'v> StarlarkValue<'v> for QueryCapturesItems<'v> {
+    type Canonical = Self;
+
+    fn iterate_collect(&self, heap: &'v Heap) -> anyhow::Result<Vec<Value<'v>>> {
+        Ok(self
+            .0
+            .query
+            .capture_names()
+            .iter()
+            .map(|s| heap.alloc(heap.alloc_str(s)))
+            .zip(
+                self.0
+                    .query_match
+                    .captures
+                    .iter()
+                    .map(|c| &c.node)
+                    .map(|n| heap.alloc(Node::new(n))),
+            )
+            .map(|p| heap.alloc(p))
+            .collect())
+    }
+}
+
+impl<'v> AllocValue<'v> for QueryCapturesItems<'v> {
+    fn alloc_value(self, heap: &'v starlark::values::Heap) -> starlark::values::Value<'v> {
+        heap.alloc_complex(self)
+    }
+}
+
+impl Freeze for QueryCapturesItems<'_> {
+    type Frozen = NoneType;
+
+    fn freeze(self, _freezer: &starlark::values::Freezer) -> anyhow::Result<Self::Frozen> {
+        Err(Error::Unfreezable(Self::TYPE).into())
+    }
+}
+
+impl Display for QueryCapturesItems<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}.items()", QueryCaptures::TYPE)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use indoc::{formatdoc, indoc};
+
+    use crate::vextest::VexTest;
+
+    #[test]
+    fn r#type() {
+        VexTest::new("type")
+            .with_scriptlet(
+                "vexes/test.star",
+                formatdoc! {r#"
+                        load('{check_path}', 'check')
+
+                        def init():
+                            vex.language('rust')
+                            vex.query('''
+                                (binary_expression
+                                    left: (integer_literal) @l_int
+                                ) @bin_expr
+                            ''')
+                            vex.observe('match', on_match)
+
+                        def on_match(event):
+                            captures = event.captures
+                            check['type'](captures, 'QueryCaptures')
+                    "#,
+                    check_path = VexTest::CHECK_STARLARK_PATH,
+                },
+            )
+            .with_source_file(
+                "src/main.rs",
+                indoc! {r#"
+                    fn main() {
+                        let x = 1 + (2 + 3);
+                        println!("{x}");
+                    }
+                "#},
+            )
+            .assert_irritation_free();
+    }
+
+    #[test]
+    fn len() {
+        VexTest::new("len")
+            .with_scriptlet(
+                "vexes/test.star",
+                formatdoc! {r#"
+                        load('{check_path}', 'check')
+
+                        def init():
+                            vex.language('rust')
+                            vex.query('''
+                                (binary_expression
+                                    left: (integer_literal) @l_int
+                                ) @bin_expr
+                            ''')
+                            vex.observe('match', on_match)
+
+                        def on_match(event):
+                            captures = event.captures
+                            check['eq'](len(captures), 2)
+                    "#,
+                    check_path = VexTest::CHECK_STARLARK_PATH,
+                },
+            )
+            .with_source_file(
+                "src/main.rs",
+                indoc! {r#"
+                    fn main() {
+                        let x = 1 + (2 + 3);
+                        println!("{x}");
+                    }
+                "#},
+            )
+            .assert_irritation_free();
+    }
+
+    #[test]
+    fn r#in() {
+        VexTest::new("in")
+            .with_scriptlet(
+                "vexes/test.star",
+                formatdoc! {r#"
+                        load('{check_path}', 'check')
+
+                        def init():
+                            vex.language('rust')
+                            vex.query('''
+                                (binary_expression
+                                    left: (integer_literal) @l_int
+                                ) @bin_expr
+                            ''')
+                            vex.observe('match', on_match)
+
+                        def on_match(event):
+                            captures = event.captures
+                            check['in']('bin_expr', captures)
+                            check['in']('l_int', captures)
+                    "#,
+                    check_path = VexTest::CHECK_STARLARK_PATH,
+                },
+            )
+            .with_source_file(
+                "src/main.rs",
+                indoc! {r#"
+                    fn main() {
+                        let x = 1 + (2 + 3);
+                        println!("{x}");
+                    }
+                "#},
+            )
+            .assert_irritation_free();
+    }
+
+    #[test]
+    fn repr() {
+        VexTest::new("repr")
+            .with_scriptlet(
+                "vexes/test.star",
+                formatdoc! {r#"
+                        load('{check_path}', 'check')
+
+                        def init():
+                            vex.language('rust')
+                            vex.query('''
+                                (binary_expression
+                                    left: (integer_literal) @l_int
+                                ) @bin_expr
+                            ''')
+                            vex.observe('match', on_match)
+
+                        def on_match(event):
+                            captures = event.captures
+                            check['eq'](str(captures), "QueryCaptures")
+                            check['eq'](str(captures), repr(captures))
+                    "#,
+                    check_path = VexTest::CHECK_STARLARK_PATH,
+                },
+            )
+            .with_source_file(
+                "src/main.rs",
+                indoc! {r#"
+                    fn main() {
+                        let x = 1 + (2 + 3);
+                        println!("{x}");
+                    }
+                "#},
+            )
+            .assert_irritation_free();
+    }
+
+    #[test]
+    fn iter() {
+        VexTest::new("iter")
+            .with_scriptlet(
+                "vexes/test.star",
+                formatdoc! {r#"
+                        load('{check_path}', 'check')
+
+                        def init():
+                            vex.language('rust')
+                            vex.query('''
+                                (binary_expression
+                                    left: (integer_literal) @l_int
+                                ) @bin_expr
+                            ''')
+                            vex.observe('match', on_match)
+
+                        def on_match(event):
+                            captures = event.captures
+
+                            expected_keys = sorted(['bin_expr', 'l_int'])
+                            actual_keys = sorted(captures)
+                            check['eq'](actual_keys, expected_keys)
+                            for key in captures:
+                                check['in'](key, captures)
+                    "#,
+                    check_path = VexTest::CHECK_STARLARK_PATH,
+                },
+            )
+            .with_source_file(
+                "src/main.rs",
+                indoc! {r#"
+                    fn main() {
+                        let x = 1 + (2 + 3);
+                        println!("{x}");
+                    }
+                "#},
+            )
+            .assert_irritation_free();
+    }
+
+    #[test]
+    fn keys() {
+        VexTest::new("keys")
+            .with_scriptlet(
+                "vexes/test.star",
+                formatdoc! {r#"
+                        load('{check_path}', 'check')
+
+                        def init():
+                            vex.language('rust')
+                            vex.query('''
+                                (binary_expression
+                                    left: (integer_literal) @l_int
+                                ) @bin_expr
+                            ''')
+                            vex.observe('match', on_match)
+
+                        def on_match(event):
+                            captures = event.captures
+
+                            check['type'](captures.keys(), "QueryCapturesKeys")
+                            check['eq'](str(captures.keys()), "QueryCaptures.keys()")
+                            for key in captures.keys():
+                                check['in'](key, captures)
+                    "#,
+                    check_path = VexTest::CHECK_STARLARK_PATH,
+                },
+            )
+            .with_source_file(
+                "src/main.rs",
+                indoc! {r#"
+                    fn main() {
+                        let x = 1 + (2 + 3);
+                        println!("{x}");
+                    }
+                "#},
+            )
+            .assert_irritation_free();
+    }
+
+    #[test]
+    fn values() {
+        VexTest::new("values")
+            .with_scriptlet(
+                "vexes/test.star",
+                formatdoc! {r#"
+                        load('{check_path}', 'check')
+
+                        def init():
+                            vex.language('rust')
+                            vex.query('''
+                                (binary_expression
+                                    left: (integer_literal) @l_int
+                                ) @bin_expr
+                            ''')
+                            vex.observe('match', on_match)
+
+                        def on_match(event):
+                            captures = event.captures
+
+                            check['type'](captures.values(), "QueryCapturesValues")
+                            check['eq'](str(captures.values()), "QueryCaptures.values()")
+                            values = [captures[k] for k in captures.keys()]
+                            for value in captures.values():
+                                check['in'](value, values)
+                    "#,
+                    check_path = VexTest::CHECK_STARLARK_PATH,
+                },
+            )
+            .with_source_file(
+                "src/main.rs",
+                indoc! {r#"
+                    fn main() {
+                        let x = 1 + (2 + 3);
+                        println!("{x}");
+                    }
+                "#},
+            )
+            .assert_irritation_free();
+    }
+
+    #[test]
+    fn items() {
+        VexTest::new("items")
+            .with_scriptlet(
+                "vexes/test.star",
+                formatdoc! {r#"
+                        load('{check_path}', 'check')
+
+                        def init():
+                            vex.language('rust')
+                            vex.query('''
+                                (binary_expression
+                                    left: (integer_literal) @l_int
+                                ) @bin_expr
+                            ''')
+                            vex.observe('match', on_match)
+
+                        def on_match(event):
+                            captures = event.captures
+
+                            check['type'](captures.items(), "QueryCapturesItems")
+                            check['eq'](str(captures.items()), "QueryCaptures.items()")
+                            expected_items = zip(captures.keys(), captures.values())
+                            actual_items = list(captures.items())
+                            check['eq'](actual_items, expected_items)
+                    "#,
+                    check_path = VexTest::CHECK_STARLARK_PATH,
+                },
+            )
+            .with_source_file(
+                "src/main.rs",
+                indoc! {r#"
+                    fn main() {
+                        let x = 1 + (2 + 3);
+                        println!("{x}");
+                    }
+                "#},
+            )
+            .assert_irritation_free();
     }
 }
