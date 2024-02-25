@@ -105,7 +105,7 @@ impl AppObject {
 }
 
 starlark::starlark_simple_value!(AppObject);
-#[starlark_value(type = "vex")]
+#[starlark_value(type = "Vex")]
 impl<'v> StarlarkValue<'v> for AppObject {
     fn get_methods() -> Option<&'static Methods> {
         static RES: MethodsStatic = MethodsStatic::new();
