@@ -40,7 +40,7 @@ pub trait Observer<'v> {
 
     fn function(&self) -> &OwnedFrozenValue;
 
-    fn handle(&'v self, module: &'v Module, path: &PrettyPath, event: Self::Event) -> Result<()>
+    fn handle(&'v self, module: &'v Module, _path: &PrettyPath, event: Self::Event) -> Result<()>
     where
         Self::Event: StarlarkValue<'v> + AllocValue<'v> + Event,
     {
