@@ -35,20 +35,19 @@ pub struct ScriptletObserverData {
     pub on_close_project: Arc<Vec<CloseProjectObserver>>,
 }
 
-pub trait Observer {
-    type Event;
+pub trait Observer<'v> {
+    type Event: 'v;
 
     fn function(&self) -> &OwnedFrozenValue;
 
-    fn handle(&self, path: &PrettyPath, event: Self::Event) -> Result<()>
+    fn handle(&'v self, module: &'v Module, path: &PrettyPath, event: Self::Event) -> Result<()>
     where
-        Self::Event: for<'v> StarlarkValue<'v> + for<'v> AllocValue<'v> + Event,
+        Self::Event: StarlarkValue<'v> + AllocValue<'v> + Event,
     {
         let extra = InvocationData::new(Action::Vexing(<Self::Event as Event>::TYPE));
-        let module = Module::new();
 
         let print_handler = PrintHandler::new(path.as_str());
-        let mut eval = Evaluator::new(&module);
+        let mut eval = Evaluator::new(module);
         eval.set_print_handler(&print_handler);
         extra.insert_into(&mut eval);
 
@@ -63,7 +62,7 @@ pub trait Observer {
 #[derive(Clone, Debug, Dupe, new)]
 pub struct OpenProjectObserver(OwnedFrozenValue);
 
-impl Observer for OpenProjectObserver {
+impl Observer<'_> for OpenProjectObserver {
     type Event = OpenProjectEvent;
 
     fn function(&self) -> &OwnedFrozenValue {
@@ -74,7 +73,7 @@ impl Observer for OpenProjectObserver {
 #[derive(Clone, Debug, Dupe, new)]
 pub struct OpenFileObserver(OwnedFrozenValue);
 
-impl Observer for OpenFileObserver {
+impl Observer<'_> for OpenFileObserver {
     type Event = OpenFileEvent;
 
     fn function(&self) -> &OwnedFrozenValue {
@@ -85,8 +84,8 @@ impl Observer for OpenFileObserver {
 #[derive(Clone, Debug, Dupe, new)]
 pub struct MatchObserver(OwnedFrozenValue);
 
-impl Observer for MatchObserver {
-    type Event = MatchEvent;
+impl<'v> Observer<'v> for MatchObserver {
+    type Event = MatchEvent<'v>;
 
     fn function(&self) -> &OwnedFrozenValue {
         &self.0
@@ -96,7 +95,7 @@ impl Observer for MatchObserver {
 #[derive(Clone, Debug, Dupe, new)]
 pub struct CloseFileObserver(OwnedFrozenValue);
 
-impl Observer for CloseFileObserver {
+impl Observer<'_> for CloseFileObserver {
     type Event = CloseFileEvent;
 
     fn function(&self) -> &OwnedFrozenValue {
@@ -106,7 +105,7 @@ impl Observer for CloseFileObserver {
 
 #[derive(Clone, Debug, Dupe, new)]
 pub struct CloseProjectObserver(OwnedFrozenValue);
-impl Observer for CloseProjectObserver {
+impl Observer<'_> for CloseProjectObserver {
     type Event = CloseProjectEvent;
 
     fn function(&self) -> &OwnedFrozenValue {

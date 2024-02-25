@@ -179,10 +179,26 @@ impl<'s> VexTest<'s> {
                 fail('assertion failed: %r != %r' % (left, right))
         check['neq'] = check_neq
 
+        def check_attrs(obj, attrs):
+            attrs = sorted(attrs)
+            check['eq'](dir(obj), attrs)
+            for attr in attrs:
+                check['hasattr'](obj, attr)
+                _ = getattr(obj, attr)
+            for attr in dir(obj):
+                check['hasattr'](obj, attr)
+                _ = getattr(obj, attr)
+        check['attrs'] = check_attrs
+
         def check_hasattr(obj, attr):
             if not hasattr(obj, attr):
-                fail('assertion failed: %r.%v does not exist' % (obj, attr))
+                fail('assertion failed: %r.%s does not exist' % (obj, attr))
         check['hasattr'] = check_hasattr
+
+        def check_dir(obj, attr):
+            if attr not in dir(obj):
+                fail('assertion failed: %r.%s not in dir(%r)' % (obj, attr, obj))
+        check['dir'] = check_dir
 
         def check_in(what, expected):
             if what not in expected:
@@ -194,6 +210,10 @@ impl<'s> VexTest<'s> {
             if '/' not in str_to_check and '\\' not in str_to_check:
                 fail('assertion failed: %r is not a path' % to_check)
         check['is_path'] = check_is_path
+
+        def check_type(obj, typ):
+            check['eq'](type(obj), typ)
+        check['type'] = check_type
 
         check
     "#};

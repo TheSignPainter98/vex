@@ -5,12 +5,15 @@ use derive_new::new;
 use dupe::Dupe;
 use starlark::{
     starlark_simple_value,
-    values::{NoSerialize, ProvidesStaticType, StarlarkValue},
+    values::{
+        none::NoneType, AllocValue, Freeze, Heap, NoSerialize, ProvidesStaticType, StarlarkValue,
+        Trace, Value,
+    },
 };
 use starlark_derive::{starlark_attrs, starlark_value, StarlarkAttrs};
 use strum::EnumIter;
 
-use crate::{error::Error, source_path::PrettyPath};
+use crate::{error::Error, scriptlets::QueryCaptures, source_path::PrettyPath};
 
 pub trait Event {
     const TYPE: EventType;
@@ -125,34 +128,61 @@ impl Display for OpenFileEvent {
     }
 }
 
-#[derive(
-    new,
-    Clone,
-    Debug,
-    Dupe,
-    PartialEq,
-    Eq,
-    ProvidesStaticType,
-    NoSerialize,
-    Allocative,
-    StarlarkAttrs,
-)]
-pub struct MatchEvent {
+#[derive(new, Clone, Debug, ProvidesStaticType, NoSerialize, Allocative, Trace)]
+pub struct MatchEvent<'v> {
     #[allocative(skip)]
     path: PrettyPath,
-}
-starlark_simple_value!(MatchEvent);
 
-impl Event for MatchEvent {
+    #[allocative(skip)]
+    query_captures: QueryCaptures<'v>,
+}
+
+impl MatchEvent<'_> {
+    const PATH_ATTR_NAME: &'static str = "path";
+    const QUERY_CAPTURES_ATTR_NAME: &'static str = "captures";
+}
+
+impl Event for MatchEvent<'_> {
     const TYPE: EventType = EventType::Match;
 }
 
 #[starlark_value(type = "MatchEvent")]
-impl<'v> StarlarkValue<'v> for MatchEvent {
-    starlark_attrs!();
+impl<'v> StarlarkValue<'v> for MatchEvent<'v> {
+    fn dir_attr(&self) -> Vec<String> {
+        [Self::PATH_ATTR_NAME, Self::QUERY_CAPTURES_ATTR_NAME]
+            .into_iter()
+            .map(Into::into)
+            .collect()
+    }
+
+    fn get_attr(&self, attr: &str, heap: &'v Heap) -> Option<Value<'v>> {
+        match attr {
+            Self::PATH_ATTR_NAME => Some(heap.alloc(self.path.dupe())),
+            Self::QUERY_CAPTURES_ATTR_NAME => Some(heap.alloc(self.query_captures.dupe())),
+            _ => None,
+        }
+    }
+
+    fn has_attr(&self, attr: &str, _heap: &'v Heap) -> bool {
+        [Self::PATH_ATTR_NAME, Self::QUERY_CAPTURES_ATTR_NAME].contains(&attr)
+    }
 }
 
-impl Display for MatchEvent {
+impl<'v> AllocValue<'v> for MatchEvent<'v> {
+    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+        heap.alloc_complex(self)
+    }
+}
+
+impl<'v> Freeze for MatchEvent<'v> {
+    type Frozen = NoneType;
+
+    fn freeze(self, _freezer: &starlark::values::Freezer) -> anyhow::Result<Self::Frozen> {
+        Err(Error::Unfreezable(<Self as StarlarkValue>::TYPE).into())
+    }
+}
+
+impl Display for MatchEvent<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         <Self as StarlarkValue>::TYPE.fmt(f)
     }
@@ -230,7 +260,11 @@ mod test {
 
     use crate::vextest::VexTest;
 
-    fn test_event_common_properties(event_name: &'static str, type_name: &'static str) {
+    fn test_event_common_properties(
+        event_name: &'static str,
+        type_name: &'static str,
+        attrs: &'static [&'static str],
+    ) {
         VexTest::new("is-triggered")
             .with_scriptlet(
                 "vexes/test.star",
@@ -240,7 +274,8 @@ mod test {
                         def init():
                             vex.language('rust')
                             vex.query('(binary_expression) @bin_expr')
-                            vex.observe('match', lambda x: x) # Make the error checker happy.
+                            if '{event_name}' != 'match':
+                                vex.observe('match', lambda x: x) # Make the error checker happy.
                             vex.observe('{event_name}', on_{event_name})
 
                         def on_{event_name}(event):
@@ -254,7 +289,7 @@ mod test {
                 indoc! {r#"
                     fn main() {
                         let x = 1 + 2;
-                        println("{x}");
+                        println!("{x}");
                     }
                 "#},
             )
@@ -268,17 +303,18 @@ mod test {
                         def init():
                             vex.language('rust')
                             vex.query('(binary_expression) @bin_expr')
-                            vex.observe('match', lambda x: x) # Make the error checker happy.
+                            if '{event_name}' != 'match':
+                                vex.observe('match', lambda x: x) # Make the error checker happy.
                             vex.observe('{event_name}', on_{event_name})
 
                         def on_{event_name}(event):
-                            check['eq'](type(event), '{type_name}')
+                            check['type'](event, '{type_name}')
                     "#,
                     check_path = VexTest::CHECK_STARLARK_PATH,
                 },
             )
             .assert_irritation_free();
-        VexTest::new("common-attrs")
+        VexTest::new("attrs")
             .with_scriptlet(
                 "vexes/test.star",
                 formatdoc! {r#"
@@ -287,17 +323,20 @@ mod test {
                         def init():
                             vex.language('rust')
                             vex.query('(binary_expression) @bin_expr')
-                            vex.observe('match', lambda x: x) # Make the error checker happy.
+                            if '{event_name}' != 'match':
+                                vex.observe('match', lambda x: x) # Make the error checker happy.
                             vex.observe('{event_name}', on_{event_name})
 
                         def on_{event_name}(event):
-                            check['hasattr'](event, 'path')
+                            check['attrs'](event, ['{attrs_repr}'])
+
                             if 'project' in '{event_name}':
                                 check['is_path'](str(event.path))
                             else:
                                 check['in'](str(event.path), ['src/main.rs', 'src\\main.rs'])
                     "#,
                     check_path = VexTest::CHECK_STARLARK_PATH,
+                    attrs_repr = attrs.join("', '"),
                 },
             )
             .with_source_file(
@@ -305,7 +344,7 @@ mod test {
                 indoc! {r#"
                     fn main() {
                         let x = 1 + 2;
-                        println("{x}");
+                        println!("{x}");
                     }
                 "#},
             )
@@ -314,26 +353,54 @@ mod test {
 
     #[test]
     fn on_open_project_event() {
-        test_event_common_properties("open_project", "OpenProjectEvent");
+        test_event_common_properties("open_project", "OpenProjectEvent", &["path"]);
     }
 
     #[test]
     fn on_open_file_event() {
-        test_event_common_properties("open_file", "OpenFileEvent");
+        test_event_common_properties("open_file", "OpenFileEvent", &["path"]);
     }
 
     #[test]
     fn on_match_event() {
-        test_event_common_properties("match", "MatchEvent");
+        test_event_common_properties("match", "MatchEvent", &["captures", "path"]);
+
+        VexTest::new("captures")
+            .with_scriptlet(
+                "vexes/test.star",
+                formatdoc! {r#"
+                        load('{check_path}', 'check')
+
+                        def init():
+                            vex.language('rust')
+                            vex.query('(binary_expression left: (integer_literal) @l_int) @bin_expr')
+                            vex.observe('match', on_match)
+
+                        def on_match(event):
+                            check['attrs'](event, ['captures', 'path'])
+                    "#,
+                    check_path = VexTest::CHECK_STARLARK_PATH,
+                },
+            )
+            .with_source_file(
+                "src/main.rs",
+                indoc! {r#"
+                    fn main() {
+                        let x = 1 + (2 + 3);
+                        println!("{x}");
+                    }
+                "#},
+            )
+            .assert_irritation_free();
     }
 
     #[test]
     fn on_close_file_event() {
-        test_event_common_properties("close_file", "CloseFileEvent");
+        test_event_common_properties("close_file", "CloseFileEvent", &["path"]);
     }
 
     #[test]
     fn on_close_project_event() {
-        test_event_common_properties("close_project", "CloseProjectEvent");
+        test_event_common_properties("close_project", "CloseProjectEvent", &["path"]);
     }
 }
