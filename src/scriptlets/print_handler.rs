@@ -1,18 +1,8 @@
-use derive_new::new;
+pub struct PrintHandler;
 
-#[derive(new)]
-pub struct PrintHandler<S> {
-    tag: S,
-}
-
-impl<S> starlark::PrintHandler for PrintHandler<S>
-where
-    S: AsRef<str>,
-{
+impl starlark::PrintHandler for PrintHandler {
     fn println(&self, text: &str) -> anyhow::Result<()> {
-        println!("{}: {text}", self.tag.as_ref()); // TODO(kcza): move this functioality
-                                                   // into a debug builtin! Make print
-                                                   // just be bare.
+        println!("{text}");
         Ok(())
     }
 }

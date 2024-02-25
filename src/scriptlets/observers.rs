@@ -40,15 +40,14 @@ pub trait Observer<'v> {
 
     fn function(&self) -> &OwnedFrozenValue;
 
-    fn handle(&'v self, module: &'v Module, path: &PrettyPath, event: Self::Event) -> Result<()>
+    fn handle(&'v self, module: &'v Module, _path: &PrettyPath, event: Self::Event) -> Result<()>
     where
         Self::Event: StarlarkValue<'v> + AllocValue<'v> + Event,
     {
         let extra = InvocationData::new(Action::Vexing(<Self::Event as Event>::TYPE));
 
-        let print_handler = PrintHandler::new(path.as_str());
         let mut eval = Evaluator::new(module);
-        eval.set_print_handler(&print_handler);
+        eval.set_print_handler(&PrintHandler);
         extra.insert_into(&mut eval);
 
         let func = self.function().value(); // TODO(kcza): check thread safety! Can this unfrozen
