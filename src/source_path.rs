@@ -294,9 +294,8 @@ mod test {
                 ..Dialect::Standard
             };
             let ast = AstModule::parse("vexes/test.star", code.to_string(), &dialect).unwrap();
-            let print_handler = PrintHandler::new("test");
             let mut eval = Evaluator::new(&module);
-            eval.set_print_handler(&print_handler);
+            eval.set_print_handler(&PrintHandler);
             eval.set_loader(&TestModuleCache);
             eval.eval_module(ast, &Self::globals()).map(|_| ())
         }

@@ -79,10 +79,9 @@ impl PreinitingScriptlet {
             let module = Module::new();
             {
                 let extra = InvocationData::new(Action::Preiniting);
-                let print_handler = PrintHandler::new(&path);
                 let mut eval = Evaluator::new(&module);
                 eval.set_loader(&cache);
-                eval.set_print_handler(&print_handler);
+                eval.set_print_handler(&PrintHandler);
                 extra.insert_into(&mut eval);
                 let globals = Self::globals();
                 eval.eval_module(ast, &globals).map_err(Error::starlark)?;
@@ -147,9 +146,8 @@ impl InitingScriptlet {
             ObserverDataBuilder::new(path.pretty_path.dupe()).insert_into(&module);
             {
                 let extra = InvocationData::new(Action::Initing);
-                let print_handler = PrintHandler::new(&path);
                 let mut eval = Evaluator::new(&module);
-                eval.set_print_handler(&print_handler);
+                eval.set_print_handler(&PrintHandler);
                 extra.insert_into(&mut eval);
                 eval.eval_function(init.value(), &[], &[])
                     .map_err(Error::starlark)?;
