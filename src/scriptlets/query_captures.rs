@@ -13,7 +13,7 @@ use starlark::{
 use starlark_derive::{starlark_module, starlark_value};
 use tree_sitter::{Query, QueryMatch as TSQueryMatch};
 
-use crate::{error::Error, scriptlets::node::Node};
+use crate::{error::Error, scriptlets::node::Node, source_file::SourceFile};
 
 #[derive(new, Clone, Debug, ProvidesStaticType, NoSerialize, Allocative, Dupe)]
 pub struct QueryCaptures<'v> {
@@ -22,6 +22,9 @@ pub struct QueryCaptures<'v> {
 
     #[allocative(skip)]
     pub query_match: &'v TSQueryMatch<'v, 'v>,
+
+    #[allocative(skip)]
+    source_file: &'v SourceFile,
 }
 
 impl QueryCaptures<'_> {
@@ -75,10 +78,16 @@ impl<'v> StarlarkValue<'v> for QueryCaptures<'v> {
         let Some(name) = index.unpack_starlark_str().map(StarlarkStr::as_str) else {
             return ValueError::unsupported_with(self, "[]", index);
         };
-        let Some(idx) = self.query.capture_index_for_name(name) else {
+        let Some(index) = self.query.capture_index_for_name(name) else {
             return Err(ValueError::KeyNotFound(name.into()).into());
         };
-        let node = Node::new(&self.query_match.captures[idx as usize].node);
+        let capture = self
+            .query_match
+            .captures
+            .iter()
+            .find(|c| c.index == index)
+            .unwrap();
+        let node = Node::new(&capture.node, self.source_file);
         Ok(heap.alloc(node))
     }
 
@@ -91,7 +100,7 @@ impl<'v> StarlarkValue<'v> for QueryCaptures<'v> {
 
     fn get_methods() -> Option<&'static Methods> {
         static RES: MethodsStatic = MethodsStatic::new();
-        RES.methods(QueryCaptures::methods)
+        RES.methods(Self::methods)
     }
 }
 
@@ -168,12 +177,17 @@ impl<'v> StarlarkValue<'v> for QueryCapturesValues<'v> {
     type Canonical = Self;
 
     fn iterate_collect(&self, heap: &'v Heap) -> anyhow::Result<Vec<Value<'v>>> {
-        Ok(self
+        let mut values = self
             .0
             .query_match
             .captures
             .iter()
-            .map(|c| heap.alloc(Node::new(&c.node)))
+            .map(|c| (c.index, Node::new(&c.node, self.0.source_file)))
+            .collect::<Vec<_>>();
+        values.sort_by_key(|(index, _)| *index);
+        Ok(values
+            .into_iter()
+            .map(|(_, node)| heap.alloc(node))
             .collect())
     }
 }
@@ -206,20 +220,26 @@ impl<'v> StarlarkValue<'v> for QueryCapturesItems<'v> {
     type Canonical = Self;
 
     fn iterate_collect(&self, heap: &'v Heap) -> anyhow::Result<Vec<Value<'v>>> {
+        let values = {
+            let mut captures = self
+                .0
+                .query_match
+                .captures
+                .iter()
+                .map(|c| (c.index, &c.node))
+                .collect::<Vec<_>>();
+            captures.sort_by_key(|(index, _)| *index);
+            captures
+                .into_iter()
+                .map(|(_, node)| Node::new(node, self.0.source_file))
+        };
         Ok(self
             .0
             .query
             .capture_names()
             .iter()
             .map(|s| heap.alloc(heap.alloc_str(s)))
-            .zip(
-                self.0
-                    .query_match
-                    .captures
-                    .iter()
-                    .map(|c| &c.node)
-                    .map(|n| heap.alloc(Node::new(n))),
-            )
+            .zip(values)
             .map(|p| heap.alloc(p))
             .collect())
     }
@@ -531,8 +551,14 @@ mod test {
                             vex.language('rust')
                             vex.query('''
                                 (binary_expression
-                                    left: (integer_literal) @l_int
-                                ) @bin_expr
+                                    left: (integer_literal) @a
+                                    right: (parenthesized_expression
+                                        (binary_expression
+                                            left: (integer_literal) @b
+                                            right: (integer_literal) @c
+                                        ) @d
+                                    ) @e
+                                ) @all
                             ''')
                             vex.observe('match', on_match)
 
@@ -541,6 +567,12 @@ mod test {
 
                             check['type'](captures.items(), "QueryCapturesItems")
                             check['eq'](str(captures.items()), "QueryCaptures.items()")
+
+                            # All valid
+                            for k,v in captures.items():
+                                check['eq'](captures[k], v)
+
+                            # Iterator orders are consistent
                             expected_items = zip(captures.keys(), captures.values())
                             actual_items = list(captures.items())
                             check['eq'](actual_items, expected_items)

@@ -10,7 +10,7 @@ use starlark::{
 };
 use starlark_derive::{starlark_value, NoSerialize, ProvidesStaticType};
 
-#[derive(Clone, Debug, Dupe)]
+#[derive(Clone, Debug, PartialEq, Eq, Dupe)]
 pub struct SourcePath {
     pub abs_path: Arc<Utf8Path>,
     pub pretty_path: PrettyPath,
@@ -136,7 +136,7 @@ impl<'v> StarlarkValue<'v> for PrettyPath {
 
     fn get_methods() -> Option<&'static Methods> {
         static RES: MethodsStatic = MethodsStatic::new();
-        RES.methods(PrettyPath::methods)
+        RES.methods(Self::methods)
     }
 
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {

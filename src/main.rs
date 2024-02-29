@@ -188,13 +188,13 @@ fn vex(ctx: &Context, store: &VexingStore) -> Result<Vec<Irritation>> {
                 src_file.content[..].as_bytes(),
             ) {
                 println!("found {qmatch:?}");
-                let query_match = QueryCaptures::new(&observer.query, &qmatch);
+                let captures = QueryCaptures::new(&observer.query, &qmatch, &src_file);
                 for on_match in &observer.on_match[..] {
                     let handler_module = Module::new();
                     on_match.handle(
                         &handler_module,
                         &observer.path,
-                        MatchEvent::new(src_file.path.pretty_path.dupe(), query_match.dupe()),
+                        MatchEvent::new(src_file.path.pretty_path.dupe(), captures.dupe()),
                     )?;
                 }
             }
