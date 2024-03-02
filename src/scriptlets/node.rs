@@ -36,9 +36,7 @@ impl Node<'_> {
 
     #[starlark_module]
     fn methods(builder: &mut MethodsBuilder) {
-        // TODO(kcza): walk
-
-        fn text<'v>(this: Node<'v>, _heap: &'v Heap) -> anyhow::Result<&'v str> {
+        fn text<'v>(this: Node<'v>) -> anyhow::Result<&'v str> {
             Ok(this.utf8_text(this.source_file.content.as_bytes())?)
         }
     }
