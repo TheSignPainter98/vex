@@ -10,6 +10,7 @@ use crate::{
     supported_language::SupportedLanguage,
 };
 
+#[derive(Debug)]
 pub struct SourceFile {
     pub path: SourcePath,
     pub content: String,
@@ -45,3 +46,11 @@ impl SourceFile {
         })
     }
 }
+
+impl PartialEq for SourceFile {
+    fn eq(&self, other: &Self) -> bool {
+        (&self.path, &self.content, self.lang) == (&other.path, &other.content, other.lang)
+    }
+}
+
+impl Eq for SourceFile {}
