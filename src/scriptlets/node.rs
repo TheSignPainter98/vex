@@ -36,6 +36,10 @@ impl Node<'_> {
 
     #[starlark_module]
     fn methods(builder: &mut MethodsBuilder) {
+        // fn walk<'v>(this: Node<'v>) -> anyhow::Result<TreeWalker<'v>> {
+        //     Ok(TreeWalker::new(this.walk()))
+        // }
+
         fn text<'v>(this: Node<'v>) -> anyhow::Result<&'v str> {
             Ok(this.utf8_text(this.source_file.content.as_bytes())?)
         }

@@ -11,6 +11,7 @@ pub mod query_cache;
 pub mod query_captures;
 mod scriptlet;
 mod store;
+mod tree_walker;
 
 pub use intents::{Intent, Intents};
 pub use node::Node;
