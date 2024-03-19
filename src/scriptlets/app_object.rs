@@ -155,11 +155,11 @@ mod test {
 
     #[test]
     fn warn_valid() {
-        const VEX_NAME: &'static str = "name_of_vex";
-        const AT: &'static str = "node bin_expr found here";
-        const SHOW_ALSO_L: &'static str = "node l found here";
-        const SHOW_ALSO_R: &'static str = "node r found here";
-        const EXTRA_INFO: &'static str = "some hopefully useful extra info";
+        const VEX_NAME: &str = "name_of_vex";
+        const AT: &str = "node bin_expr found here";
+        const SHOW_ALSO_L: &str = "node l found here";
+        const SHOW_ALSO_R: &str = "node r found here";
+        const EXTRA_INFO: &str = "some hopefully useful extra info";
 
         let irritations = VexTest::new("arg-combinations")
             .with_scriptlet(
@@ -205,10 +205,10 @@ mod test {
 
         println!("{irritations:?}");
 
-        let assert_contains = |irritation: &str, strings: &[&'static str]| {
+        let assert_contains = |irritation: &str, strings: &[&str]| {
             [VEX_NAME]
                 .as_ref()
-                .into_iter()
+                .iter()
                 .chain(strings)
                 .for_each(|string| {
                     assert!(
@@ -234,9 +234,9 @@ mod test {
 
     #[test]
     fn warn_invalid() {
-        const VEX_NAME: &'static str = "name_of_vex";
-        const SHOW_ALSO_L: &'static str = "node l found here";
-        const SHOW_ALSO_R: &'static str = "node r found here";
+        const VEX_NAME: &str = "name_of_vex";
+        const SHOW_ALSO_L: &str = "node l found here";
+        const SHOW_ALSO_R: &str = "node r found here";
         VexTest::new("show-also-without-at")
             .with_scriptlet(
                 format!("vexes/{VEX_NAME}.star"),
@@ -270,12 +270,12 @@ mod test {
 
     #[test]
     fn warn_sorting() {
-        const VEX_1_NAME: &'static str = "vex_1";
-        const VEX_2_NAME: &'static str = "vex_2";
-        const AT: &'static str = "node bin_expr found here";
-        const SHOW_ALSO_L: &'static str = "node l found here";
-        const SHOW_ALSO_R: &'static str = "node r found here";
-        const EXTRA_INFO: &'static str = "some hopefully useful extra info";
+        const VEX_1_NAME: &str = "vex_1";
+        const VEX_2_NAME: &str = "vex_2";
+        const AT: &str = "node bin_expr found here";
+        const SHOW_ALSO_L: &str = "node l found here";
+        const SHOW_ALSO_R: &str = "node r found here";
+        const EXTRA_INFO: &str = "some hopefully useful extra info";
 
         let vex_source = formatdoc! {r#"
             def init():
