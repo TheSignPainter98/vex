@@ -3,12 +3,13 @@ use std::{fmt::Display, ops::Deref, sync::Arc};
 use allocative::Allocative;
 use camino::Utf8Path;
 use dupe::Dupe;
+use serde::Serialize;
 use starlark::{
     environment::{Methods, MethodsBuilder, MethodsStatic},
     starlark_module, starlark_simple_value,
     values::{list::AllocList, Demand, Heap, StarlarkValue, Value, ValueError},
 };
-use starlark_derive::{starlark_value, NoSerialize, ProvidesStaticType};
+use starlark_derive::{starlark_value, ProvidesStaticType};
 
 #[derive(Clone, Debug, PartialEq, Eq, Dupe)]
 pub struct SourcePath {
@@ -62,7 +63,7 @@ impl Display for SourcePath {
     Ord,
     Hash,
     Allocative,
-    NoSerialize,
+    Serialize,
     ProvidesStaticType,
 )]
 pub struct PrettyPath(#[allocative(skip)] Arc<Utf8Path>);

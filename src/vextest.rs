@@ -10,13 +10,15 @@ use indoc::indoc;
 use regex::Regex;
 
 use crate::{
-    context::Context, irritation::Irritation, result::Result, scriptlets::PreinitingStore,
+    cli::MaxProblems, context::Context, irritation::Irritation, result::Result,
+    scriptlets::PreinitingStore,
 };
 
 pub struct VexTest<'s> {
     name: Cow<'s, str>,
     bare: bool,
     manifest_content: Option<Cow<'s, str>>,
+    max_problems: MaxProblems,
     scriptlets: BTreeMap<Utf8PathBuf, Cow<'s, str>>,
     source_files: BTreeMap<Utf8PathBuf, Cow<'s, str>>,
 }
@@ -27,6 +29,7 @@ impl<'s> VexTest<'s> {
             name: name.into(),
             bare: false,
             manifest_content: None,
+            max_problems: MaxProblems::Unlimited,
             scriptlets: BTreeMap::new(),
             source_files: BTreeMap::new(),
         }
@@ -41,6 +44,11 @@ impl<'s> VexTest<'s> {
     #[allow(unused)]
     pub fn with_manifest(mut self, content: impl Into<Cow<'s, str>>) -> Self {
         self.manifest_content = Some(content.into());
+        self
+    }
+
+    pub fn with_max_problems(mut self, max_problems: MaxProblems) -> Self {
+        self.max_problems = max_problems;
         self
     }
 
@@ -148,7 +156,7 @@ impl<'s> VexTest<'s> {
             fs::create_dir(ctx.vex_dir()).ok();
         }
         let store = PreinitingStore::new(&ctx)?.preinit()?.init()?;
-        super::vex(&ctx, &store)
+        super::vex(&ctx, &store, self.max_problems)
     }
 
     fn setup(&mut self) {

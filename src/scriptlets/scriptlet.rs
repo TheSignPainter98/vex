@@ -78,7 +78,7 @@ impl PreinitingScriptlet {
         let preinited_module = {
             let module = Module::new();
             {
-                let extra = InvocationData::new(Action::Preiniting);
+                let extra = InvocationData::new(Action::Preiniting, path.pretty_path.dupe());
                 let mut eval = Evaluator::new(&module);
                 eval.set_loader(&cache);
                 eval.set_print_handler(&PrintHandler);
@@ -145,7 +145,7 @@ impl InitingScriptlet {
             let module = Module::new();
             ObserverDataBuilder::new(path.pretty_path.dupe()).insert_into(&module);
             {
-                let extra = InvocationData::new(Action::Initing);
+                let extra = InvocationData::new(Action::Initing, path.pretty_path.dupe());
                 let mut eval = Evaluator::new(&module);
                 eval.set_print_handler(&PrintHandler);
                 extra.insert_into(&mut eval);

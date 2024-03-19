@@ -23,7 +23,7 @@ pub struct Node<'v> {
     ts_node: &'v TSNode<'v>,
 
     #[allocative(skip)]
-    source_file: &'v SourceFile,
+    pub source_file: &'v SourceFile,
 }
 
 unsafe impl<'v> Trace<'v> for Node<'v> {
