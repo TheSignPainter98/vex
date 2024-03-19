@@ -22,12 +22,15 @@ use crate::{
     },
 };
 
+type StarlarkSourceAnnotation<'v> = (Node<'v>, &'v str);
+
 #[derive(Debug, PartialEq, Eq, ProvidesStaticType, NoSerialize, Allocative)]
 pub struct AppObject;
 
 impl AppObject {
     pub const NAME: &'static str = "vex";
 
+    #[allow(clippy::type_complexity)]
     #[starlark_module]
     fn methods(builder: &mut MethodsBuilder) {
         fn language<'v>(
@@ -71,8 +74,8 @@ impl AppObject {
         fn warn<'v>(
             #[starlark(this)] _this: Value<'v>,
             #[starlark(require=pos)] message: &'v str,
-            at: Option<(Node<'v>, &'v str)>,
-            show_also: Option<Vec<(Node<'v>, &'v str)>>,
+            at: Option<StarlarkSourceAnnotation>,
+            show_also: Option<Vec<StarlarkSourceAnnotation>>,
             extra_info: Option<&'v str>,
             eval: &mut Evaluator<'v, '_>,
         ) -> anyhow::Result<NoneType> {

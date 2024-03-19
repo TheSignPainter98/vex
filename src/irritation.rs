@@ -100,13 +100,13 @@ impl<'v> IrritationRenderer<'v> {
         let snippet = Snippet {
             title: Some(Annotation {
                 id: Some(vex_path.file_stem().expect("vex has no file stem")),
-                label: Some(&message),
+                label: Some(message),
                 annotation_type: AnnotationType::Warning,
             }),
             slices: source
                 .iter()
                 .map(|(node, label)| {
-                    let range = Self::relevant_range(&node);
+                    let range = Self::relevant_range(node);
                     Slice {
                         source: &node.source_file.content[range.start..range.end],
                         // overhead!

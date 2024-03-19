@@ -42,7 +42,6 @@ pub trait Observer<'v> {
 
     fn function(&self) -> &OwnedFrozenValue;
 
-    #[must_use]
     fn handle(
         &'v self,
         module: &'v Module,
