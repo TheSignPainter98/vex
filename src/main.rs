@@ -84,7 +84,9 @@ fn list_languages() -> Result<()> {
 fn list_lints() -> Result<()> {
     let ctx = Context::acquire()?;
     let store = PreinitingStore::new(&ctx)?.preinit()?;
-    store.vexes().for_each(|vex| println!("{}", vex.path));
+    store
+        .vexes()
+        .for_each(|vex| println!("{}", vex.path.pretty_path));
     Ok(())
 }
 

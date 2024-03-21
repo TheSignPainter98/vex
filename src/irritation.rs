@@ -97,6 +97,9 @@ impl<'v> IrritationRenderer<'v> {
 
         // TODO(kcza): allow source and show_alsos to be in separate files.
 
+        let file_name = source
+            .as_ref()
+            .map(|source| source.0.source_file.path.pretty_path.as_str());
         let snippet = Snippet {
             title: Some(Annotation {
                 id: Some(vex_path.file_stem().expect("vex has no file stem")),
@@ -111,7 +114,7 @@ impl<'v> IrritationRenderer<'v> {
                         source: &node.source_file.content[range.start..range.end],
                         // overhead!
                         line_start: 1 + node.start_position().row,
-                        origin: Some(node.source_file.path.pretty_path.as_str()),
+                        origin: Some(file_name.as_ref().unwrap()),
                         annotations: [SourceAnnotation {
                             range: (
                                 node.start_byte() - range.start,
