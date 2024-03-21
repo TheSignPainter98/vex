@@ -15,8 +15,8 @@ use strum::EnumIter;
 
 use crate::{error::Error, scriptlets::QueryCaptures, source_path::PrettyPath};
 
-const PATH_ATTR_NAME: &'static str = "path";
-const NAME_ATTR_NAME: &'static str = "name";
+const PATH_ATTR_NAME: &str = "path";
+const NAME_ATTR_NAME: &str = "name";
 
 pub trait Event {
     const TYPE: EventType;
