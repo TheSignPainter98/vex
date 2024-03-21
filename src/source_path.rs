@@ -1,14 +1,18 @@
 use std::{fmt::Display, ops::Deref, sync::Arc};
 
+#[cfg(target_os = "windows")]
+use std::path;
+
 use allocative::Allocative;
 use camino::Utf8Path;
 use dupe::Dupe;
+use serde::Serialize;
 use starlark::{
     environment::{Methods, MethodsBuilder, MethodsStatic},
     starlark_module, starlark_simple_value,
     values::{list::AllocList, Demand, Heap, StarlarkValue, Value, ValueError},
 };
-use starlark_derive::{starlark_value, NoSerialize, ProvidesStaticType};
+use starlark_derive::{starlark_value, ProvidesStaticType};
 
 #[derive(Clone, Debug, PartialEq, Eq, Dupe)]
 pub struct SourcePath {
@@ -20,10 +24,8 @@ impl SourcePath {
     pub fn new(path: &Utf8Path, base_dir: &Utf8Path) -> Self {
         Self {
             abs_path: path.into(),
-            pretty_path: PrettyPath(
-                path.strip_prefix(base_dir)
-                    .expect("path not in base dir")
-                    .into(),
+            pretty_path: PrettyPath::new(
+                path.strip_prefix(base_dir).expect("path not in base dir"),
             ),
         }
     }
@@ -62,23 +64,37 @@ impl Display for SourcePath {
     Ord,
     Hash,
     Allocative,
-    NoSerialize,
+    Serialize,
     ProvidesStaticType,
 )]
-pub struct PrettyPath(#[allocative(skip)] Arc<Utf8Path>);
+pub struct PrettyPath {
+    #[allocative(skip)]
+    path: Arc<Utf8Path>,
+
+    #[cfg(target_os = "windows")]
+    sanitised_path: Arc<str>,
+}
 starlark_simple_value!(PrettyPath);
 
 impl PrettyPath {
     pub fn new(path: &Utf8Path) -> Self {
-        Self(Arc::from(path))
+        Self {
+            path: Arc::from(path),
+
+            #[cfg(target_os = "windows")]
+            sanitised_path: path.as_str().replace(path::MAIN_SEPARATOR, "/").into(),
+        }
     }
 
     pub fn as_str(&self) -> &str {
-        self.0.as_str()
+        #[cfg(not(target_os = "windows"))]
+        return self.path.as_str();
+        #[cfg(target_os = "windows")]
+        return self.sanitised_path.as_str();
     }
 
     pub fn len(&self) -> usize {
-        self.0.components().count()
+        self.path.components().count()
     }
 
     #[starlark_module]
@@ -92,25 +108,22 @@ impl PrettyPath {
                 return Ok(this == other);
             }
 
-            if let Some(other) = other.unpack_str() {
-                let this_str = this.0.as_str();
-                return Ok(this_str == other || this_str.replace('/', "\\") == other);
-            }
-
-            Ok(false)
+            Ok(other
+                .unpack_str()
+                .is_some_and(|other| this.as_str() == other))
         }
     }
 }
 
 impl From<&str> for PrettyPath {
     fn from(value: &str) -> Self {
-        Self(Utf8Path::new(value).into())
+        Self::new(Utf8Path::new(value))
     }
 }
 
 impl AsRef<Utf8Path> for PrettyPath {
     fn as_ref(&self) -> &Utf8Path {
-        &self.0
+        &self.path
     }
 }
 
@@ -118,13 +131,16 @@ impl Deref for PrettyPath {
     type Target = Utf8Path;
 
     fn deref(&self) -> &Self::Target {
-        self.0.as_ref()
+        self.path.as_ref()
     }
 }
 
 impl Display for PrettyPath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
+        #[cfg(not(target_os = "windows"))]
+        return self.path.fmt(f);
+        #[cfg(target_os = "windows")]
+        return self.sanitised_path.fmt(f);
     }
 }
 
@@ -351,11 +367,9 @@ mod test {
     fn matches() {
         PathTest::new("matches").path("src/main.rs").run(indoc! {r#"
             check['true'](path.matches("src/main.rs"))
-            check['true'](path.matches("src\\main.rs"))
             check['false'](path.matches(None))
             check['false'](path.matches(''))
             check['false'](path.matches("src/lib.rs"))
-            check['false'](path.matches("src\\lib.rs"))
         "#});
     }
 

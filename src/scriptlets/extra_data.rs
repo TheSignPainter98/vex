@@ -1,4 +1,8 @@
-use std::{cell::RefCell, fmt::Display, sync::Arc};
+use std::{
+    cell::RefCell,
+    fmt::Display,
+    sync::{Arc, Mutex},
+};
 
 use allocative::Allocative;
 use dupe::Dupe;
@@ -15,6 +19,7 @@ use tree_sitter::Query;
 
 use crate::{
     error::Error,
+    irritation::Irritation,
     result::Result,
     scriptlets::{
         action::Action,
@@ -32,11 +37,18 @@ use crate::{
 #[derive(Debug, ProvidesStaticType, NoSerialize, Allocative)]
 pub struct InvocationData {
     action: Action,
+    path: PrettyPath,
+    #[allocative(skip)]
+    pub irritations: Mutex<Vec<Irritation>>,
 }
 
 impl InvocationData {
-    pub fn new(action: Action) -> Self {
-        Self { action }
+    pub fn new(action: Action, path: PrettyPath) -> Self {
+        Self {
+            action,
+            path,
+            irritations: Mutex::new(vec![]),
+        }
     }
 
     pub fn insert_into<'e>(&'e self, eval: &mut Evaluator<'_, 'e>) {
@@ -53,6 +65,18 @@ impl InvocationData {
 
     pub fn action(&self) -> Action {
         self.action
+    }
+
+    pub fn path(&self) -> &PrettyPath {
+        &self.path
+    }
+
+    pub fn add_irritation(&self, irritation: Irritation) {
+        self.irritations
+            .lock()
+            .as_mut()
+            .expect("invocation data used concurrently")
+            .push(irritation)
     }
 }
 

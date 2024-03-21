@@ -85,5 +85,11 @@ fn annotation_type_of(level: Level) -> AnnotationType {
 }
 
 pub fn render_snippet(snippet: Snippet) -> String {
-    Renderer::styled().render(snippet).to_string()
+    if !cfg!(test) {
+        Renderer::styled()
+    } else {
+        Renderer::plain()
+    }
+    .render(snippet)
+    .to_string()
 }

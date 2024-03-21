@@ -10,7 +10,7 @@ allocative = "0.3.1"
 annotate-snippets = "0.10.0"
 anyhow = "1.0.76"
 async-recursion = "1.0.5"
-camino = "1.1.6"
+camino = { version = "1.1.6", features = ["serde1"] }
 clap = { version = "4.4.11", features = ["derive"] }
 derive-new = "0.6.0"
 derive_more = "0.99.17"
@@ -22,7 +22,7 @@ joinery = "3.1.0"
 lazy_static = "1.4.0"
 log = { version = "0.4.20", features = ["std", "kv_unstable"] }
 num-traits = "0.2.17"
-serde = { version = "1.0.193", features = ["derive"] }
+serde = { version = "1.0.193", features = ["derive", "rc"] }
 starlark = "0.10.0"
 starlark_derive = "0.10.0"
 strum = { version = "0.25.0", features = ["derive"] }
@@ -33,5 +33,10 @@ tree-sitter = "0.20.10"
 tree-sitter-rust = "0.20.4"
 
 [dev-dependencies]
+insta = { version = "1.36.1", features = ["yaml"] }
 pretty_assertions = "1.4.0"
 regex = "1.10.3"
+
+[profile.dev.package]
+insta.opt-level = 3
+similar.opt-level = 3

@@ -25,9 +25,9 @@ use std::{env, fs, process::ExitCode};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser as _;
-use cli::DumpCmd;
+use cli::{DumpCmd, MaxProblems};
 use dupe::Dupe;
-use log::{info, log_enabled, trace};
+use log::{info, log_enabled, trace, warn};
 use starlark::environment::Module;
 use strum::IntoEnumIterator;
 use tree_sitter::QueryCursor;
@@ -37,6 +37,7 @@ use crate::{
     context::{CompiledFilePattern, Context},
     error::{Error, IOAction},
     irritation::Irritation,
+    plural::Plural,
     result::Result,
     scriptlets::{
         event::CloseProjectEvent,
@@ -83,37 +84,46 @@ fn list_languages() -> Result<()> {
 fn list_lints() -> Result<()> {
     let ctx = Context::acquire()?;
     let store = PreinitingStore::new(&ctx)?.preinit()?;
-    store.vexes().for_each(|vex| println!("{}", vex.path));
+    store
+        .vexes()
+        .for_each(|vex| println!("{}", vex.path.pretty_path));
     Ok(())
 }
 
-fn check(_cmd_args: CheckCmd) -> Result<()> {
+fn check(cmd_args: CheckCmd) -> Result<()> {
     let ctx = Context::acquire()?;
     let store = PreinitingStore::new(&ctx)?.preinit()?.init()?;
 
-    let irritations = vex(&ctx, &store)?;
-    println!("Got irritations: {irritations:?}");
+    let RunData {
+        irritations,
+        num_files_scanned,
+    } = vex(&ctx, &store, cmd_args.max_problems)?;
+    irritations.iter().for_each(|irr| println!("{irr}"));
+    if !irritations.is_empty() {
+        warn!(
+            "scanned {} and found {}",
+            Plural::new(num_files_scanned, "file", "files"),
+            Plural::new(irritations.len(), "problem", "problems"),
+        );
+    }
 
-    // if let MaxProblems::Limited(max_problems) = cmd_args.max_problems {
-    //     problems.truncate(max_problems as usize);
-    // }
-    // problems.sort();
-    // for problem in &problems {
-    //     if log_enabled!(log::Level::Warn) {
-    //         warn!(target: "vex", custom = true; "{problem}");
-    //     }
-    // }
-    // if log_enabled!(log::Level::Info) {
-    //     info!(
-    //         "scanned {} and found {}",
-    //         Plural::new(npaths, "path", "paths"),
-    //         Plural::new(problems.len(), "problem", "problems"),
-    //     );
-    // }
     Ok(())
 }
 
-fn vex(ctx: &Context, store: &VexingStore) -> Result<Vec<Irritation>> {
+#[derive(Debug)]
+struct RunData {
+    irritations: Vec<Irritation>,
+    num_files_scanned: usize,
+}
+
+impl RunData {
+    #[cfg(test)]
+    fn into_irritations(self) -> Vec<Irritation> {
+        self.irritations
+    }
+}
+
+fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<RunData> {
     let language_observers = store.language_observers();
     let paths = {
         let mut paths = Vec::new();
@@ -150,13 +160,13 @@ fn vex(ctx: &Context, store: &VexingStore) -> Result<Vec<Irritation>> {
             let handler_module = Module::new();
             on_open_project.handle(
                 &handler_module,
-                &observer.path,
+                &observer.path, // TODO(kcza): what path is this??
                 OpenProjectEvent::new(ctx.project_root.dupe()),
             )?;
         }
     }
-    // let mut irritations = Vec::new();
-    for path in paths {
+    let mut irritations = Vec::new();
+    for path in &paths {
         let src_file = match SourceFile::load(path.dupe()) {
             Ok(f) => f,
             Err(e) if e.is_recoverable() => {
@@ -170,60 +180,51 @@ fn vex(ctx: &Context, store: &VexingStore) -> Result<Vec<Irritation>> {
             }
         };
 
-        println!("linting {}...", src_file.path);
         for observer in &language_observers[src_file.lang] {
             for on_open_file in &observer.on_open_file[..] {
                 let handler_module = Module::new();
-                on_open_file.handle(
+                irritations.extend(on_open_file.handle(
                     &handler_module,
                     &observer.path,
                     OpenFileEvent::new(src_file.path.pretty_path.dupe()),
-                )?;
+                )?);
             }
 
-            println!("running a handler set...");
             for qmatch in QueryCursor::new().matches(
                 observer.query.as_ref(),
                 src_file.tree.root_node(),
                 src_file.content[..].as_bytes(),
             ) {
-                println!("found {qmatch:?}");
                 let captures = QueryCaptures::new(&observer.query, &qmatch, &src_file);
                 for on_match in &observer.on_match[..] {
                     let handler_module = Module::new();
-                    on_match.handle(
+                    irritations.extend(on_match.handle(
                         &handler_module,
                         &observer.path,
                         MatchEvent::new(src_file.path.pretty_path.dupe(), captures.dupe()),
-                    )?;
+                    )?);
                 }
             }
 
             for on_close_file in &observer.on_close_file[..] {
                 let handler_module = Module::new();
-                on_close_file.handle(
+                irritations.extend(on_close_file.handle(
                     &handler_module,
                     &observer.path,
                     CloseFileEvent::new(src_file.path.pretty_path.dupe()),
-                )?;
+                )?);
             }
         }
-
-        // let mut vex_irritations = Vec::new();
-        // for vex in vexes {
-        //     vex_irritations.extend(vex.check(&src_file)?);
-        // }
-        // irritations.push((vex.id, vex_irritations));
     }
     for language_observer in language_observers.values() {
         for observer in language_observer {
             for on_close_project in &observer.on_close_project[..] {
                 let handler_module = Module::new();
-                on_close_project.handle(
+                irritations.extend(on_close_project.handle(
                     &handler_module,
                     &observer.path,
                     CloseProjectEvent::new(ctx.project_root.dupe()),
-                )?;
+                )?);
             }
         }
     }
@@ -251,9 +252,18 @@ fn vex(ctx: &Context, store: &VexingStore) -> Result<Vec<Irritation>> {
     //         break;
     //     }
     // }
-    //
 
-    Ok(vec![])
+    irritations.sort();
+    if let MaxProblems::Limited(max) = max_problems {
+        let max = max as usize;
+        if max < irritations.len() {
+            irritations.truncate(max);
+        }
+    }
+    Ok(RunData {
+        irritations,
+        num_files_scanned: paths.len(),
+    })
 }
 
 fn walkdir(
@@ -349,6 +359,8 @@ mod test {
 
     use indoc::indoc;
     use tempfile::TempDir;
+
+    use crate::vextest::VexTest;
 
     use super::*;
 
@@ -454,5 +466,46 @@ mod test {
             err.to_string(),
             format!("unknown extension 'unknown-extension'")
         );
+    }
+
+    #[test]
+    fn max_problems() {
+        const MAX: u32 = 47;
+        let irritations = VexTest::new("max-problems")
+            .with_max_problems(MaxProblems::Limited(MAX))
+            .with_scriptlet(
+                "vexes/var.star",
+                indoc! {r#"
+                    def init():
+                        vex.language('rust')
+                        vex.query('(integer_literal) @num')
+                        vex.observe('match', on_match)
+
+                    def on_match(event):
+                        vex.warn('oh no a number!', at=(event.captures['num'], 'num'))
+                "#},
+            )
+            .with_source_file(
+                "src/main.rs",
+                indoc! {r#"
+                    fn main() {
+                        let x = 1 + 2 + 3 + 4 + 5 + 6 + 8 + 9 + 10;
+                        let x = 1 + 2 + 3 + 4 + 5 + 6 + 8 + 9 + 10;
+                        let x = 1 + 2 + 3 + 4 + 5 + 6 + 8 + 9 + 10;
+                        let x = 1 + 2 + 3 + 4 + 5 + 6 + 8 + 9 + 10;
+                        let x = 1 + 2 + 3 + 4 + 5 + 6 + 8 + 9 + 10;
+                        let x = 1 + 2 + 3 + 4 + 5 + 6 + 8 + 9 + 10;
+                        let x = 1 + 2 + 3 + 4 + 5 + 6 + 8 + 9 + 10;
+                        let x = 1 + 2 + 3 + 4 + 5 + 6 + 8 + 9 + 10;
+                        let x = 1 + 2 + 3 + 4 + 5 + 6 + 8 + 9 + 10;
+                        let x = 1 + 2 + 3 + 4 + 5 + 6 + 8 + 9 + 10;
+                        println!("{x}");
+                    }
+                "#},
+            )
+            .try_run()
+            .unwrap()
+            .into_irritations();
+        assert_eq!(irritations.len(), MAX as usize);
     }
 }

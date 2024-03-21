@@ -34,6 +34,9 @@ pub enum Error {
     #[error("import cycle detected: {}", .0.iter().join_with(" -> "))]
     ImportCycle(Vec<PrettyPath>),
 
+    #[error("{0}")]
+    InvalidWarnCall(&'static str),
+
     #[error("cannot {action} {path}: {cause}")]
     IO {
         path: PrettyPath,
@@ -117,6 +120,7 @@ impl Error {
             | Self::EmptyQuery(..)
             | Self::FromPathBuf { .. }
             | Self::ImportCycle(..)
+            | Self::InvalidWarnCall(..)
             | Self::Language(..)
             | Self::ManifestNotFound
             | Self::NoCallbacks(..)

@@ -11,11 +11,13 @@ use tree_sitter::Query;
 
 use crate::{
     error::Error,
+    irritation::Irritation,
     result::Result,
     scriptlets::{
         action::Action,
-        event::Event,
-        event::{CloseFileEvent, CloseProjectEvent, MatchEvent, OpenFileEvent, OpenProjectEvent},
+        event::{
+            CloseFileEvent, CloseProjectEvent, Event, MatchEvent, OpenFileEvent, OpenProjectEvent,
+        },
         extra_data::InvocationData,
         print_handler::PrintHandler,
     },
@@ -40,21 +42,30 @@ pub trait Observer<'v> {
 
     fn function(&self) -> &OwnedFrozenValue;
 
-    fn handle(&'v self, module: &'v Module, _path: &PrettyPath, event: Self::Event) -> Result<()>
+    fn handle(
+        &'v self,
+        module: &'v Module,
+        path: &PrettyPath,
+        event: Self::Event,
+    ) -> Result<Vec<Irritation>>
     where
         Self::Event: StarlarkValue<'v> + AllocValue<'v> + Event,
     {
-        let extra = InvocationData::new(Action::Vexing(<Self::Event as Event>::TYPE));
+        let extra = InvocationData::new(Action::Vexing(<Self::Event as Event>::TYPE), path.dupe());
 
-        let mut eval = Evaluator::new(module);
-        eval.set_print_handler(&PrintHandler);
-        extra.insert_into(&mut eval);
+        {
+            let mut eval = Evaluator::new(module);
+            eval.set_print_handler(&PrintHandler);
+            extra.insert_into(&mut eval);
 
-        let func = self.function().value(); // TODO(kcza): check thread safety! Can this unfrozen
-                                            // function mutate upvalues if it is a closure?
-        eval.eval_function(func, &[module.heap().alloc(event)], &[])
-            .map_err(Error::starlark)?;
-        Ok(())
+            let func = self.function().value(); // TODO(kcza): check thread safety! Can this unfrozen
+                                                // function mutate upvalues if it is a closure?
+            eval.eval_function(func, &[module.heap().alloc(event)], &[])
+                .map_err(Error::starlark)?;
+        }
+
+        let irritations = extra.irritations.into_inner().expect("lock poisoned");
+        Ok(irritations)
     }
 }
 
