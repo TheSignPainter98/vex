@@ -90,7 +90,7 @@ impl PrettyPath {
         #[cfg(not(target_os = "windows"))]
         return self.path.as_str();
         #[cfg(target_os = "windows")]
-        return self.sanitised_path.as_str();
+        return self.sanitised_path.as_ref();
     }
 
     pub fn len(&self) -> usize {
