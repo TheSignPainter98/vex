@@ -35,7 +35,7 @@ impl AppObject {
     fn methods(builder: &mut MethodsBuilder) {
         fn language<'v>(
             #[starlark(this)] _this: Value<'v>,
-            lang: &'v str,
+            #[starlark(require=pos)] lang: &'v str,
             eval: &mut Evaluator<'v, '_>,
         ) -> anyhow::Result<NoneType> {
             AppObject::check_attr_available(eval, "vex.language", &[Action::Initing])?;
@@ -47,7 +47,7 @@ impl AppObject {
 
         fn query<'v>(
             #[starlark(this)] _this: Value<'v>,
-            query: &'v str,
+            #[starlark(require=pos)] query: &'v str,
             eval: &mut Evaluator<'v, '_>,
         ) -> anyhow::Result<NoneType> {
             AppObject::check_attr_available(eval, "vex.query", &[Action::Initing])?;
@@ -59,8 +59,8 @@ impl AppObject {
 
         fn observe<'v>(
             #[starlark(this)] _this: Value<'v>,
-            event: &str,
-            handler: Value<'v>,
+            #[starlark(require=pos)] event: &str,
+            #[starlark(require=pos)] handler: Value<'v>,
             eval: &mut Evaluator<'v, '_>,
         ) -> anyhow::Result<NoneType> {
             AppObject::check_attr_available(eval, "vex.observe", &[Action::Initing])?;
@@ -74,9 +74,9 @@ impl AppObject {
         fn warn<'v>(
             #[starlark(this)] _this: Value<'v>,
             #[starlark(require=pos)] message: &'v str,
-            at: Option<StarlarkSourceAnnotation>,
-            show_also: Option<Vec<StarlarkSourceAnnotation>>,
-            extra_info: Option<&'v str>,
+            #[starlark(require=named)] at: Option<StarlarkSourceAnnotation>,
+            #[starlark(require=named)] show_also: Option<Vec<StarlarkSourceAnnotation>>,
+            #[starlark(require=named)] extra_info: Option<&'v str>,
             eval: &mut Evaluator<'v, '_>,
         ) -> anyhow::Result<NoneType> {
             AppObject::check_attr_available(
@@ -150,8 +150,77 @@ impl Display for AppObject {
 mod test {
     use indoc::{formatdoc, indoc};
     use insta::assert_yaml_snapshot;
+    use joinery::JoinableIterator;
 
     use crate::vextest::VexTest;
+
+    #[test]
+    fn argument_kinds() {
+        let lines = indoc! {r#"
+            def init():
+                vex.language('rust')
+                vex.query('(binary_expression) @bin_expr')
+                vex.observe('match', on_match)
+
+            def on_match(event):
+                vex.warn('okay')
+        "#}
+        .lines()
+        .collect::<Vec<_>>();
+        let line_replacements = [
+            ("language", 2, "vex.language(lang = 'rust')"),
+            ("query", 3, "vex.query(query='(binary_expression)')"),
+            ("observe-event", 4, "vex.query(on_match, event='match')"),
+            (
+                "observe-observer",
+                4,
+                "vex.query('match', observer=on_match)",
+            ),
+            ("warn-message", 7, "vex.warn(message='oh no')"),
+            (
+                "warn-at",
+                7,
+                "vex.warn('oh no', (event.captures['bin_expr'], 'bin_expr'))",
+            ),
+            (
+                "warn-show-also",
+                7,
+                "vex.warn('oh no', [(event.captures['bin_expr'], 'bin_expr')], at=(event.captures['bin_expr'], 'bin_expr'))"
+            ),
+            (
+                "warn-show-also",
+                7,
+                "vex.warn('oh no', 'extra_info', at=(event.captures['bin_expr'], 'bin_expr'))"
+            ),
+        ];
+        let error_messages = line_replacements
+            .into_iter()
+            .map(|(name, replace_line_num, replacement)| {
+                VexTest::new(name)
+                    .with_scriptlet(format!("vexes/{name}.star"), {
+                        lines[..replace_line_num - 1]
+                            .iter()
+                            .chain(&[&textwrap::indent(replacement, "    ")[..]])
+                            .chain(&lines[replace_line_num..])
+                            .join_with("\n")
+                            .to_string()
+                    })
+                    .with_source_file(
+                        "src/main.rs",
+                        indoc! {r#"
+                    fn main() {
+                        let x = 1 + 2;
+                        println!("{x}");
+                    }
+                    "#},
+                    )
+                    .try_run()
+                    .unwrap_err()
+                    .to_string()
+            })
+            .collect::<Vec<_>>();
+        assert_yaml_snapshot!(error_messages);
+    }
 
     #[test]
     fn warn_valid() {

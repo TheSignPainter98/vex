@@ -2,4 +2,5 @@
 /vex
 /vex.toml
 /vexes/
-tester.*
+test_project/
+*.snap.new

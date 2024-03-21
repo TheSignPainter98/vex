@@ -1249,7 +1249,7 @@ dependencies = [
  "starlark_syntax",
  "static_assertions",
  "strsim",
- "textwrap",
+ "textwrap 0.11.0",
  "thiserror",
 ]
 
@@ -1410,6 +1410,12 @@ checksum = "d326610f408c7a4eb6f51c37c330e496b08506c9457c9d34287ecc38809fb060"
 dependencies = [
  "unicode-width",
 ]
+
+[[package]]
+name = "textwrap"
+version = "0.16.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23d434d3f8967a09480fb04132ebe0a3e088c173e6d0ee7897abbdf4eab0f8b9"
 
 [[package]]
 name = "thiserror"
@@ -1594,6 +1600,7 @@ dependencies = [
  "starlark_derive",
  "strum",
  "tempfile",
+ "textwrap 0.16.1",
  "thiserror",
  "toml_edit",
  "tree-sitter",
