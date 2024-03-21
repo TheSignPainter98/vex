@@ -25,6 +25,7 @@ num-traits = "0.2.17"
 serde = { version = "1.0.193", features = ["derive", "rc"] }
 starlark = "0.10.0"
 starlark_derive = "0.10.0"
+strsim = "0.11.0"
 strum = { version = "0.25.0", features = ["derive"] }
 tempfile = "3.9.0"
 thiserror = "1.0.51"
