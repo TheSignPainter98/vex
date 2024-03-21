@@ -25,9 +25,7 @@ impl SourcePath {
         Self {
             abs_path: path.into(),
             pretty_path: PrettyPath::new(
-                path.strip_prefix(base_dir)
-                    .expect("path not in base dir")
-                    .into(),
+                path.strip_prefix(base_dir).expect("path not in base dir"),
             ),
         }
     }
@@ -119,7 +117,7 @@ impl PrettyPath {
 
 impl From<&str> for PrettyPath {
     fn from(value: &str) -> Self {
-        Self::new(Utf8Path::new(value).into())
+        Self::new(Utf8Path::new(value))
     }
 }
 
