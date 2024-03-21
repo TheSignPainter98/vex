@@ -10,8 +10,7 @@ use indoc::indoc;
 use regex::Regex;
 
 use crate::{
-    cli::MaxProblems, context::Context, irritation::Irritation, result::Result,
-    scriptlets::PreinitingStore,
+    cli::MaxProblems, context::Context, result::Result, scriptlets::PreinitingStore, RunData,
 };
 
 pub struct VexTest<'s> {
@@ -91,22 +90,11 @@ impl<'s> VexTest<'s> {
     }
 
     pub fn assert_irritation_free(self) {
-        assert_eq!(self.try_run().unwrap(), &[], "irritations returned!");
-    }
-
-    #[allow(unused)]
-    pub fn returns_irritations(self, irritations: Vec<IrritationMatch>) {
-        self.try_run()
-            .unwrap()
-            .into_iter()
-            .zip(irritations)
-            .enumerate()
-            .for_each(|(i, (irritation, matcher))| {
-                assert!(
-                    matcher.matches(&irritation),
-                    "irritation {i} incorrect, expected {matcher:?}, got {irritation:?}"
-                )
-            });
+        assert_eq!(
+            self.try_run().unwrap().into_irritations(),
+            &[],
+            "irritations returned!"
+        );
     }
 
     pub fn returns_error(self, message: impl Into<Cow<'static, str>>) {
@@ -119,7 +107,7 @@ impl<'s> VexTest<'s> {
         );
     }
 
-    pub fn try_run(mut self) -> Result<Vec<Irritation>> {
+    pub fn try_run(mut self) -> Result<RunData> {
         self.setup();
 
         let root_dir = tempfile::tempdir().unwrap();
@@ -225,19 +213,4 @@ impl<'s> VexTest<'s> {
 
         check
     "#};
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct IrritationMatch {
-    vex_id: Cow<'static, str>,
-    message: Cow<'static, str>,
-    start_byte: usize,
-    end_byte: usize,
-    path: Utf8PathBuf,
-}
-
-impl IrritationMatch {
-    pub fn matches(&self, _irritation: &Irritation) -> bool {
-        todo!();
-    }
 }

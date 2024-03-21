@@ -198,6 +198,7 @@ mod test {
             )
             .try_run()
             .unwrap()
+            .into_irritations()
             .into_iter()
             .map(|irr| irr.to_string())
             .collect::<Vec<_>>();
@@ -317,6 +318,7 @@ mod test {
             )
             .try_run()
             .unwrap()
+            .into_irritations()
             .into_iter()
             .map(|irr| irr.to_string())
             .collect::<Vec<_>>();

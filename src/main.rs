@@ -94,19 +94,36 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
     let ctx = Context::acquire()?;
     let store = PreinitingStore::new(&ctx)?.preinit()?.init()?;
 
-    let irritations = vex(&ctx, &store, cmd_args.max_problems)?;
+    let RunData {
+        irritations,
+        num_files_scanned,
+    } = vex(&ctx, &store, cmd_args.max_problems)?;
     irritations.iter().for_each(|irr| println!("{irr}"));
-    warn!(
-        // "scanned {} and found {}",
-        // Plural::new(npaths, "path", "paths"),
-        "vex found {}",
-        Plural::new(irritations.len(), "problem", "problems"),
-    );
+    if !irritations.is_empty() {
+        warn!(
+            "scanned {} and found {}",
+            Plural::new(num_files_scanned, "file", "files"),
+            Plural::new(irritations.len(), "problem", "problems"),
+        );
+    }
 
     Ok(())
 }
 
-fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<Vec<Irritation>> {
+#[derive(Debug)]
+struct RunData {
+    irritations: Vec<Irritation>,
+    num_files_scanned: usize,
+}
+
+impl RunData {
+    #[cfg(test)]
+    fn into_irritations(self) -> Vec<Irritation> {
+        self.irritations
+    }
+}
+
+fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<RunData> {
     let language_observers = store.language_observers();
     let paths = {
         let mut paths = Vec::new();
@@ -149,7 +166,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
         }
     }
     let mut irritations = Vec::new();
-    for path in paths {
+    for path in &paths {
         let src_file = match SourceFile::load(path.dupe()) {
             Ok(f) => f,
             Err(e) if e.is_recoverable() => {
@@ -243,7 +260,10 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
             irritations.truncate(max);
         }
     }
-    Ok(irritations)
+    Ok(RunData {
+        irritations,
+        num_files_scanned: paths.len(),
+    })
 }
 
 fn walkdir(
@@ -484,7 +504,8 @@ mod test {
                 "#},
             )
             .try_run()
-            .unwrap();
+            .unwrap()
+            .into_irritations();
         assert_eq!(irritations.len(), MAX as usize);
     }
 }
