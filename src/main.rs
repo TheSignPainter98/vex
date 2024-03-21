@@ -355,7 +355,7 @@ fn init() -> Result<()> {
 
 #[cfg(test)]
 mod test {
-    use std::{fs::File, io::Write};
+    use std::{fs::File, io::Write, path};
 
     use indoc::indoc;
     use tempfile::TempDir;
@@ -437,7 +437,10 @@ mod test {
         let err = dump(cmd).unwrap_err();
         assert_eq!(
             err.to_string(),
-            format!("cannot parse {} as rust", test_file.path)
+            format!(
+                "cannot parse {} as rust",
+                test_file.path.as_str().replace(path::MAIN_SEPARATOR, "/")
+            )
         );
     }
 
