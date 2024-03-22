@@ -10,10 +10,13 @@ use starlark::{
         Trace, Value,
     },
 };
-use starlark_derive::{starlark_attrs, starlark_value, StarlarkAttrs};
+use starlark_derive::{starlark_value, StarlarkAttrs};
 use strum::EnumIter;
 
 use crate::{error::Error, scriptlets::QueryCaptures, source_path::PrettyPath};
+
+const PATH_ATTR_NAME: &str = "path";
+const NAME_ATTR_NAME: &str = "name";
 
 pub trait Event {
     const TYPE: EventType;
@@ -62,18 +65,7 @@ impl Display for EventType {
     }
 }
 
-#[derive(
-    new,
-    Clone,
-    Debug,
-    Dupe,
-    PartialEq,
-    Eq,
-    ProvidesStaticType,
-    NoSerialize,
-    Allocative,
-    StarlarkAttrs,
-)]
+#[derive(new, Clone, Debug, Dupe, PartialEq, Eq, ProvidesStaticType, NoSerialize, Allocative)]
 pub struct OpenProjectEvent {
     #[allocative(skip)]
     path: PrettyPath,
@@ -86,7 +78,24 @@ impl Event for OpenProjectEvent {
 
 #[starlark_value(type = "OpenProjectEvent")]
 impl<'v> StarlarkValue<'v> for OpenProjectEvent {
-    starlark_attrs!();
+    fn dir_attr(&self) -> Vec<String> {
+        [NAME_ATTR_NAME, PATH_ATTR_NAME]
+            .into_iter()
+            .map(Into::into)
+            .collect()
+    }
+
+    fn get_attr(&self, attr: &str, heap: &'v Heap) -> Option<Value<'v>> {
+        match attr {
+            NAME_ATTR_NAME => Some(heap.alloc(heap.alloc_str(<Self as Event>::TYPE.name()))),
+            PATH_ATTR_NAME => Some(heap.alloc(self.path.dupe())),
+            _ => None,
+        }
+    }
+
+    fn has_attr(&self, attr: &str, _: &'v Heap) -> bool {
+        [NAME_ATTR_NAME, PATH_ATTR_NAME].contains(&attr)
+    }
 }
 
 impl Display for OpenProjectEvent {
@@ -95,18 +104,7 @@ impl Display for OpenProjectEvent {
     }
 }
 
-#[derive(
-    new,
-    Clone,
-    Debug,
-    Dupe,
-    PartialEq,
-    Eq,
-    ProvidesStaticType,
-    NoSerialize,
-    Allocative,
-    StarlarkAttrs,
-)]
+#[derive(new, Clone, Debug, Dupe, PartialEq, Eq, ProvidesStaticType, NoSerialize, Allocative)]
 pub struct OpenFileEvent {
     #[allocative(skip)]
     path: PrettyPath,
@@ -119,7 +117,24 @@ impl Event for OpenFileEvent {
 
 #[starlark_value(type = "OpenFileEvent")]
 impl<'v> StarlarkValue<'v> for OpenFileEvent {
-    starlark_attrs!();
+    fn dir_attr(&self) -> Vec<String> {
+        [NAME_ATTR_NAME, PATH_ATTR_NAME]
+            .into_iter()
+            .map(Into::into)
+            .collect()
+    }
+
+    fn get_attr(&self, attr: &str, heap: &'v Heap) -> Option<Value<'v>> {
+        match attr {
+            NAME_ATTR_NAME => Some(heap.alloc(heap.alloc_str(<Self as Event>::TYPE.name()))),
+            PATH_ATTR_NAME => Some(heap.alloc(self.path.dupe())),
+            _ => None,
+        }
+    }
+
+    fn has_attr(&self, attr: &str, _: &'v Heap) -> bool {
+        [NAME_ATTR_NAME, PATH_ATTR_NAME].contains(&attr)
+    }
 }
 
 impl Display for OpenFileEvent {
@@ -138,7 +153,6 @@ pub struct MatchEvent<'v> {
 }
 
 impl MatchEvent<'_> {
-    const PATH_ATTR_NAME: &'static str = "path";
     const QUERY_CAPTURES_ATTR_NAME: &'static str = "captures";
 }
 
@@ -149,22 +163,32 @@ impl Event for MatchEvent<'_> {
 #[starlark_value(type = "MatchEvent")]
 impl<'v> StarlarkValue<'v> for MatchEvent<'v> {
     fn dir_attr(&self) -> Vec<String> {
-        [Self::PATH_ATTR_NAME, Self::QUERY_CAPTURES_ATTR_NAME]
-            .into_iter()
-            .map(Into::into)
-            .collect()
+        [
+            NAME_ATTR_NAME,
+            PATH_ATTR_NAME,
+            Self::QUERY_CAPTURES_ATTR_NAME,
+        ]
+        .into_iter()
+        .map(Into::into)
+        .collect()
     }
 
     fn get_attr(&self, attr: &str, heap: &'v Heap) -> Option<Value<'v>> {
         match attr {
-            Self::PATH_ATTR_NAME => Some(heap.alloc(self.path.dupe())),
+            NAME_ATTR_NAME => Some(heap.alloc(heap.alloc_str(<Self as Event>::TYPE.name()))),
+            PATH_ATTR_NAME => Some(heap.alloc(self.path.dupe())),
             Self::QUERY_CAPTURES_ATTR_NAME => Some(heap.alloc(self.query_captures.dupe())),
             _ => None,
         }
     }
 
     fn has_attr(&self, attr: &str, _heap: &'v Heap) -> bool {
-        [Self::PATH_ATTR_NAME, Self::QUERY_CAPTURES_ATTR_NAME].contains(&attr)
+        [
+            NAME_ATTR_NAME,
+            PATH_ATTR_NAME,
+            Self::QUERY_CAPTURES_ATTR_NAME,
+        ]
+        .contains(&attr)
     }
 }
 
@@ -188,18 +212,7 @@ impl Display for MatchEvent<'_> {
     }
 }
 
-#[derive(
-    new,
-    Clone,
-    Debug,
-    Dupe,
-    PartialEq,
-    Eq,
-    ProvidesStaticType,
-    NoSerialize,
-    Allocative,
-    StarlarkAttrs,
-)]
+#[derive(new, Clone, Debug, Dupe, PartialEq, Eq, ProvidesStaticType, NoSerialize, Allocative)]
 pub struct CloseFileEvent {
     #[allocative(skip)]
     path: PrettyPath,
@@ -212,7 +225,24 @@ impl Event for CloseFileEvent {
 
 #[starlark_value(type = "CloseFileEvent")]
 impl<'v> StarlarkValue<'v> for CloseFileEvent {
-    starlark_attrs!();
+    fn dir_attr(&self) -> Vec<String> {
+        [NAME_ATTR_NAME, PATH_ATTR_NAME]
+            .into_iter()
+            .map(Into::into)
+            .collect()
+    }
+
+    fn get_attr(&self, attr: &str, heap: &'v Heap) -> Option<Value<'v>> {
+        match attr {
+            NAME_ATTR_NAME => Some(heap.alloc(heap.alloc_str(<Self as Event>::TYPE.name()))),
+            PATH_ATTR_NAME => Some(heap.alloc(self.path.dupe())),
+            _ => None,
+        }
+    }
+
+    fn has_attr(&self, attr: &str, _: &'v Heap) -> bool {
+        [NAME_ATTR_NAME, PATH_ATTR_NAME].contains(&attr)
+    }
 }
 
 impl Display for CloseFileEvent {
@@ -245,7 +275,24 @@ impl Event for CloseProjectEvent {
 
 #[starlark_value(type = "CloseProjectEvent")]
 impl<'v> StarlarkValue<'v> for CloseProjectEvent {
-    starlark_attrs!();
+    fn dir_attr(&self) -> Vec<String> {
+        [NAME_ATTR_NAME, PATH_ATTR_NAME]
+            .into_iter()
+            .map(Into::into)
+            .collect()
+    }
+
+    fn get_attr(&self, attr: &str, heap: &'v Heap) -> Option<Value<'v>> {
+        match attr {
+            NAME_ATTR_NAME => Some(heap.alloc(heap.alloc_str(<Self as Event>::TYPE.name()))),
+            PATH_ATTR_NAME => Some(heap.alloc(self.path.dupe())),
+            _ => None,
+        }
+    }
+
+    fn has_attr(&self, attr: &str, _: &'v Heap) -> bool {
+        [NAME_ATTR_NAME, PATH_ATTR_NAME].contains(&attr)
+    }
 }
 
 impl Display for CloseProjectEvent {
@@ -329,6 +376,7 @@ mod test {
 
                         def on_{event_name}(event):
                             check['attrs'](event, ['{attrs_repr}'])
+                            check['eq'](event.name, '{event_name}')
 
                             if 'project' in '{event_name}':
                                 check['is_path'](str(event.path))
@@ -353,17 +401,17 @@ mod test {
 
     #[test]
     fn on_open_project_event() {
-        test_event_common_properties("open_project", "OpenProjectEvent", &["path"]);
+        test_event_common_properties("open_project", "OpenProjectEvent", &["name", "path"]);
     }
 
     #[test]
     fn on_open_file_event() {
-        test_event_common_properties("open_file", "OpenFileEvent", &["path"]);
+        test_event_common_properties("open_file", "OpenFileEvent", &["name", "path"]);
     }
 
     #[test]
     fn on_match_event() {
-        test_event_common_properties("match", "MatchEvent", &["captures", "path"]);
+        test_event_common_properties("match", "MatchEvent", &["name", "captures", "path"]);
 
         VexTest::new("captures")
             .with_scriptlet(
@@ -377,7 +425,13 @@ mod test {
                             vex.observe('match', on_match)
 
                         def on_match(event):
-                            check['attrs'](event, ['captures', 'path'])
+                            captures = event.captures
+
+                            expected_fields = ['l_int', 'bin_expr']
+                            for expected_field in expected_fields:
+                                check['in'](expected_field, captures)
+                            for field in captures:
+                                check['in'](field, expected_fields)
                     "#,
                     check_path = VexTest::CHECK_STARLARK_PATH,
                 },
@@ -396,11 +450,11 @@ mod test {
 
     #[test]
     fn on_close_file_event() {
-        test_event_common_properties("close_file", "CloseFileEvent", &["path"]);
+        test_event_common_properties("close_file", "CloseFileEvent", &["name", "path"]);
     }
 
     #[test]
     fn on_close_project_event() {
-        test_event_common_properties("close_project", "CloseProjectEvent", &["path"]);
+        test_event_common_properties("close_project", "CloseProjectEvent", &["name", "path"]);
     }
 }
