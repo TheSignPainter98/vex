@@ -101,9 +101,9 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
     irritations.iter().for_each(|irr| println!("{irr}"));
     if !irritations.is_empty() {
         warn!(
-            "scanned {} and found {}",
-            Plural::new(num_files_scanned, "file", "files"),
+            "found {} across {}",
             Plural::new(irritations.len(), "problem", "problems"),
+            Plural::new(num_files_scanned, "file", "files"),
         );
     }
 
