@@ -95,8 +95,15 @@ pub enum Error {
     #[error("cannot freeze a {0}")]
     Unfreezable(&'static str),
 
-    #[error("unknown event '{0}', expected one of: {}", EventType::iter().join_with(", "))]
-    UnknownEvent(String),
+    #[error(
+        "unknown event '{name}'{}, expected one of: {}",
+        suggestion.map(|suggestion| format!(" (did you mean '{suggestion}'?)")).unwrap_or_default(),
+        EventType::iter().join_with(", "),
+    )]
+    UnknownEvent {
+        name: String,
+        suggestion: Option<&'static str>,
+    },
 
     #[error("unknown extension '{0}'")]
     UnknownExtension(String),
@@ -138,7 +145,7 @@ impl Error {
             | Self::StripPrefix(..)
             | Self::Toml(..)
             | Self::Unfreezable(..)
-            | Self::UnknownEvent(..)
+            | Self::UnknownEvent { .. }
             | Self::UnknownLanguage(..) => false,
             Self::IO { .. }
             | Self::NoExtension(..)

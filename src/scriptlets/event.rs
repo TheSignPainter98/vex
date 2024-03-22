@@ -11,7 +11,7 @@ use starlark::{
     },
 };
 use starlark_derive::{starlark_value, StarlarkAttrs};
-use strum::EnumIter;
+use strum::{EnumIter, IntoEnumIterator};
 
 use crate::{error::Error, scriptlets::QueryCaptures, source_path::PrettyPath};
 
@@ -32,8 +32,7 @@ pub enum EventType {
 }
 
 impl EventType {
-    #[allow(unused)]
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         match self {
             EventType::OpenProject => "open_project",
             EventType::OpenFile => "open_file",
@@ -54,7 +53,21 @@ impl FromStr for EventType {
             "match" => Ok(EventType::Match),
             "close_file" => Ok(EventType::CloseFile),
             "close_project" => Ok(EventType::CloseProject),
-            _ => Err(Error::UnknownEvent(s.to_owned()).into()),
+            _ => Err(Error::UnknownEvent {
+                name: s.to_owned(),
+                suggestion: {
+                    let (event, distance) = EventType::iter()
+                        .map(|event| (event, strsim::damerau_levenshtein(s, event.name())))
+                        .min_by_key(|(_, distance)| *distance)
+                        .unwrap();
+                    if distance <= 2 {
+                        Some(event.name())
+                    } else {
+                        None
+                    }
+                },
+            }
+            .into()),
         }
     }
 }
