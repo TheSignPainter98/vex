@@ -448,6 +448,35 @@ mod test {
             "OpenFileEvent",
             &["name", "path", "trigger_id"],
         );
+
+        let run_data = VexTest::new("many-matching-triggers-one-event")
+            .with_scriptlet(
+                "vexes/test.star",
+                indoc! {r#"
+                    expected_trigger = 'trigger-1'
+                    other_trigger = 'trigger-2'
+
+                    def init():
+                        vex.add_trigger(
+                            id=expected_trigger,
+                            path="src/"
+                        )
+                        vex.add_trigger(
+                            id=other_trigger,
+                            path='main.rs'
+                        )
+                        vex.observe('open_file', on_open_file)
+
+                    def on_open_file(event):
+                        vex.warn("opened file %s" % event.path)
+                        if event.trigger_id != expected_trigger:
+                            fail("expected event to be caused by trigger '%s' but got '%s'" % (expected_trigger, event.trigger_id))
+                "#},
+            )
+            .with_source_file("src/main.rs", r#"fn main() { println!("hello, world!"); }"#)
+            .try_run()
+            .unwrap();
+        assert_eq!(1, run_data.irritations.len());
     }
 
     #[test]
@@ -502,6 +531,35 @@ mod test {
             "CloseFileEvent",
             &["name", "path", "trigger_id"],
         );
+
+        let run_data = VexTest::new("many-matching-triggers-one-event")
+            .with_scriptlet(
+                "vexes/test.star",
+                indoc! {r#"
+                    expected_trigger = 'trigger-1'
+                    other_trigger = 'trigger-2'
+
+                    def init():
+                        vex.add_trigger(
+                            id=expected_trigger,
+                            path="src/"
+                        )
+                        vex.add_trigger(
+                            id=other_trigger,
+                            path='main.rs'
+                        )
+                        vex.observe('close_file', on_close_file)
+
+                    def on_close_file(event):
+                        vex.warn("closed file %s" % event.path)
+                        if event.trigger_id != expected_trigger:
+                            fail("expected event to be caused by trigger '%s' but got '%s'" % (expected_trigger, event.trigger_id))
+                "#},
+            )
+            .with_source_file("src/main.rs", r#"fn main() { println!("hello, world!"); }"#)
+            .try_run()
+            .unwrap();
+        assert_eq!(1, run_data.irritations.len());
     }
 
     #[test]
