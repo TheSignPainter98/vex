@@ -47,7 +47,7 @@ impl Context {
         let project_root = project_root.as_ref();
         fs::create_dir_all(project_root.join(QueriesDir::default().as_str())).map_err(|cause| {
             Error::IO {
-                path: PrettyPath::new(&project_root),
+                path: PrettyPath::new(project_root),
                 action: IOAction::Write,
                 cause,
             }
@@ -90,7 +90,7 @@ impl Manifest {
 
     fn init(project_root: impl AsRef<Utf8Path>) -> Result<()> {
         let project_root = project_root.as_ref();
-        match Manifest::acquire_file_in(&project_root) {
+        match Manifest::acquire_file_in(project_root) {
             Ok((found_root, _)) => return Err(Error::AlreadyInited { found_root }),
             Err(Error::ManifestNotFound) => {}
             Err(e) => return Err(e),

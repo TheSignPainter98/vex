@@ -164,7 +164,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
         .try_for_each(|(obs_path, obs)| {
             irritations.extend(obs.handle(
                 &Module::new(),
-                &obs_path,
+                obs_path,
                 OpenProjectEvent::new(ctx.project_root.dupe()),
             )?);
             Ok::<_, Error>(())
@@ -185,7 +185,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
                     Ok::<_, Error>(())
                 })?;
 
-                if let Some(parsed_src_file) = src_file.parse().ok() {
+                if let Ok(parsed_src_file) = src_file.parse() {
                     observer
                         .trigger_queries()
                         .try_for_each(|(trigger_id, query)| {
@@ -197,7 +197,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
                                 )
                                 .try_for_each(|qmatch| {
                                     let captures =
-                                        QueryCaptures::new(&query, &qmatch, &parsed_src_file);
+                                        QueryCaptures::new(query, &qmatch, &parsed_src_file);
                                     observer.on_match.iter().try_for_each(|on_match| {
                                         irritations.extend(on_match.handle(
                                             &Module::new(),
@@ -302,7 +302,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
         .try_for_each(|(obs_path, obs)| {
             irritations.extend(obs.handle(
                 &Module::new(),
-                &obs_path,
+                obs_path,
                 CloseProjectEvent::new(ctx.project_root.dupe()),
             )?);
             Ok::<_, Error>(())
@@ -437,11 +437,11 @@ fn walkdir(
         let relative_path = dbg!(Utf8Path::new(
             &entry_path.as_str()[ctx.project_root.as_str().len()..]
         ));
-        if !allows.iter().any(|p| p.matches_path(&relative_path)) {
+        if !allows.iter().any(|p| p.matches_path(relative_path)) {
             let hidden = relative_path
                 .file_name()
                 .is_some_and(|name| name.starts_with('.'));
-            if hidden || ignores.iter().any(|p| p.matches_path(&relative_path)) {
+            if hidden || ignores.iter().any(|p| p.matches_path(relative_path)) {
                 if log_enabled!(log::Level::Info) {
                     let dir_marker = if metadata.is_dir() { "/" } else { "" };
                     info!("ignoring /{relative_path}{dir_marker}");

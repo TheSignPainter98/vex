@@ -43,8 +43,7 @@ impl ScriptletObserverData {
             let Some(query) = trigger
                 .content_trigger
                 .as_ref()
-                .map(|ct| ct.query.as_ref())
-                .flatten()
+                .and_then(|ct| ct.query.as_ref())
             else {
                 return None;
             };

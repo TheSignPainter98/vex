@@ -269,11 +269,11 @@ mod test {
                     .unwrap();
                 let matches = self
                     .test_paths
-                    .into_iter()
+                    .iter()
                     .filter(|test_path| {
                         pattern.matches_path(&Utf8PathBuf::from(self.root_dir).join(test_path))
                     })
-                    .map(|path| *path)
+                    .copied()
                     .collect::<Vec<_>>();
                 assert_eq!(matches, self.expected_matches.unwrap(),);
             }

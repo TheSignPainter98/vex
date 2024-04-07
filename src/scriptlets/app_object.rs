@@ -77,7 +77,7 @@ impl AppObject {
             let path_patterns = if let Some(path) = path {
                 if let Some(path_patterns) = path.request_value::<&[Value<'v>]>() {
                     path_patterns
-                        .into_iter()
+                        .iter()
                         .map(|path_pattern| {
                             let Some(path_pattern) = path_pattern.unpack_str() else {
                                 return Err(anyhow::Error::from(
