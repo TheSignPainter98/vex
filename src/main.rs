@@ -175,7 +175,6 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
         file_observers
             .iter()
             .try_for_each(|(trigger_id, observer)| {
-                // TODO(kcza): check multiple triggers doesn't cause the same open/close handler to be called multiple times?)
                 observer.on_open_file.iter().try_for_each(|on_open_file| {
                     irritations.extend(on_open_file.handle(
                         &Module::new(),
