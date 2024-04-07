@@ -51,7 +51,6 @@ impl AppObject {
 
             let builder = ObserverDataBuilder::get_from(eval.module());
 
-            // TODO(kcza): test me!
             if language.is_none() && query.is_none() && path.is_none() {
                 return Err(Error::EmptyTrigger.into());
             }
