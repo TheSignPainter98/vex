@@ -13,6 +13,7 @@ use crate::{
     cli::MaxProblems, context::Context, result::Result, scriptlets::PreinitingStore, RunData,
 };
 
+#[must_use]
 pub struct VexTest<'s> {
     name: Cow<'s, str>,
     bare: bool,

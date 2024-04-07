@@ -20,13 +20,13 @@ pub enum Error {
     AlreadyInited { found_root: Utf8PathBuf },
 
     #[error("{0}")]
-    Starlark(anyhow::Error),
-
-    #[error("{0}")]
     Clap(#[from] clap::Error),
 
-    #[error("{0} declares empty query")]
+    #[error("{0} adds trigger with empty query")]
     EmptyQuery(PrettyPath),
+
+    #[error("{0} adds empty trigger")]
+    EmptyTrigger(PrettyPath),
 
     #[error("{0}")]
     FromPathBuf(#[from] camino::FromPathBufError),
@@ -47,10 +47,19 @@ pub enum Error {
     #[error("{0}")]
     Language(#[from] tree_sitter::LanguageError),
 
+    #[error(
+        "cannot declare triggers with different languages: expected {expected} but found {found}"
+    )]
+    LanguageMismatch {
+        expected: SupportedLanguage,
+        found: SupportedLanguage,
+    },
+
     #[error("cannot find manifest, try running `vex init` in the project’s root")]
     ManifestNotFound,
 
     #[error("{0} declares no callbacks")]
+    // TODO(kcza): rename this to 'observer'
     NoCallbacks(PrettyPath),
 
     #[error("{0} has no file extension")]
@@ -59,17 +68,17 @@ pub enum Error {
     #[error("{0} declares no init function")]
     NoInit(PrettyPath),
 
-    #[error("{0} declares no target language")]
-    NoLanguage(PrettyPath),
-
-    #[error("{0} declares no match observer")]
-    NoMatch(PrettyPath),
-
-    #[error("{0} declares no query")]
+    #[error("{0} observes query_match but adds no triggers with queries")]
     NoQuery(PrettyPath),
+
+    #[error("{0} adds trigger with query but does not observe query_match")]
+    NoQueryMatch(PrettyPath),
 
     #[error("cannot find module '{0}'")]
     NoSuchModule(PrettyPath),
+
+    #[error("{0} adds no triggers")]
+    NoTriggers(PrettyPath),
 
     #[error("cannot find vexes directory at {0}")]
     NoVexesDir(Utf8PathBuf),
@@ -77,14 +86,23 @@ pub enum Error {
     #[error("{0}")]
     ParseInt(#[from] num::ParseIntError),
 
-    #[error("{0}")]
-    Pattern(#[from] glob::PatternError),
+    #[error("cannot compile {pattern}@{}: {}", cause.pos, cause.msg)]
+    Pattern {
+        pattern: String,
+        cause: glob::PatternError,
+    },
 
     #[error("{0}")]
     Query(#[from] tree_sitter::QueryError),
 
+    #[error("cannot add query without specifying a language")]
+    QueryWithoutLanguage,
+
     #[error("{0}")]
     SetLogger(#[from] log::SetLoggerError),
+
+    #[error("{0}")]
+    Starlark(anyhow::Error),
 
     #[error("{0}")]
     StripPrefix(#[from] path::StripPrefixError),
@@ -108,7 +126,7 @@ pub enum Error {
     #[error("unknown extension '{0}'")]
     UnknownExtension(String),
 
-    #[error("unknown language '{0}'")]
+    #[error("unsupported language '{0}'")]
     UnknownLanguage(String),
 
     #[error("cannot parse {path} as {language}")]
@@ -116,43 +134,6 @@ pub enum Error {
         path: PrettyPath,
         language: SupportedLanguage,
     },
-}
-
-impl Error {
-    pub fn is_recoverable(&self) -> bool {
-        match self {
-            Self::ActionUnavailable { .. }
-            | Self::AlreadyInited { .. }
-            | Self::Clap { .. }
-            | Self::EmptyQuery(..)
-            | Self::FromPathBuf { .. }
-            | Self::ImportCycle(..)
-            | Self::InvalidWarnCall(..)
-            | Self::Language(..)
-            | Self::ManifestNotFound
-            | Self::NoCallbacks(..)
-            | Self::NoInit(..)
-            | Self::NoLanguage(..)
-            | Self::NoMatch(..)
-            | Self::NoQuery(..)
-            | Self::NoSuchModule(..)
-            | Self::NoVexesDir(..)
-            | Self::ParseInt(..)
-            | Self::Pattern(..)
-            | Self::Query(..)
-            | Self::SetLogger(..)
-            | Self::Starlark { .. }
-            | Self::StripPrefix(..)
-            | Self::Toml(..)
-            | Self::Unfreezable(..)
-            | Self::UnknownEvent { .. }
-            | Self::UnknownLanguage(..) => false,
-            Self::IO { .. }
-            | Self::NoExtension(..)
-            | Self::UnknownExtension { .. }
-            | Self::Unparseable { .. } => true,
-        }
-    }
 }
 
 impl Error {

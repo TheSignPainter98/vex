@@ -6,9 +6,10 @@ use starlark::{
     environment::{Methods, MethodsBuilder, MethodsStatic},
     eval::Evaluator,
     starlark_module,
-    values::{none::NoneType, NoSerialize, ProvidesStaticType, StarlarkValue, Value},
+    values::{none::NoneType, NoSerialize, ProvidesStaticType, StarlarkValue, Value, ValueError},
 };
 use starlark_derive::starlark_value;
+use tree_sitter::Query;
 
 use crate::{
     error::Error,
@@ -20,6 +21,8 @@ use crate::{
         extra_data::{InvocationData, ObserverDataBuilder},
         Node,
     },
+    supported_language::SupportedLanguage,
+    trigger::{ContentTrigger, RawFilePattern, Trigger, TriggerId},
 };
 
 type StarlarkSourceAnnotation<'v> = (Node<'v>, &'v str);
@@ -33,26 +36,78 @@ impl AppObject {
     #[allow(clippy::type_complexity)]
     #[starlark_module]
     fn methods(builder: &mut MethodsBuilder) {
-        fn language<'v>(
+        fn add_trigger<'v>(
             #[starlark(this)] _this: Value<'v>,
-            #[starlark(require=pos)] lang: &'v str,
+            #[starlark(require=named)] id: Option<&'v str>,
+            #[starlark(require=named)] language: Option<&'v str>,
+            #[starlark(require=named)] query: Option<&'v str>,
+            #[starlark(require=named)] path: Option<Value<'v>>,
             eval: &mut Evaluator<'v, '_>,
         ) -> anyhow::Result<NoneType> {
-            AppObject::check_attr_available(eval, "vex.language", &[Action::Initing])?;
+            AppObject::check_attr_available(eval, "vex.add_trigger", &[Action::Initing])?;
 
-            ObserverDataBuilder::get_from(eval.module()).set_language(lang.into());
+            let builder = ObserverDataBuilder::get_from(eval.module());
 
-            Ok(NoneType)
-        }
+            // TODO(kcza): test me!
+            if language.is_none() && query.is_none() && path.is_none() {
+                return Err(Error::EmptyTrigger(builder.vex_path.dupe()).into());
+            }
 
-        fn query<'v>(
-            #[starlark(this)] _this: Value<'v>,
-            #[starlark(require=pos)] query: &'v str,
-            eval: &mut Evaluator<'v, '_>,
-        ) -> anyhow::Result<NoneType> {
-            AppObject::check_attr_available(eval, "vex.query", &[Action::Initing])?;
+            let id = id.map(TriggerId::new);
+            let content_trigger = {
+                if language.is_none() && query.is_some() {
+                    return Err(Error::QueryWithoutLanguage.into());
+                }
 
-            ObserverDataBuilder::get_from(eval.module()).set_query(query.into());
+                if let Some(language) = language {
+                    let language = language.parse::<SupportedLanguage>()?;
+                    let query = query
+                        .map(|query| {
+                            if query.is_empty() {
+                                return Err(Error::EmptyQuery(builder.vex_path.dupe()));
+                            }
+                            Ok(Query::new(language.ts_language(), query)?)
+                        })
+                        .transpose()?;
+                    Some(ContentTrigger { language, query })
+                } else {
+                    None
+                }
+            };
+            let path_patterns = if let Some(path) = path {
+                if let Some(path_patterns) = path.request_value::<&[Value<'v>]>() {
+                    path_patterns
+                        .into_iter()
+                        .map(|path_pattern| {
+                            let Some(path_pattern) = path_pattern.unpack_str() else {
+                                return Err(anyhow::Error::from(
+                                    ValueError::IncorrectParameterTypeWithExpected(
+                                        path_pattern.get_type().into(),
+                                        "str".into(),
+                                    ),
+                                ));
+                            };
+                            Ok(RawFilePattern(path_pattern.into())
+                                .compile(&builder.project_root)?)
+                        })
+                        .collect::<anyhow::Result<_>>()?
+                } else if let Some(path_pattern) = path.unpack_str() {
+                    vec![RawFilePattern(path_pattern.into()).compile(&builder.project_root)?]
+                } else {
+                    return Err(ValueError::IncorrectParameterTypeWithExpected(
+                        path.get_type().into(),
+                        "str|[str]".into(),
+                    )
+                    .into());
+                }
+            } else {
+                vec![]
+            };
+            builder.add_trigger(Trigger {
+                id,
+                content_trigger,
+                path_patterns,
+            })?;
 
             Ok(NoneType)
         }
@@ -84,7 +139,8 @@ impl AppObject {
                 "vex.warn",
                 &[
                     Action::Vexing(EventType::OpenProject),
-                    Action::Vexing(EventType::Match),
+                    Action::Vexing(EventType::OpenFile),
+                    Action::Vexing(EventType::QueryMatch),
                     Action::Vexing(EventType::CloseFile),
                     Action::Vexing(EventType::CloseProject),
                 ],
@@ -110,6 +166,7 @@ impl AppObject {
                 renderer.set_extra_info(extra_info);
             }
             inv_data.add_irritation(renderer.render());
+            // panic!("{inv_data:?}");
 
             Ok(NoneType)
         }
@@ -158,50 +215,53 @@ mod test {
     fn argument_kinds() {
         let lines = indoc! {r#"
             def init():
-                vex.language('rust')
-                vex.query('(binary_expression) @bin_expr')
-                vex.observe('match', on_match)
+                vex.add_trigger(
+                    language='rust',
+                    query='(binary_expression) @bin_expr',
+                )
+                vex.observe('query_match', on_query_match)
 
-            def on_match(event):
+            def on_query_match(event):
                 vex.warn('okay')
         "#}
         .lines()
         .collect::<Vec<_>>();
         let line_replacements = [
-            ("language", 2, "vex.language(lang = 'rust')"),
-            ("query", 3, "vex.query(query='(binary_expression)')"),
-            ("observe-event", 4, "vex.query(on_match, event='match')"),
+            ("language", 2..=5, "vex.add_trigger('rust')"),
+            ("query-without-language", 2..=5, "vex.add_trigger(query='(binary_expression)')"),
+            ("observe-event", 6..=6, "vex.observe(on_query_match, event='query_match')"),
             (
                 "observe-observer",
-                4,
-                "vex.query('match', observer=on_match)",
+                6..=6,
+                "vex.observe('query_match', observer=on_query_match)",
             ),
-            ("warn-message", 7, "vex.warn(message='oh no')"),
+            ("warn-message", 9..=9, "vex.warn(message='oh no')"),
             (
                 "warn-at",
-                7,
+                9..=9,
                 "vex.warn('oh no', (event.captures['bin_expr'], 'bin_expr'))",
             ),
             (
                 "warn-show-also",
-                7,
+                9..=9,
                 "vex.warn('oh no', [(event.captures['bin_expr'], 'bin_expr')], at=(event.captures['bin_expr'], 'bin_expr'))"
             ),
             (
                 "warn-show-also",
-                7,
+                9..=9,
                 "vex.warn('oh no', 'extra_info', at=(event.captures['bin_expr'], 'bin_expr'))"
             ),
         ];
         let error_messages = line_replacements
             .into_iter()
-            .map(|(name, replace_line_num, replacement)| {
+            .map(|(name, replacement_range, replacement)| {
+                let (replacement_start_line, replacement_end_line) = replacement_range.into_inner();
                 VexTest::new(name)
                     .with_scriptlet(format!("vexes/{name}.star"), {
-                        lines[..replace_line_num - 1]
+                        lines[..replacement_start_line - 1]
                             .iter()
                             .chain(&[&textwrap::indent(replacement, "    ")[..]])
-                            .chain(&lines[replace_line_num..])
+                            .chain(&lines[replacement_end_line..])
                             .join_with("\n")
                             .to_string()
                     })
@@ -235,11 +295,13 @@ mod test {
                 format!("vexes/{VEX_NAME}.star"),
                 formatdoc! {r#"
                     def init():
-                        vex.language('rust')
-                        vex.query('(binary_expression left: (integer_literal) @l right: (integer_literal) @r) @bin_expr')
-                        vex.observe('match', on_match)
+                        vex.add_trigger(
+                            language='rust',
+                            query='(binary_expression left: (integer_literal) @l right: (integer_literal) @r) @bin_expr',
+                        )
+                        vex.observe('query_match', on_query_match)
 
-                    def on_match(event):
+                    def on_query_match(event):
                         bin_expr = event.captures['bin_expr']
                         l = event.captures['l']
                         r = event.captures['r']
@@ -272,8 +334,6 @@ mod test {
             .map(|irr| irr.to_string())
             .collect::<Vec<_>>();
         assert_eq!(irritations.len(), 5);
-
-        println!("{irritations:?}");
 
         let assert_contains = |irritation: &str, strings: &[&str]| {
             [VEX_NAME]
@@ -312,11 +372,13 @@ mod test {
                 format!("vexes/{VEX_NAME}.star"),
                 formatdoc! {r#"
                     def init():
-                        vex.language('rust')
-                        vex.query('(binary_expression left: (integer_literal) @l right: (integer_literal) @r) @bin_expr')
-                        vex.observe('match', on_match)
+                        vex.add_trigger(
+                            language='rust',
+                            query='(binary_expression left: (integer_literal) @l right: (integer_literal) @r) @bin_expr',
+                        )
+                        vex.observe('query_match', on_query_match)
 
-                    def on_match(event):
+                    def on_query_match(event):
                         l = event.captures['l']
                         r = event.captures['r']
 
@@ -349,11 +411,13 @@ mod test {
 
         let vex_source = formatdoc! {r#"
             def init():
-                vex.language('rust')
-                vex.query('(binary_expression left: (integer_literal) @l right: (integer_literal) @r) @bin_expr')
-                vex.observe('match', on_match)
+                vex.add_trigger(
+                    language='rust',
+                    query='(binary_expression left: (integer_literal) @l right: (integer_literal) @r) @bin_expr',
+                )
+                vex.observe('query_match', on_query_match)
 
-            def on_match(event):
+            def on_query_match(event):
                 bin_expr = event.captures['bin_expr']
                 l = event.captures['l']
                 r = event.captures['r']

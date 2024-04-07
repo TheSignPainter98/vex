@@ -11,11 +11,10 @@ use starlark::{
     eval::Evaluator,
     values::{
         AllocFrozenValue, AllocValue, Demand, Freeze, Freezer, FrozenHeap, FrozenValue, Heap,
-        OwnedFrozenValue, ProvidesStaticType, StarlarkValue, Trace, Tracer, Value, ValueLike,
+        OwnedFrozenValue, ProvidesStaticType, StarlarkValue, Trace, Value, ValueLike,
     },
 };
 use starlark_derive::{starlark_value, NoSerialize};
-use tree_sitter::Query;
 
 use crate::{
     error::Error,
@@ -32,12 +31,14 @@ use crate::{
     },
     source_path::PrettyPath,
     supported_language::SupportedLanguage,
+    trigger::Trigger,
 };
 
 #[derive(Debug, ProvidesStaticType, NoSerialize, Allocative)]
 pub struct InvocationData {
     action: Action,
     path: PrettyPath,
+
     #[allocative(skip)]
     pub irritations: Mutex<Vec<Irritation>>,
 }
@@ -81,7 +82,7 @@ impl InvocationData {
 }
 
 starlark::starlark_simple_value!(InvocationData);
-#[starlark_value(type = "EvaluatorData")]
+#[starlark_value(type = "InvocationData")]
 impl<'v> StarlarkValue<'v> for InvocationData {}
 
 impl Display for InvocationData {
@@ -92,11 +93,9 @@ impl Display for InvocationData {
 
 #[derive(Debug, Trace, ProvidesStaticType, NoSerialize, Allocative)]
 pub struct ObserverDataBuilder<'v> {
-    pub path: PrettyPath,
-    #[allocative(skip)]
-    pub lang: RefCell<Option<RawSupportedLanguage<'v>>>,
-    #[allocative(skip)]
-    pub query: RefCell<Option<RawQuery<'v>>>,
+    pub project_root: PrettyPath,
+    pub vex_path: PrettyPath,
+    pub triggers: RefCell<Vec<Arc<Trigger>>>,
     pub on_open_project: RefCell<Vec<Value<'v>>>,
     pub on_open_file: RefCell<Vec<Value<'v>>>,
     pub on_match: RefCell<Vec<Value<'v>>>,
@@ -105,11 +104,11 @@ pub struct ObserverDataBuilder<'v> {
 }
 
 impl<'v> ObserverDataBuilder<'v> {
-    pub fn new(path: PrettyPath) -> Self {
+    pub fn new(project_root: PrettyPath, vex_path: PrettyPath) -> Self {
         Self {
-            path,
-            lang: RefCell::new(None),
-            query: RefCell::new(None),
+            project_root,
+            vex_path,
+            triggers: RefCell::new(Vec::with_capacity(1)),
             on_open_project: RefCell::new(vec![]),
             on_open_file: RefCell::new(vec![]),
             on_match: RefCell::new(vec![]),
@@ -131,19 +130,40 @@ impl<'v> ObserverDataBuilder<'v> {
             .expect("Module extra has wrong type")
     }
 
-    pub fn set_language(&self, language: RawSupportedLanguage<'v>) {
-        *self.lang.borrow_mut() = Some(language);
+    pub fn add_trigger(&self, trigger: Trigger) -> Result<()> {
+        if let Some(language) = trigger.content_trigger.as_ref().map(|ct| ct.language) {
+            self.validate_trigger_language(language)?;
+        };
+
+        self.triggers.borrow_mut().push(Arc::new(trigger));
+        Ok(())
     }
 
-    pub fn set_query(&self, query: RawQuery<'v>) {
-        *self.query.borrow_mut() = Some(query);
+    fn validate_trigger_language(&self, language: SupportedLanguage) -> Result<()> {
+        let Some(prev_language) = self
+            .triggers
+            .borrow()
+            .iter()
+            .rev()
+            .find_map(|t| t.content_trigger.as_ref().map(|ct| ct.language))
+        else {
+            return Ok(());
+        };
+        if language != prev_language {
+            Err(Error::LanguageMismatch {
+                expected: prev_language,
+                found: language,
+            })
+        } else {
+            Ok(())
+        }
     }
 
     pub fn add_observer(&self, event: EventType, handler: Value<'v>) {
         match event {
             EventType::OpenProject => self.on_open_project.borrow_mut().push(handler),
             EventType::OpenFile => self.on_open_file.borrow_mut().push(handler),
-            EventType::Match => self.on_match.borrow_mut().push(handler),
+            EventType::QueryMatch => self.on_match.borrow_mut().push(handler),
             EventType::CloseFile => self.on_close_file.borrow_mut().push(handler),
             EventType::CloseProject => self.on_close_project.borrow_mut().push(handler),
         }
@@ -162,17 +182,16 @@ impl<'v> Freeze for ObserverDataBuilder<'v> {
 
     fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         let ObserverDataBuilder {
-            path,
-            lang,
-            query,
+            project_root: _project_root,
+            vex_path,
+            triggers,
             on_open_project,
             on_open_file,
             on_match,
             on_close_file,
             on_close_project,
         } = self;
-        let lang = lang.into_inner().map(|e| e.to_string());
-        let query = query.into_inner().map(|e| e.to_string());
+        let triggers = triggers.into_inner();
         let on_open_project = on_open_project
             .into_inner()
             .into_iter()
@@ -199,9 +218,8 @@ impl<'v> Freeze for ObserverDataBuilder<'v> {
             .map(|v| v.freeze(freezer))
             .collect::<anyhow::Result<_>>()?;
         Ok(FrozenObserverDataBuilder {
-            path,
-            lang,
-            query,
+            vex_path,
+            triggers,
             on_open_project,
             on_open_file,
             on_match,
@@ -224,34 +242,10 @@ impl<'v> Display for ObserverDataBuilder<'v> {
     }
 }
 
-pub type RawSupportedLanguage<'v> = RawStr<'v>;
-pub type RawQuery<'v> = RawStr<'v>;
-
-/// Wrapper type to allow implementation of certain traits on &str.
-#[derive(Debug)]
-pub struct RawStr<'v>(&'v str);
-
-unsafe impl<'v> Trace<'v> for RawStr<'v> {
-    fn trace(&mut self, _tracer: &Tracer<'v>) {}
-}
-
-impl<'v> From<&'v str> for RawStr<'v> {
-    fn from(value: &'v str) -> Self {
-        Self(value)
-    }
-}
-
-impl<'v> Display for RawStr<'v> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
 #[derive(Debug, ProvidesStaticType, NoSerialize, Allocative)]
 pub struct FrozenObserverDataBuilder {
-    pub path: PrettyPath,
-    pub lang: Option<String>,
-    pub query: Option<String>,
+    pub vex_path: PrettyPath,
+    pub triggers: Vec<Arc<Trigger>>,
     pub on_open_project: Vec<FrozenValue>,
     pub on_open_file: Vec<FrozenValue>,
     pub on_match: Vec<FrozenValue>,
@@ -271,9 +265,8 @@ impl FrozenObserverDataBuilder {
 
     pub fn build(&self) -> Result<ScriptletObserverData> {
         let Self {
-            path,
-            lang,
-            query,
+            vex_path,
+            triggers,
             on_open_project,
             on_open_file,
             on_match,
@@ -281,22 +274,21 @@ impl FrozenObserverDataBuilder {
             on_close_project,
         } = self;
 
-        let path = path.dupe();
-        let lang = {
-            let Some(lang) = lang else {
-                return Err(Error::NoLanguage(path));
-            };
-            lang.parse::<SupportedLanguage>()?
-        };
-        let query = {
-            let Some(query) = query else {
-                return Err(Error::NoQuery(path));
-            };
-            if query.is_empty() {
-                return Err(Error::EmptyQuery(path));
-            }
-            Arc::new(Query::new(lang.ts_language(), query)?)
-        };
+        let vex_path = vex_path.dupe();
+        if triggers.is_empty() {
+            return Err(Error::NoTriggers(vex_path));
+        }
+        let has_queries = triggers.iter().any(|t| {
+            t.content_trigger
+                .as_ref()
+                .is_some_and(|ct| ct.query.is_some())
+        });
+        if on_match.is_empty() && has_queries {
+            return Err(Error::NoQueryMatch(vex_path));
+        } else if !on_match.is_empty() && !has_queries {
+            return Err(Error::NoQuery(vex_path));
+        }
+        let triggers = triggers.to_vec();
 
         if on_open_project.is_empty()
             && on_open_file.is_empty()
@@ -304,55 +296,42 @@ impl FrozenObserverDataBuilder {
             && on_close_file.is_empty()
             && on_close_project.is_empty()
         {
-            return Err(Error::NoCallbacks(path));
+            return Err(Error::NoCallbacks(vex_path));
         }
-        if on_match.is_empty() {
-            return Err(Error::NoMatch(path));
-        }
-        let on_open_project = Arc::new(
-            on_open_project
-                .iter()
-                .map(Dupe::dupe)
-                .map(OwnedFrozenValue::alloc)
-                .map(OpenProjectObserver::new)
-                .collect(),
-        );
-        let on_open_file = Arc::new(
-            on_open_file
-                .iter()
-                .map(Dupe::dupe)
-                .map(OwnedFrozenValue::alloc)
-                .map(OpenFileObserver::new)
-                .collect(),
-        );
-        let on_match = Arc::new(
-            on_match
-                .iter()
-                .map(Dupe::dupe)
-                .map(OwnedFrozenValue::alloc)
-                .map(MatchObserver::new)
-                .collect(),
-        );
-        let on_close_file = Arc::new(
-            on_close_file
-                .iter()
-                .map(Dupe::dupe)
-                .map(OwnedFrozenValue::alloc)
-                .map(CloseFileObserver::new)
-                .collect(),
-        );
-        let on_close_project = Arc::new(
-            on_close_project
-                .iter()
-                .map(Dupe::dupe)
-                .map(OwnedFrozenValue::alloc)
-                .map(CloseProjectObserver::new)
-                .collect(),
-        );
+        let on_open_project = on_open_project
+            .iter()
+            .map(Dupe::dupe)
+            .map(OwnedFrozenValue::alloc)
+            .map(OpenProjectObserver::new)
+            .collect();
+        let on_open_file = on_open_file
+            .iter()
+            .map(Dupe::dupe)
+            .map(OwnedFrozenValue::alloc)
+            .map(OpenFileObserver::new)
+            .collect();
+        let on_match = on_match
+            .iter()
+            .map(Dupe::dupe)
+            .map(OwnedFrozenValue::alloc)
+            .map(MatchObserver::new)
+            .collect();
+        let on_close_file = on_close_file
+            .iter()
+            .map(Dupe::dupe)
+            .map(OwnedFrozenValue::alloc)
+            .map(CloseFileObserver::new)
+            .collect();
+        let on_close_project = on_close_project
+            .iter()
+            .map(Dupe::dupe)
+            .map(OwnedFrozenValue::alloc)
+            .map(CloseProjectObserver::new)
+            .collect();
+
         Ok(ScriptletObserverData {
-            path,
-            lang,
-            query,
+            vex_path,
+            triggers,
             on_open_project,
             on_open_file,
             on_match,

@@ -118,7 +118,7 @@ pub struct InitingScriptlet {
 }
 
 impl InitingScriptlet {
-    pub fn init(self) -> Result<VexingScriptlet> {
+    pub fn init(self, project_root: &PrettyPath) -> Result<VexingScriptlet> {
         let Self {
             path,
             toplevel,
@@ -143,7 +143,8 @@ impl InitingScriptlet {
 
         let inited_module = {
             let module = Module::new();
-            ObserverDataBuilder::new(path.pretty_path.dupe()).insert_into(&module);
+            ObserverDataBuilder::new(project_root.dupe(), path.pretty_path.dupe())
+                .insert_into(&module);
             {
                 let extra = InvocationData::new(Action::Initing, path.pretty_path.dupe());
                 let mut eval = Evaluator::new(&module);
@@ -226,7 +227,7 @@ mod test {
 
     #[test]
     fn missing_declarations() {
-        VexTest::new("no-language")
+        VexTest::new("no-triggers")
             .with_scriptlet(
                 "vexes/test.star",
                 indoc! {r#"
@@ -234,76 +235,40 @@ mod test {
                         pass
                 "#},
             )
-            .returns_error(r"test\.star declares no target language");
-        VexTest::new("no-query")
-            .with_scriptlet(
-                "vexes/test.star",
-                indoc! {r#"
-                    def init():
-                        vex.language('rust')
-                "#},
-            )
-            .returns_error(r"test\.star declares no query");
+            .returns_error(r"test\.star adds no triggers");
         VexTest::new("no-callbacks")
             .with_scriptlet(
                 "vexes/test.star",
                 indoc! {r#"
                     def init():
-                        vex.language('rust')
-                        vex.query('(binary_expression)')
+                        vex.add_trigger(language='rust')
                 "#},
             )
             .returns_error(r"test\.star declares no callbacks");
-    }
-
-    #[test]
-    fn unknown_language() {
-        VexTest::new("unknown-language")
+        VexTest::new("no-queries")
             .with_scriptlet(
                 "vexes/test.star",
                 indoc! {r#"
                     def init():
-                        vex.language('brainfuck')
-                        vex.query('(binary_expression)')
-                        vex.observe('match', on_match)
-
-                    def on_match(event):
-                        pass
+                        vex.add_trigger(language='rust')
+                        vex.observe('query_match', lambda x: x)
                 "#},
             )
-            .returns_error("unknown language 'brainfuck'")
-    }
-
-    #[test]
-    fn malformed_query() {
-        VexTest::new("empty")
+            .returns_error(r#"test\.star observes query_match but adds no triggers with queries"#);
+        VexTest::new("no-query-match-listener")
             .with_scriptlet(
                 "vexes/test.star",
                 indoc! {r#"
                     def init():
-                        vex.language('rust')
-                        vex.query('')
-                        vex.observe('match', on_match)
-
-                    def on_match(event):
-                        pass
+                        vex.add_trigger(
+                            language='rust',
+                            query='(binary_expression)',
+                        )
                 "#},
             )
-            .returns_error(r"test\.star declares empty query");
-        VexTest::new("syntax-error")
-            .with_scriptlet(
-                "vexes/test.star",
-                indoc! {r#"
-                    def init():
-                        vex.language('rust')
-                        vex.query('(binary_expression') # Missing closing bracket
-                        vex.observe('match', on_match)
-
-                    def on_match(event):
-                        pass
-                "#},
-            )
-            .returns_error("Invalid syntax");
+            .returns_error(
+                r#"test\.star adds trigger with query but does not observe query_match"#,
+            );
     }
 
     #[test]
@@ -313,8 +278,10 @@ mod test {
                 "vexes/test.star",
                 indoc! {r#"
                     def init():
-                        vex.language('rust')
-                        vex.query('(binary_expression)')
+                        vex.add_trigger(
+                            language='rust',
+                            query='(binary_expression)',
+                        )
                         vex.observe('smissmass', on_smissmass)
 
                     def on_smissmass(event):
@@ -326,62 +293,102 @@ mod test {
 
     #[test]
     fn app_object_attr_availability() {
-        let assert_unavailable_preiniting = |name, call| {
-            VexTest::new(format!("preiniting-{name}"))
+        enum Availability {
+            Available,
+            Unavailable,
+        }
+        use Availability::*;
+
+        let test_preiniting_availability = |name, availability, call| {
+            let result = VexTest::new(format!("preiniting-{name}"))
                 .with_scriptlet(
                     "vexes/test.star",
                     formatdoc! {r#"
                         {call}
 
                         def init():
-                            vex.language('rust')
-                            vex.query('(binary_expression)')
-                            vex.observe('match', print)
+                            vex.add_trigger(
+                                language='rust',
+                                query='(binary_expression)',
+                            )
+                            vex.observe('query_match', lambda x: x)
                     "#},
                 )
-                .returns_error(format!("{name} unavailable while preiniting"));
+                .try_run();
+            match availability {
+                Available => {
+                    result.unwrap();
+                }
+                Unavailable => assert!(result
+                    .unwrap_err()
+                    .to_string()
+                    .contains(&format!("{name} unavailable while preiniting"))),
+            }
         };
-        assert_unavailable_preiniting("vex.language", "vex.language('rust')");
-        assert_unavailable_preiniting("vex.query", "vex.query('(binary_expression)')");
-        assert_unavailable_preiniting("vex.observe", "vex.observe('match', print)");
-        assert_unavailable_preiniting("vex.warn", "vex.warn('oh no!')");
+        test_preiniting_availability(
+            "vex.add_trigger",
+            Unavailable,
+            "vex.add_trigger(language='rust')",
+        );
+        test_preiniting_availability(
+            "vex.observe",
+            Unavailable,
+            "vex.observe('query_match', print)",
+        );
+        test_preiniting_availability("vex.warn", Unavailable, "vex.warn('oh no!')");
 
-        let assert_unavailable_initing = |name, call| {
+        let assert_available_initing = |name, call| {
             VexTest::new(format!("initing-{name}"))
                 .with_scriptlet(
                     "vexes/test.star",
                     formatdoc! {r#"
                         def init():
                             {call}
-                            vex.language('rust')
-                            vex.query('(binary_expression)')
-                            vex.observe('match', print)
+                            vex.add_trigger(path="*.rs")
+                            vex.observe('', lambda x: x)
                     "#},
                 )
                 .returns_error(format!("{name} unavailable while initing"));
         };
-        assert_unavailable_initing("vex.warn", "vex.warn('oh no!')");
+        assert_available_initing("vex.warn", "vex.warn('oh no!')");
 
-        let assert_unavailable_vexing = |name, call| {
-            VexTest::new(format!("vexing-{name}"))
+        let test_vexing_availability = |name, availability, call| {
+            let result = VexTest::new(format!("vexing-{name}"))
                 .with_scriptlet(
                     "vexes/test.star",
                     formatdoc! {r#"
                         def init():
-                            vex.language('rust')
-                            vex.query('(binary_expression)')
-                            vex.observe('match', print)
+                            vex.add_trigger(
+                                language='rust',
+                                query='(binary_expression)',
+                            )
+                            vex.observe('query_match', lambda x: x)
                             vex.observe('open_project', on_open_project)
 
                         def on_open_project(event):
                             {call}
                     "#},
                 )
-                .returns_error(format!("{name} unavailable while vexing"));
+                .try_run();
+            match availability {
+                Available => drop(result.unwrap()),
+                Unavailable => assert!(result
+                    .unwrap_err()
+                    .to_string()
+                    .contains(&format!("{name} unavailable while vexing"))),
+            }
         };
-        assert_unavailable_vexing("vex.language", "vex.language('rust')");
-        assert_unavailable_vexing("vex.query", "vex.query('(binary_expression)')");
-        assert_unavailable_vexing("vex.observe", "vex.observe('match', print)");
+        test_vexing_availability(
+            "vex.add_trigger",
+            Unavailable,
+            "vex.add_trigger(language='rust')",
+        );
+        test_vexing_availability(
+            "vex.observe",
+            Unavailable,
+            "vex.observe('query_match', print)",
+        );
+        test_vexing_availability("vex.warn", Available, "vex.warn('oh no!')");
     }
 
     #[test]
@@ -397,18 +404,20 @@ mod test {
             .with_scriptlet(
                 "vexes/test.star",
                 indoc! {r#"
-                    load('lib/helper.star', imported_on_match='on_match')
+                    load('lib/helper.star', imported_on_query_match='on_query_match')
 
                     def init():
-                        vex.language('rust')
-                        vex.query('(binary_expression)')
-                        vex.observe('match', imported_on_match)
+                        vex.add_trigger(
+                            language='rust',
+                            query='(binary_expression)',
+                        )
+                        vex.observe('query_match', imported_on_query_match)
                 "#},
             )
             .with_scriptlet(
                 "vexes/lib/helper.star",
                 indoc! {r#"
-                    def on_match(event):
+                    def on_query_match(event):
                         pass
                 "#},
             )

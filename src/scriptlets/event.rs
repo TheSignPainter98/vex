@@ -13,10 +13,11 @@ use starlark::{
 use starlark_derive::{starlark_value, StarlarkAttrs};
 use strum::{EnumIter, IntoEnumIterator};
 
-use crate::{error::Error, scriptlets::QueryCaptures, source_path::PrettyPath};
+use crate::{error::Error, scriptlets::QueryCaptures, source_path::PrettyPath, trigger::TriggerId};
 
 const PATH_ATTR_NAME: &str = "path";
 const NAME_ATTR_NAME: &str = "name";
+const TRIGGER_ID_NAME: &str = "trigger_id";
 
 pub trait Event {
     const TYPE: EventType;
@@ -26,7 +27,7 @@ pub trait Event {
 pub enum EventType {
     OpenProject,
     OpenFile,
-    Match,
+    QueryMatch,
     CloseFile,
     CloseProject,
 }
@@ -36,7 +37,7 @@ impl EventType {
         match self {
             EventType::OpenProject => "open_project",
             EventType::OpenFile => "open_file",
-            EventType::Match => "match",
+            EventType::QueryMatch => "query_match",
             EventType::CloseFile => "close_file",
             EventType::CloseProject => "close_project",
         }
@@ -50,7 +51,7 @@ impl FromStr for EventType {
         match s {
             "open_project" => Ok(EventType::OpenProject),
             "open_file" => Ok(EventType::OpenFile),
-            "match" => Ok(EventType::Match),
+            "query_match" => Ok(EventType::QueryMatch),
             "close_file" => Ok(EventType::CloseFile),
             "close_project" => Ok(EventType::CloseProject),
             _ => Err(Error::UnknownEvent {
@@ -121,6 +122,8 @@ impl Display for OpenProjectEvent {
 pub struct OpenFileEvent {
     #[allocative(skip)]
     path: PrettyPath,
+
+    trigger_id: Option<TriggerId>,
 }
 starlark_simple_value!(OpenFileEvent);
 
@@ -131,7 +134,7 @@ impl Event for OpenFileEvent {
 #[starlark_value(type = "OpenFileEvent")]
 impl<'v> StarlarkValue<'v> for OpenFileEvent {
     fn dir_attr(&self) -> Vec<String> {
-        [NAME_ATTR_NAME, PATH_ATTR_NAME]
+        [NAME_ATTR_NAME, PATH_ATTR_NAME, TRIGGER_ID_NAME]
             .into_iter()
             .map(Into::into)
             .collect()
@@ -141,12 +144,15 @@ impl<'v> StarlarkValue<'v> for OpenFileEvent {
         match attr {
             NAME_ATTR_NAME => Some(heap.alloc(heap.alloc_str(<Self as Event>::TYPE.name()))),
             PATH_ATTR_NAME => Some(heap.alloc(self.path.dupe())),
+            TRIGGER_ID_NAME => {
+                Some(heap.alloc(self.trigger_id.as_ref().map(|id| id.as_str().to_owned())))
+            }
             _ => None,
         }
     }
 
     fn has_attr(&self, attr: &str, _: &'v Heap) -> bool {
-        [NAME_ATTR_NAME, PATH_ATTR_NAME].contains(&attr)
+        [NAME_ATTR_NAME, PATH_ATTR_NAME, TRIGGER_ID_NAME].contains(&attr)
     }
 }
 
@@ -157,29 +163,32 @@ impl Display for OpenFileEvent {
 }
 
 #[derive(new, Clone, Debug, ProvidesStaticType, NoSerialize, Allocative, Trace)]
-pub struct MatchEvent<'v> {
+pub struct QueryMatchEvent<'v> {
     #[allocative(skip)]
     path: PrettyPath,
 
     #[allocative(skip)]
     query_captures: QueryCaptures<'v>,
+
+    trigger_id: Option<TriggerId>,
 }
 
-impl MatchEvent<'_> {
+impl QueryMatchEvent<'_> {
     const QUERY_CAPTURES_ATTR_NAME: &'static str = "captures";
 }
 
-impl Event for MatchEvent<'_> {
-    const TYPE: EventType = EventType::Match;
+impl Event for QueryMatchEvent<'_> {
+    const TYPE: EventType = EventType::QueryMatch;
 }
 
-#[starlark_value(type = "MatchEvent")]
-impl<'v> StarlarkValue<'v> for MatchEvent<'v> {
+#[starlark_value(type = "QueryMatchEvent")]
+impl<'v> StarlarkValue<'v> for QueryMatchEvent<'v> {
     fn dir_attr(&self) -> Vec<String> {
         [
             NAME_ATTR_NAME,
             PATH_ATTR_NAME,
             Self::QUERY_CAPTURES_ATTR_NAME,
+            TRIGGER_ID_NAME,
         ]
         .into_iter()
         .map(Into::into)
@@ -191,6 +200,9 @@ impl<'v> StarlarkValue<'v> for MatchEvent<'v> {
             NAME_ATTR_NAME => Some(heap.alloc(heap.alloc_str(<Self as Event>::TYPE.name()))),
             PATH_ATTR_NAME => Some(heap.alloc(self.path.dupe())),
             Self::QUERY_CAPTURES_ATTR_NAME => Some(heap.alloc(self.query_captures.dupe())),
+            TRIGGER_ID_NAME => {
+                Some(heap.alloc(self.trigger_id.as_ref().map(|id| id.as_str().to_owned())))
+            }
             _ => None,
         }
     }
@@ -200,18 +212,19 @@ impl<'v> StarlarkValue<'v> for MatchEvent<'v> {
             NAME_ATTR_NAME,
             PATH_ATTR_NAME,
             Self::QUERY_CAPTURES_ATTR_NAME,
+            TRIGGER_ID_NAME,
         ]
         .contains(&attr)
     }
 }
 
-impl<'v> AllocValue<'v> for MatchEvent<'v> {
+impl<'v> AllocValue<'v> for QueryMatchEvent<'v> {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
         heap.alloc_complex(self)
     }
 }
 
-impl<'v> Freeze for MatchEvent<'v> {
+impl<'v> Freeze for QueryMatchEvent<'v> {
     type Frozen = NoneType;
 
     fn freeze(self, _freezer: &starlark::values::Freezer) -> anyhow::Result<Self::Frozen> {
@@ -219,7 +232,7 @@ impl<'v> Freeze for MatchEvent<'v> {
     }
 }
 
-impl Display for MatchEvent<'_> {
+impl Display for QueryMatchEvent<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         <Self as StarlarkValue>::TYPE.fmt(f)
     }
@@ -229,6 +242,8 @@ impl Display for MatchEvent<'_> {
 pub struct CloseFileEvent {
     #[allocative(skip)]
     path: PrettyPath,
+
+    trigger_id: Option<TriggerId>,
 }
 starlark_simple_value!(CloseFileEvent);
 
@@ -239,7 +254,7 @@ impl Event for CloseFileEvent {
 #[starlark_value(type = "CloseFileEvent")]
 impl<'v> StarlarkValue<'v> for CloseFileEvent {
     fn dir_attr(&self) -> Vec<String> {
-        [NAME_ATTR_NAME, PATH_ATTR_NAME]
+        [NAME_ATTR_NAME, PATH_ATTR_NAME, TRIGGER_ID_NAME]
             .into_iter()
             .map(Into::into)
             .collect()
@@ -249,12 +264,15 @@ impl<'v> StarlarkValue<'v> for CloseFileEvent {
         match attr {
             NAME_ATTR_NAME => Some(heap.alloc(heap.alloc_str(<Self as Event>::TYPE.name()))),
             PATH_ATTR_NAME => Some(heap.alloc(self.path.dupe())),
+            TRIGGER_ID_NAME => {
+                Some(heap.alloc(self.trigger_id.as_ref().map(|id| id.as_str().to_owned())))
+            }
             _ => None,
         }
     }
 
     fn has_attr(&self, attr: &str, _: &'v Heap) -> bool {
-        [NAME_ATTR_NAME, PATH_ATTR_NAME].contains(&attr)
+        [NAME_ATTR_NAME, PATH_ATTR_NAME, TRIGGER_ID_NAME].contains(&attr)
     }
 }
 
@@ -332,10 +350,12 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            vex.language('rust')
-                            vex.query('(binary_expression) @bin_expr')
-                            if '{event_name}' != 'match':
-                                vex.observe('match', lambda x: x) # Make the error checker happy.
+                            vex.add_trigger(
+                                language='rust',
+                                query='(binary_expression) @bin_expr',
+                            )
+                            if '{event_name}' != 'query_match':
+                                vex.observe('query_match', lambda x: x) # Make the error checker happy.
                             vex.observe('{event_name}', on_{event_name})
 
                         def on_{event_name}(event):
@@ -361,10 +381,12 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            vex.language('rust')
-                            vex.query('(binary_expression) @bin_expr')
-                            if '{event_name}' != 'match':
-                                vex.observe('match', lambda x: x) # Make the error checker happy.
+                            vex.add_trigger(
+                                language='rust',
+                                query='(binary_expression) @bin_expr',
+                            )
+                            if '{event_name}' != 'query_match':
+                                vex.observe('query_match', lambda x: x) # Make the error checker happy.
                             vex.observe('{event_name}', on_{event_name})
 
                         def on_{event_name}(event):
@@ -381,10 +403,12 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            vex.language('rust')
-                            vex.query('(binary_expression) @bin_expr')
-                            if '{event_name}' != 'match':
-                                vex.observe('match', lambda x: x) # Make the error checker happy.
+                            vex.add_trigger(
+                                language='rust',
+                                query='(binary_expression) @bin_expr',
+                            )
+                            if '{event_name}' != 'query_match':
+                                vex.observe('query_match', lambda x: x) # Make the error checker happy.
                             vex.observe('{event_name}', on_{event_name})
 
                         def on_{event_name}(event):
@@ -419,12 +443,20 @@ mod test {
 
     #[test]
     fn on_open_file_event() {
-        test_event_common_properties("open_file", "OpenFileEvent", &["name", "path"]);
+        test_event_common_properties(
+            "open_file",
+            "OpenFileEvent",
+            &["name", "path", "trigger_id"],
+        );
     }
 
     #[test]
     fn on_match_event() {
-        test_event_common_properties("match", "MatchEvent", &["name", "captures", "path"]);
+        test_event_common_properties(
+            "query_match",
+            "QueryMatchEvent",
+            &["name", "captures", "path", "trigger_id"],
+        );
 
         VexTest::new("captures")
             .with_scriptlet(
@@ -433,11 +465,13 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            vex.language('rust')
-                            vex.query('(binary_expression left: (integer_literal) @l_int) @bin_expr')
-                            vex.observe('match', on_match)
+                            vex.add_trigger(
+                                language='rust',
+                                query='(binary_expression left: (integer_literal) @l_int) @bin_expr',
+                            )
+                            vex.observe('query_match', on_query_match)
 
-                        def on_match(event):
+                        def on_query_match(event):
                             captures = event.captures
 
                             expected_fields = ['l_int', 'bin_expr']
@@ -463,7 +497,11 @@ mod test {
 
     #[test]
     fn on_close_file_event() {
-        test_event_common_properties("close_file", "CloseFileEvent", &["name", "path"]);
+        test_event_common_properties(
+            "close_file",
+            "CloseFileEvent",
+            &["name", "path", "trigger_id"],
+        );
     }
 
     #[test]

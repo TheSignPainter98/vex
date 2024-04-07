@@ -2,10 +2,8 @@ use std::{collections::BTreeMap, fs, io::ErrorKind, iter};
 
 use camino::Utf8PathBuf;
 use dupe::Dupe;
-use enum_map::EnumMap;
 use log::{info, log_enabled};
 use starlark::{environment::FrozenModule, eval::FileLoader};
-use strum::IntoEnumIterator;
 
 use crate::{
     context::Context,
@@ -15,15 +13,17 @@ use crate::{
         scriptlet::{InitingScriptlet, PreinitingScriptlet, VexingScriptlet},
         ScriptletObserverData,
     },
+    source_file::SourceFile,
     source_path::{PrettyPath, SourcePath},
-    supported_language::SupportedLanguage,
+    trigger::{TriggerCause, TriggerId},
 };
 
 type StoreIndex = usize;
 
 #[derive(Debug)]
 pub struct PreinitingStore {
-    dir: Utf8PathBuf,
+    project_root: PrettyPath,
+    vex_dir: Utf8PathBuf,
     path_indices: BTreeMap<PrettyPath, StoreIndex>,
     store: Vec<PreinitingScriptlet>,
 }
@@ -31,7 +31,8 @@ pub struct PreinitingStore {
 impl PreinitingStore {
     pub fn new(ctx: &Context) -> Result<Self> {
         let mut ret = Self {
-            dir: ctx.vex_dir(),
+            project_root: ctx.project_root.dupe(),
+            vex_dir: ctx.vex_dir(),
             path_indices: BTreeMap::new(),
             store: Vec::new(),
         };
@@ -84,7 +85,7 @@ impl PreinitingStore {
                 }
                 continue;
             }
-            let scriptlet_path = SourcePath::new(&entry_path, &self.dir);
+            let scriptlet_path = SourcePath::new(&entry_path, &self.vex_dir);
             self.load_file(scriptlet_path, toplevel)?;
         }
 
@@ -109,7 +110,11 @@ impl PreinitingStore {
         self.sort();
         self.linearise_store()?;
 
-        let Self { store, .. } = self;
+        let Self {
+            store,
+            project_root,
+            ..
+        } = self;
 
         let mut initing_store = Vec::with_capacity(store.len());
         let mut cache = PreinitedModuleCache::new();
@@ -120,6 +125,7 @@ impl PreinitingStore {
         }
 
         Ok(InitingStore {
+            project_root,
             store: initing_store,
         })
     }
@@ -321,15 +327,19 @@ impl FileLoader for &PreinitedModuleCache {
 
 #[derive(Debug)]
 pub struct InitingStore {
+    project_root: PrettyPath,
     store: Vec<InitingScriptlet>,
 }
 
 impl InitingStore {
     pub fn init(self) -> Result<VexingStore> {
-        let Self { store } = self;
+        let Self {
+            project_root,
+            store,
+        } = self;
         let store = store
             .into_iter()
-            .map(InitingScriptlet::init)
+            .map(|scriptlet| scriptlet.init(&project_root))
             .collect::<Result<_>>()?;
         Ok(VexingStore { store })
     }
@@ -346,13 +356,22 @@ pub struct VexingStore {
 }
 
 impl VexingStore {
-    pub fn language_observers(&self) -> EnumMap<SupportedLanguage, Vec<ScriptletObserverData>> {
-        let mut result: EnumMap<_, Vec<ScriptletObserverData>> =
-            EnumMap::from_iter(SupportedLanguage::iter().map(|s| (s, vec![])));
+    pub fn observers(&self) -> impl Iterator<Item = &ScriptletObserverData> {
+        self.store.iter().filter_map(VexingScriptlet::observer_data)
+    }
+
+    pub fn observers_for<'v>(
+        &'v self,
+        src_file: &'v SourceFile,
+    ) -> impl Iterator<Item = (Option<TriggerId>, &ScriptletObserverData)> {
         self.store
             .iter()
-            .flat_map(VexingScriptlet::observer_data)
-            .for_each(|h| result[h.lang].push(h.dupe()));
-        result
+            .filter_map(VexingScriptlet::observer_data)
+            .filter_map(|obs| {
+                obs.triggers
+                    .iter()
+                    .find(|trigger| src_file.matches(trigger))
+                    .map(|trigger| (trigger.id.dupe(), obs))
+            })
     }
 }
