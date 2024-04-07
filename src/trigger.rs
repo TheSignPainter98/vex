@@ -369,6 +369,64 @@ mod test {
     }
 
     #[test]
+    fn many_paths() {
+        let run_data = VexTest::new("language-with-path")
+            .with_scriptlet(
+                "vexes/test.star",
+                indoc! {r#"
+                    def init():
+                        vex.add_trigger(
+                            language='rust',
+                            path=['mod_name_1/', 'mod_name_2/'],
+                        )
+                        vex.observe('open_file', on_query_match)
+
+                    def on_query_match(event):
+                        vex.warn(str(event.path))
+                "#},
+            )
+            .with_source_file(
+                "src/main.rs",
+                indoc! {r#"
+                    mod mod_name_1;
+                    mod mod_name_2;
+                    mod mod_name_3;
+
+                    fn main() {
+                        println!("{}", mod_name_1::func());
+                    }
+                "#},
+            )
+            .with_source_file(
+                "src/mod_name_1/mod.rs",
+                indoc! {r#"
+                    fn func() -> &'static str {
+                        "hello, world!"
+                    }
+                "#},
+            )
+            .with_source_file(
+                "src/mod_name_2/mod.rs",
+                indoc! {r#"
+                    fn func() -> &'static str {
+                        "hello, world!"
+                    }
+                "#},
+            )
+            .with_source_file(
+                "src/mod_name_3/mod.rs",
+                indoc! {r#"
+                    fn func() -> &'static str {
+                        "hello, world!"
+                    }
+                "#},
+            )
+            .try_run()
+            .unwrap();
+        assert_eq!(2, run_data.irritations.len());
+    }
+
+    #[test]
     fn path_interactions() {
         let run_data = VexTest::new("language-with-path")
             .with_scriptlet(

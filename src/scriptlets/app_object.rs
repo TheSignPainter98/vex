@@ -6,7 +6,10 @@ use starlark::{
     environment::{Methods, MethodsBuilder, MethodsStatic},
     eval::Evaluator,
     starlark_module,
-    values::{none::NoneType, NoSerialize, ProvidesStaticType, StarlarkValue, Value, ValueError},
+    values::{
+        list::UnpackList, none::NoneType, NoSerialize, ProvidesStaticType, StarlarkValue,
+        UnpackValue, Value, ValueError,
+    },
 };
 use starlark_derive::starlark_value;
 use tree_sitter::Query;
@@ -75,18 +78,11 @@ impl AppObject {
                 }
             };
             let path_patterns = if let Some(path) = path {
-                if let Some(path_patterns) = path.request_value::<&[Value<'v>]>() {
+                if let Some(path_patterns) = UnpackList::<&str>::unpack_value(path) {
                     path_patterns
-                        .iter()
+                        .items
+                        .into_iter()
                         .map(|path_pattern| {
-                            let Some(path_pattern) = path_pattern.unpack_str() else {
-                                return Err(anyhow::Error::from(
-                                    ValueError::IncorrectParameterTypeWithExpected(
-                                        path_pattern.get_type().into(),
-                                        "str".into(),
-                                    ),
-                                ));
-                            };
                             Ok(RawFilePattern(path_pattern.into())
                                 .compile(&builder.project_root)?)
                         })
@@ -95,8 +91,8 @@ impl AppObject {
                     vec![RawFilePattern(path_pattern.into()).compile(&builder.project_root)?]
                 } else {
                     return Err(ValueError::IncorrectParameterTypeWithExpected(
-                        path.get_type().into(),
                         "str|[str]".into(),
+                        path.get_type().into(),
                     )
                     .into());
                 }
