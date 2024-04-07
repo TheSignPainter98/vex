@@ -79,7 +79,7 @@ pub struct Manifest {
     pub ignores: IgnoreData,
 
     #[serde(default, rename = "allow")]
-    pub allows: Vec<RawFilePattern>,
+    pub allows: Vec<RawFilePattern<String>>,
 }
 
 impl Manifest {
@@ -181,10 +181,10 @@ impl Default for QueriesDir {
 }
 
 #[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
-pub struct IgnoreData(Vec<RawFilePattern>);
+pub struct IgnoreData(Vec<RawFilePattern<String>>);
 
 impl IgnoreData {
-    pub fn into_inner(self) -> Vec<RawFilePattern> {
+    pub fn into_inner(self) -> Vec<RawFilePattern<String>> {
         self.0
     }
 }
@@ -195,14 +195,14 @@ impl Default for IgnoreData {
             ["/vex.toml", "/vexes/", ".git/", ".gitignore", "/target/"]
                 .into_iter()
                 .map(Into::into)
-                .map(RawFilePattern)
+                .map(RawFilePattern::new)
                 .collect(),
         )
     }
 }
 
 impl Deref for IgnoreData {
-    type Target = [RawFilePattern];
+    type Target = [RawFilePattern<String>];
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -227,7 +227,7 @@ mod test {
             init_manifest
                 .ignores
                 .iter()
-                .map(RawFilePattern::as_str)
+                .map(RawFilePattern::to_string)
                 .collect::<Vec<_>>(),
             &["/vex.toml", "/vexes/", ".git/", ".gitignore", "/target/"]
         );

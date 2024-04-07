@@ -1,4 +1,4 @@
-use std::{ops::Deref, sync::Arc};
+use std::{fmt::Display, ops::Deref, sync::Arc};
 
 use allocative::Allocative;
 use camino::{Utf8Path, Utf8PathBuf};
@@ -77,9 +77,13 @@ impl FilePattern {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-pub struct RawFilePattern(pub String);
+pub struct RawFilePattern<S>(S);
 
-impl RawFilePattern {
+impl<S: AsRef<str>> RawFilePattern<S> {
+    pub fn new(raw: S) -> Self {
+        Self(raw)
+    }
+
     pub fn compile(self, project_root: impl AsRef<Utf8Path>) -> Result<FilePattern> {
         let project_root = project_root.as_ref();
         let pattern = {
@@ -89,38 +93,41 @@ impl RawFilePattern {
             if !self.starts_with('/') {
                 pattern_buf.push("**");
             };
-            pattern_buf.push(&self.0);
+            pattern_buf.push(self.deref());
             if self.ends_with('/') {
                 pattern_buf.push("*");
             }
             Pattern::new(pattern_buf.as_str()).map_err(|cause| Error::Pattern {
-                pattern: self.0,
+                pattern: self.deref().into(),
                 cause,
             })?
         };
         Ok(FilePattern(pattern))
     }
-
-    #[cfg(test)]
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
 }
 
-impl Deref for RawFilePattern {
+impl<S: AsRef<str>> Deref for RawFilePattern<S> {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        self.0.as_ref()
+    }
+}
+
+impl<S: AsRef<str>> Display for RawFilePattern<S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.as_ref().fmt(f)
     }
 }
 
 #[cfg(test)]
 mod test {
+    use super::*;
+
     use camino::Utf8PathBuf;
     use indoc::{formatdoc, indoc};
 
-    use crate::{irritation::Irritation, trigger::RawFilePattern, vextest::VexTest};
+    use crate::{irritation::Irritation, vextest::VexTest};
 
     #[test]
     fn supported_language() {
@@ -264,7 +271,7 @@ mod test {
                 eprintln!("running test {}...", self.name);
 
                 let path_pattern = self.path_pattern.unwrap();
-                let pattern = RawFilePattern(path_pattern.to_owned())
+                let pattern = RawFilePattern::new(path_pattern)
                     .compile(self.root_dir)
                     .unwrap();
                 let matches = self

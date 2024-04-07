@@ -83,12 +83,11 @@ impl AppObject {
                         .items
                         .into_iter()
                         .map(|path_pattern| {
-                            Ok(RawFilePattern(path_pattern.into())
-                                .compile(&builder.project_root)?)
+                            Ok(RawFilePattern::new(path_pattern).compile(&builder.project_root)?)
                         })
                         .collect::<anyhow::Result<_>>()?
                 } else if let Some(path_pattern) = path.unpack_str() {
-                    vec![RawFilePattern(path_pattern.into()).compile(&builder.project_root)?]
+                    vec![RawFilePattern::new(path_pattern).compile(&builder.project_root)?]
                 } else {
                     return Err(ValueError::IncorrectParameterTypeWithExpected(
                         "str|[str]".into(),
