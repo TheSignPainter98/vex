@@ -212,7 +212,7 @@ mod test {
                         pass
                 "#},
             )
-            .returns_error(r"test\.star adds trigger with empty query");
+            .returns_error(r"query is empty");
         VexTest::new("syntax-error")
             .with_scriptlet(
                 "vexes/test.star",

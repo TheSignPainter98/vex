@@ -53,7 +53,7 @@ impl AppObject {
 
             // TODO(kcza): test me!
             if language.is_none() && query.is_none() && path.is_none() {
-                return Err(Error::EmptyTrigger(builder.vex_path.dupe()).into());
+                return Err(Error::EmptyTrigger.into());
             }
 
             let id = id.map(TriggerId::new);
@@ -67,7 +67,7 @@ impl AppObject {
                     let query = query
                         .map(|query| {
                             if query.is_empty() {
-                                return Err(Error::EmptyQuery(builder.vex_path.dupe()));
+                                return Err(Error::EmptyQuery);
                             }
                             Ok(Query::new(language.ts_language(), query)?)
                         })
@@ -205,6 +205,19 @@ mod test {
     use joinery::JoinableIterator;
 
     use crate::vextest::VexTest;
+
+    #[test]
+    fn empty_trigger() {
+        VexTest::new("empty-trigger")
+            .with_scriptlet(
+                "vexes/test.star",
+                indoc! {r#"
+                def init():
+                    vex.add_trigger()
+            "#},
+            )
+            .returns_error("trigger is empty")
+    }
 
     #[test]
     fn argument_kinds() {

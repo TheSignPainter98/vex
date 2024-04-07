@@ -22,11 +22,11 @@ pub enum Error {
     #[error("{0}")]
     Clap(#[from] clap::Error),
 
-    #[error("{0} adds trigger with empty query")]
-    EmptyQuery(PrettyPath),
+    #[error("query is empty")]
+    EmptyQuery,
 
-    #[error("{0} adds empty trigger")]
-    EmptyTrigger(PrettyPath),
+    #[error("trigger is empty")]
+    EmptyTrigger,
 
     #[error("{0}")]
     FromPathBuf(#[from] camino::FromPathBufError),
