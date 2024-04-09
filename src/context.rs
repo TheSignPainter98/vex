@@ -85,7 +85,7 @@ pub struct Manifest {
 impl Manifest {
     const FILE_NAME: &'static str = "vex.toml";
     const DEFAULT_CONTENT: &'static str = indoc! {r#"
-        ignore = [ "/vex.toml", "/vexes/", ".git/", ".gitignore", "/target/" ]
+        ignore = [ "vex.toml", "vexes/", ".git/", ".gitignore", "/target/" ]
     "#};
 
     fn init(project_root: impl AsRef<Utf8Path>) -> Result<()> {
@@ -192,7 +192,7 @@ impl IgnoreData {
 impl Default for IgnoreData {
     fn default() -> Self {
         Self(
-            ["/vex.toml", "/vexes/", ".git/", ".gitignore", "/target/"]
+            ["vex.toml", "vexes/", ".git/", ".gitignore", "/target/"]
                 .into_iter()
                 .map(Into::into)
                 .map(RawFilePattern::new)
@@ -229,7 +229,7 @@ mod test {
                 .iter()
                 .map(RawFilePattern::to_string)
                 .collect::<Vec<_>>(),
-            &["/vex.toml", "/vexes/", ".git/", ".gitignore", "/target/"]
+            &["vex.toml", "vexes/", ".git/", ".gitignore", "/target/"]
         );
 
         let raw_manifest: Document = Manifest::DEFAULT_CONTENT.parse().unwrap();
