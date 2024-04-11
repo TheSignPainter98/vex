@@ -86,9 +86,10 @@ pub enum Error {
     #[error("{0}")]
     ParseInt(#[from] num::ParseIntError),
 
-    #[error("cannot compile {pattern}@{}: {}", cause.pos, cause.msg)]
+    #[error(r#"cannot compile "{pattern}": {} at position {}"#, cause.msg, cause.pos - cause_pos_offset)]
     Pattern {
         pattern: String,
+        cause_pos_offset: usize,
         cause: glob::PatternError,
     },
 

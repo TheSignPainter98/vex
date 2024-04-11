@@ -90,8 +90,11 @@ impl<S: AsRef<str>> RawFilePattern<S> {
             let mut pattern_buf = Utf8PathBuf::with_capacity(
                 project_root.as_str().len() + "**/".len() + self.len() + "*".len(),
             );
-            if !self.starts_with('/') {
+            let original_start_index = if !self.starts_with('/') {
                 pattern_buf.push("**");
+                "**".len()
+            } else {
+                0
             };
             pattern_buf.push(self.deref());
             if self.ends_with('/') {
@@ -99,6 +102,7 @@ impl<S: AsRef<str>> RawFilePattern<S> {
             }
             Pattern::new(pattern_buf.as_str()).map_err(|cause| Error::Pattern {
                 pattern: self.deref().into(),
+                cause_pos_offset: original_start_index,
                 cause,
             })?
         };
@@ -373,6 +377,16 @@ mod test {
         PathGlobTest::new("dir-glob-with-file", root_dir, test_paths)
             .path_pattern("qux/**/foo.rs")
             .matches(&["/qux/baz/bar/foo.rs"]);
+    }
+
+    #[test]
+    fn malformed_glob() {
+        let pattern = "[".to_string();
+        let err = RawFilePattern::new(&pattern).compile("").unwrap_err();
+        assert_eq!(
+            r#"cannot compile "[": invalid range pattern at position 1"#,
+            err.to_string()
+        );
     }
 
     #[test]
