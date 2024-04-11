@@ -47,14 +47,6 @@ pub enum Error {
     #[error("{0}")]
     Language(#[from] tree_sitter::LanguageError),
 
-    #[error(
-        "cannot declare triggers with different languages: expected {expected} but found {found}"
-    )]
-    LanguageMismatch {
-        expected: SupportedLanguage,
-        found: SupportedLanguage,
-    },
-
     #[error("cannot find manifest, try running `vex init` in the project’s root")]
     ManifestNotFound,
 

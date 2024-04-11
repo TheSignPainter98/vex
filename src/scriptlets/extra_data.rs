@@ -30,7 +30,6 @@ use crate::{
         ScriptletObserverData,
     },
     source_path::PrettyPath,
-    supported_language::SupportedLanguage,
     trigger::Trigger,
 };
 
@@ -131,32 +130,8 @@ impl<'v> ObserverDataBuilder<'v> {
     }
 
     pub fn add_trigger(&self, trigger: Trigger) -> Result<()> {
-        if let Some(language) = trigger.content_trigger.as_ref().map(|ct| ct.language) {
-            self.validate_trigger_language(language)?;
-        };
-
         self.triggers.borrow_mut().push(Arc::new(trigger));
         Ok(())
-    }
-
-    fn validate_trigger_language(&self, language: SupportedLanguage) -> Result<()> {
-        let Some(prev_language) = self
-            .triggers
-            .borrow()
-            .iter()
-            .rev()
-            .find_map(|t| t.content_trigger.as_ref().map(|ct| ct.language))
-        else {
-            return Ok(());
-        };
-        if language != prev_language {
-            Err(Error::LanguageMismatch {
-                expected: prev_language,
-                found: language,
-            })
-        } else {
-            Ok(())
-        }
     }
 
     pub fn add_observer(&self, event: EventType, handler: Value<'v>) {
