@@ -228,71 +228,9 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
 
                         Ok::<_, Error>(())
                     })?;
-                //         QueryCursor::new()
-                //             .matches(
-                //                 query,
-                //                 src_file.tree.root_node(),
-                //                 src_file.content.as_bytes(),
-                //             )
-                //             .try_for_each(|qmatch| {
-                //                 let captures =
-                //                     QueryCaptures::new(&observer.query, &qmatch, &src_file);
-                //                 observer.on_match.iter().try_for_each(|on_match| {
-                //                     irritations.extend(on_match.handle(
-                //                         &Module::new(),
-                //                         &observer.vex_path,
-                //                         MatchEvent::new(
-                //                             &src_file.path.pretty_path.dupe(),
-                //                             captures.dupe(),
-                //                             trigger_id,
-                //                         ),
-                //                     ))
-                //                 })
-                //             })
-                //     })?;
 
                 Ok::<_, Error>(())
             })?;
-        // for (trigger_id, observer) in file_observer {
-        //     for on_open_file in &observer.on_open_file {
-        //         irritations.extend(on_open_file.handle(
-        //             &Module::new(),
-        //             &observer.vex_path,
-        //             OpenFileEvent::new(src_file.path.pretty_path.dupe(), trigger_id.dupe()),
-        //         )?);
-        //     }
-        //
-        //     for (id, language, query) in observer.trigger_queries() {
-        //         for qmatch in QueryCursor::new().matches(
-        //             query,
-        //             src_file.tree.root_node(),
-        //             src_file.content.as_bytes(),
-        //         ) {
-        //             for on_match in &observer.on_match {
-        //                 irritations.extend(on_match.handle(
-        //                     &Module::new(),
-        //                     &observer.path,
-        //                     MatchEvent::new(&src_file.path.pretty_path.dupe(), captures.dupe(), id),
-        //                 ))
-        //             }
-        //         }
-        //     }
-        // for qmatch in QueryCursor::new().matches(
-        //     observer_data.query.as_ref(),
-        //     src_file.tree.root_node(),
-        //     src_file.content[..].as_bytes(),
-        // ) {
-        //     let captures = QueryCaptures::new(&observer.query, &qmatch, &src_file);
-        //     for on_match in &observer_data.on_match {
-        //         let handler_module = Module::new();
-        //         irritations.extend(on_match.handle(
-        //             &handler_module,
-        //             &observer.path,
-        //             MatchEvent::new(src_file.path.pretty_path.dupe(), captures.dupe()),
-        //         )?);
-        //     }
-        // }
-        // }
     }
 
     observers
@@ -306,92 +244,6 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
             )?);
             Ok::<_, Error>(())
         })?;
-    // for path in &paths {
-    //     let src_file = match SourceFile::load(path.dupe()) {
-    //         Ok(f) => f,
-    //         Err(e) if e.is_recoverable() => {
-    //             if log_enabled!(log::Level::Trace) {
-    //                 trace!("ignoring {path}: {e}");
-    //             }
-    //             continue;
-    //         }
-    //         Err(e) => {
-    //             return Err(e);
-    //         }
-    //     };
-    //
-    //     for observer in &language_observers[src_file.lang] {
-    //         for on_open_file in &observer.on_open_file[..] {
-    //             let handler_module = Module::new();
-    //             irritations.extend(on_open_file.handle(
-    //                 &handler_module,
-    //                 &observer.path,
-    //                 OpenFileEvent::new(src_file.path.pretty_path.dupe()),
-    //             )?);
-    //         }
-    //
-    //         for qmatch in QueryCursor::new().matches(
-    //             observer.query.as_ref(),
-    //             src_file.tree.root_node(),
-    //             src_file.content[..].as_bytes(),
-    //         ) {
-    //             let captures = QueryCaptures::new(&observer.query, &qmatch, &src_file);
-    //             for on_match in &observer.on_match[..] {
-    //                 let handler_module = Module::new();
-    //                 irritations.extend(on_match.handle(
-    //                     &handler_module,
-    //                     &observer.path,
-    //                     MatchEvent::new(src_file.path.pretty_path.dupe(), captures.dupe()),
-    //                 )?);
-    //             }
-    //         }
-    //
-    //         for on_close_file in &observer.on_close_file[..] {
-    //             let handler_module = Module::new();
-    //             irritations.extend(on_close_file.handle(
-    //                 &handler_module,
-    //                 &observer.path,
-    //                 CloseFileEvent::new(src_file.path.pretty_path.dupe()),
-    //             )?);
-    //         }
-    //     }
-    // }
-    // for language_observer in language_observers.values() {
-    //     for observer in language_observer {
-    //         for on_close_project in &observer.on_close_project[..] {
-    //             let handler_module = Module::new();
-    //             irritations.extend(on_close_project.handle(
-    //                 &handler_module,
-    //                 &observer.path,
-    //                 CloseProjectEvent::new(ctx.project_root.dupe()),
-    //             )?);
-    //         }
-    //     }
-    // }
-
-    // let max_problem_channel_size = match cmd_args.max_problems {
-    //     MaxProblems::Limited(lim) => lim as usize,
-    //     MaxProblems::Unlimited => 1000, // Large limit but still capped.
-    // };
-    // let npaths = paths.len();
-    // let mut set = JoinSet::new();
-    // for path in paths {
-    //     let vexes = vexes.clone();
-    //     let path = path.clone();
-    //     let Some(src_file_result) = SourceFile::maybe_load(path).await else {
-    //         continue;
-    //     };
-    //     set.spawn(async move { vexes.check(src_file_result?).await });
-    // }
-    //
-    // let mut problems = Vec::with_capacity(max_problem_channel_size);
-    // while let Some(res) = set.join_next().await {
-    //     problems.extend(res??);
-    //
-    //     if cmd_args.max_problems.is_exceeded_by(problems.len()) {
-    //         break;
-    //     }
-    // }
 
     irritations.sort();
     if let MaxProblems::Limited(max) = max_problems {

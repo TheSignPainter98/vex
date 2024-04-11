@@ -160,7 +160,6 @@ impl AppObject {
                 renderer.set_extra_info(extra_info);
             }
             inv_data.add_irritation(renderer.render());
-            // panic!("{inv_data:?}");
 
             Ok(NoneType)
         }
