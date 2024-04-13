@@ -13,7 +13,7 @@ use starlark::{
 use starlark_derive::{starlark_module, starlark_value};
 use tree_sitter::{Query, QueryMatch as TSQueryMatch};
 
-use crate::{error::Error, scriptlets::node::Node, source_file::SourceFile};
+use crate::{error::Error, scriptlets::node::Node, source_file::ParsedSourceFile};
 
 #[derive(new, Clone, Debug, ProvidesStaticType, NoSerialize, Allocative, Dupe)]
 pub struct QueryCaptures<'v> {
@@ -24,7 +24,7 @@ pub struct QueryCaptures<'v> {
     pub query_match: &'v TSQueryMatch<'v, 'v>,
 
     #[allocative(skip)]
-    source_file: &'v SourceFile,
+    source_file: &'v ParsedSourceFile<'v>,
 }
 
 impl QueryCaptures<'_> {
@@ -280,15 +280,17 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            vex.language('rust')
-                            vex.query('''
-                                (binary_expression
-                                    left: (integer_literal) @l_int
-                                ) @bin_expr
-                            ''')
-                            vex.observe('match', on_match)
+                            vex.add_trigger(
+                                language = 'rust',
+                                query='''
+                                    (binary_expression
+                                        left: (integer_literal) @l_int
+                                    ) @bin_expr
+                                ''',
+                            )
+                            vex.observe('query_match', on_query_match)
 
-                        def on_match(event):
+                        def on_query_match(event):
                             captures = event.captures
                             check['type'](captures, 'QueryCaptures')
                     "#,
@@ -316,15 +318,17 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            vex.language('rust')
-                            vex.query('''
-                                (binary_expression
-                                    left: (integer_literal) @l_int
-                                ) @bin_expr
-                            ''')
-                            vex.observe('match', on_match)
+                            vex.add_trigger(
+                                language='rust',
+                                query='''
+                                    (binary_expression
+                                        left: (integer_literal) @l_int
+                                    ) @bin_expr
+                                '''
+                            )
+                            vex.observe('query_match', on_query_match)
 
-                        def on_match(event):
+                        def on_query_match(event):
                             captures = event.captures
                             check['eq'](len(captures), 2)
                     "#,
@@ -352,15 +356,17 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            vex.language('rust')
-                            vex.query('''
-                                (binary_expression
-                                    left: (integer_literal) @l_int
-                                ) @bin_expr
-                            ''')
-                            vex.observe('match', on_match)
+                            vex.add_trigger(
+                                language='rust',
+                                query='''
+                                    (binary_expression
+                                        left: (integer_literal) @l_int
+                                    ) @bin_expr
+                                ''',
+                            )
+                            vex.observe('query_match', on_query_match)
 
-                        def on_match(event):
+                        def on_query_match(event):
                             captures = event.captures
                             check['in']('bin_expr', captures)
                             check['in']('l_int', captures)
@@ -389,15 +395,17 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            vex.language('rust')
-                            vex.query('''
-                                (binary_expression
-                                    left: (integer_literal) @l_int
-                                ) @bin_expr
-                            ''')
-                            vex.observe('match', on_match)
+                            vex.add_trigger(
+                                language='rust',
+                                query='''
+                                    (binary_expression
+                                        left: (integer_literal) @l_int
+                                    ) @bin_expr
+                                ''',
+                            )
+                            vex.observe('query_match', on_query_match)
 
-                        def on_match(event):
+                        def on_query_match(event):
                             captures = event.captures
                             check['eq'](str(captures), "QueryCaptures")
                             check['eq'](str(captures), repr(captures))
@@ -426,15 +434,17 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            vex.language('rust')
-                            vex.query('''
-                                (binary_expression
-                                    left: (integer_literal) @l_int
-                                ) @bin_expr
-                            ''')
-                            vex.observe('match', on_match)
+                            vex.add_trigger(
+                                language='rust',
+                                query='''
+                                    (binary_expression
+                                        left: (integer_literal) @l_int
+                                    ) @bin_expr
+                                ''',
+                            )
+                            vex.observe('query_match', on_query_match)
 
-                        def on_match(event):
+                        def on_query_match(event):
                             captures = event.captures
 
                             expected_keys = sorted(['bin_expr', 'l_int'])
@@ -467,15 +477,17 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            vex.language('rust')
-                            vex.query('''
-                                (binary_expression
-                                    left: (integer_literal) @l_int
-                                ) @bin_expr
-                            ''')
-                            vex.observe('match', on_match)
+                            vex.add_trigger(
+                                language='rust',
+                                query='''
+                                    (binary_expression
+                                        left: (integer_literal) @l_int
+                                    ) @bin_expr
+                                ''',
+                            )
+                            vex.observe('query_match', on_query_match)
 
-                        def on_match(event):
+                        def on_query_match(event):
                             captures = event.captures
 
                             check['type'](captures.keys(), "QueryCapturesKeys")
@@ -507,15 +519,17 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            vex.language('rust')
-                            vex.query('''
-                                (binary_expression
-                                    left: (integer_literal) @l_int
-                                ) @bin_expr
-                            ''')
-                            vex.observe('match', on_match)
+                            vex.add_trigger(
+                                language='rust',
+                                query='''
+                                    (binary_expression
+                                        left: (integer_literal) @l_int
+                                    ) @bin_expr
+                                ''',
+                            )
+                            vex.observe('query_match', on_query_match)
 
-                        def on_match(event):
+                        def on_query_match(event):
                             captures = event.captures
 
                             check['type'](captures.values(), "QueryCapturesValues")
@@ -548,21 +562,23 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            vex.language('rust')
-                            vex.query('''
-                                (binary_expression
-                                    left: (integer_literal) @a
-                                    right: (parenthesized_expression
-                                        (binary_expression
-                                            left: (integer_literal) @b
-                                            right: (integer_literal) @c
-                                        ) @d
-                                    ) @e
-                                ) @all
-                            ''')
-                            vex.observe('match', on_match)
+                            vex.add_trigger(
+                                language='rust',
+                                query='''
+                                    (binary_expression
+                                        left: (integer_literal) @a
+                                        right: (parenthesized_expression
+                                            (binary_expression
+                                                left: (integer_literal) @b
+                                                right: (integer_literal) @c
+                                            ) @d
+                                        ) @e
+                                    ) @all
+                                ''',
+                            )
+                            vex.observe('query_match', on_query_match)
 
-                        def on_match(event):
+                        def on_query_match(event):
                             captures = event.captures
 
                             check['type'](captures.items(), "QueryCapturesItems")

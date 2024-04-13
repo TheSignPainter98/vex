@@ -16,25 +16,40 @@ use crate::{
     scriptlets::{
         action::Action,
         event::{
-            CloseFileEvent, CloseProjectEvent, Event, MatchEvent, OpenFileEvent, OpenProjectEvent,
+            CloseFileEvent, CloseProjectEvent, Event, OpenFileEvent, OpenProjectEvent,
+            QueryMatchEvent,
         },
         extra_data::InvocationData,
         print_handler::PrintHandler,
     },
     source_path::PrettyPath,
-    supported_language::SupportedLanguage,
+    trigger::{Trigger, TriggerId},
 };
 
-#[derive(Clone, Debug, Dupe)]
+#[derive(Debug)]
 pub struct ScriptletObserverData {
-    pub path: PrettyPath,
-    pub lang: SupportedLanguage,
-    pub query: Arc<Query>,
-    pub on_open_project: Arc<Vec<OpenProjectObserver>>,
-    pub on_open_file: Arc<Vec<OpenFileObserver>>,
-    pub on_match: Arc<Vec<MatchObserver>>,
-    pub on_close_file: Arc<Vec<CloseFileObserver>>,
-    pub on_close_project: Arc<Vec<CloseProjectObserver>>,
+    pub vex_path: PrettyPath,
+    pub triggers: Vec<Arc<Trigger>>,
+    pub on_open_project: Vec<OpenProjectObserver>,
+    pub on_open_file: Vec<OpenFileObserver>,
+    pub on_match: Vec<MatchObserver>,
+    pub on_close_file: Vec<CloseFileObserver>,
+    pub on_close_project: Vec<CloseProjectObserver>,
+}
+
+impl ScriptletObserverData {
+    pub fn trigger_queries(&self) -> impl Iterator<Item = (Option<&TriggerId>, &Query)> {
+        self.triggers.iter().filter_map(|trigger| {
+            let Some(query) = trigger
+                .content_trigger
+                .as_ref()
+                .and_then(|ct| ct.query.as_ref())
+            else {
+                return None;
+            };
+            Some((trigger.id.as_ref(), query))
+        })
+    }
 }
 
 pub trait Observer<'v> {
@@ -95,7 +110,7 @@ impl Observer<'_> for OpenFileObserver {
 pub struct MatchObserver(OwnedFrozenValue);
 
 impl<'v> Observer<'v> for MatchObserver {
-    type Event = MatchEvent<'v>;
+    type Event = QueryMatchEvent<'v>;
 
     fn function(&self) -> &OwnedFrozenValue {
         &self.0

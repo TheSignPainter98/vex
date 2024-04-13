@@ -15,13 +15,14 @@ mod scriptlets;
 mod source_file;
 mod source_path;
 mod supported_language;
+mod trigger;
 mod verbosity;
 mod vex;
 
 #[cfg(test)]
 mod vextest;
 
-use std::{env, fs, process::ExitCode};
+use std::{env, fs, iter, process::ExitCode};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser as _;
@@ -34,19 +35,20 @@ use tree_sitter::QueryCursor;
 
 use crate::{
     cli::{Args, CheckCmd, Command},
-    context::{CompiledFilePattern, Context},
+    context::Context,
     error::{Error, IOAction},
     irritation::Irritation,
     plural::Plural,
     result::Result,
     scriptlets::{
         event::CloseProjectEvent,
-        event::{CloseFileEvent, MatchEvent, OpenFileEvent, OpenProjectEvent},
+        event::{CloseFileEvent, OpenFileEvent, OpenProjectEvent, QueryMatchEvent},
         Observer, PreinitingStore, QueryCaptures, VexingStore,
     },
     source_file::SourceFile,
     source_path::{PrettyPath, SourcePath},
     supported_language::SupportedLanguage,
+    trigger::FilePattern,
     verbosity::Verbosity,
 };
 
@@ -124,21 +126,18 @@ impl RunData {
 }
 
 fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<RunData> {
-    let language_observers = store.language_observers();
-    let paths = {
+    let src_files = {
         let mut paths = Vec::new();
         let ignores = ctx
             .ignores
             .clone()
-            .unwrap_or_default()
-            .0
+            .into_inner()
             .into_iter()
             .map(|ignore| ignore.compile(&ctx.project_root))
             .collect::<Result<Vec<_>>>()?;
         let allows = ctx
             .allows
             .clone()
-            .unwrap_or_default()
             .into_iter()
             .map(|allow| allow.compile(&ctx.project_root))
             .collect::<Result<Vec<_>>>()?;
@@ -152,106 +151,99 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
         paths
             .into_iter()
             .map(|p| SourcePath::new(&p, &ctx.project_root))
-            .collect::<Vec<_>>()
+            .map(SourceFile::new)
+            .collect::<Result<Vec<_>>>()?
     };
 
-    for observer in language_observers.values().flatten() {
-        for on_open_project in &observer.on_open_project[..] {
-            let handler_module = Module::new();
-            on_open_project.handle(
-                &handler_module,
-                &observer.path, // TODO(kcza): what path is this??
+    let mut irritations = vec![];
+
+    let observers = store.observers().collect::<Vec<_>>();
+    observers
+        .iter()
+        .flat_map(|obs| iter::repeat(&obs.vex_path).zip(&obs.on_open_project))
+        .try_for_each(|(obs_path, obs)| {
+            irritations.extend(obs.handle(
+                &Module::new(),
+                obs_path,
                 OpenProjectEvent::new(ctx.project_root.dupe()),
-            )?;
-        }
-    }
-    let mut irritations = Vec::new();
-    for path in &paths {
-        let src_file = match SourceFile::load(path.dupe()) {
-            Ok(f) => f,
-            Err(e) if e.is_recoverable() => {
-                if log_enabled!(log::Level::Trace) {
-                    trace!("ignoring {path}: {e}");
-                }
-                continue;
-            }
-            Err(e) => {
-                return Err(e);
-            }
-        };
+            )?);
+            Ok::<_, Error>(())
+        })?;
 
-        for observer in &language_observers[src_file.lang] {
-            for on_open_file in &observer.on_open_file[..] {
-                let handler_module = Module::new();
-                irritations.extend(on_open_file.handle(
-                    &handler_module,
-                    &observer.path,
-                    OpenFileEvent::new(src_file.path.pretty_path.dupe()),
-                )?);
-            }
-
-            for qmatch in QueryCursor::new().matches(
-                observer.query.as_ref(),
-                src_file.tree.root_node(),
-                src_file.content[..].as_bytes(),
-            ) {
-                let captures = QueryCaptures::new(&observer.query, &qmatch, &src_file);
-                for on_match in &observer.on_match[..] {
-                    let handler_module = Module::new();
-                    irritations.extend(on_match.handle(
-                        &handler_module,
-                        &observer.path,
-                        MatchEvent::new(src_file.path.pretty_path.dupe(), captures.dupe()),
+    for src_file in &src_files {
+        let file_observers = store.observers_for(src_file).collect::<Vec<_>>();
+        file_observers
+            .iter()
+            .try_for_each(|(trigger_id, observer)| {
+                observer.on_open_file.iter().try_for_each(|on_open_file| {
+                    irritations.extend(on_open_file.handle(
+                        &Module::new(),
+                        &observer.vex_path,
+                        OpenFileEvent::new(src_file.path.pretty_path.dupe(), trigger_id.dupe()),
                     )?);
+                    Ok::<_, Error>(())
+                })?;
+
+                if let Ok(parsed_src_file) = src_file.parse() {
+                    observer
+                        .trigger_queries()
+                        .try_for_each(|(trigger_id, query)| {
+                            QueryCursor::new()
+                                .matches(
+                                    query,
+                                    parsed_src_file.tree.root_node(),
+                                    parsed_src_file.content.as_bytes(),
+                                )
+                                .try_for_each(|qmatch| {
+                                    let captures =
+                                        QueryCaptures::new(query, &qmatch, &parsed_src_file);
+                                    observer.on_match.iter().try_for_each(|on_match| {
+                                        irritations.extend(on_match.handle(
+                                            &Module::new(),
+                                            &observer.vex_path,
+                                            QueryMatchEvent::new(
+                                                src_file.path.pretty_path.dupe(),
+                                                captures.dupe(),
+                                                trigger_id.cloned(),
+                                            ),
+                                        )?);
+                                        Ok::<_, Error>(())
+                                    })
+                                })
+                        })?;
                 }
-            }
 
-            for on_close_file in &observer.on_close_file[..] {
-                let handler_module = Module::new();
-                irritations.extend(on_close_file.handle(
-                    &handler_module,
-                    &observer.path,
-                    CloseFileEvent::new(src_file.path.pretty_path.dupe()),
-                )?);
-            }
-        }
-    }
-    for language_observer in language_observers.values() {
-        for observer in language_observer {
-            for on_close_project in &observer.on_close_project[..] {
-                let handler_module = Module::new();
-                irritations.extend(on_close_project.handle(
-                    &handler_module,
-                    &observer.path,
-                    CloseProjectEvent::new(ctx.project_root.dupe()),
-                )?);
-            }
-        }
+                observer
+                    .on_close_file
+                    .iter()
+                    .try_for_each(|on_close_file| {
+                        irritations.extend(on_close_file.handle(
+                            &Module::new(),
+                            &observer.vex_path,
+                            CloseFileEvent::new(
+                                src_file.path.pretty_path.dupe(),
+                                trigger_id.dupe(),
+                            ),
+                        )?);
+
+                        Ok::<_, Error>(())
+                    })?;
+
+                Ok::<_, Error>(())
+            })?;
     }
 
-    // let max_problem_channel_size = match cmd_args.max_problems {
-    //     MaxProblems::Limited(lim) => lim as usize,
-    //     MaxProblems::Unlimited => 1000, // Large limit but still capped.
-    // };
-    // let npaths = paths.len();
-    // let mut set = JoinSet::new();
-    // for path in paths {
-    //     let vexes = vexes.clone();
-    //     let path = path.clone();
-    //     let Some(src_file_result) = SourceFile::maybe_load(path).await else {
-    //         continue;
-    //     };
-    //     set.spawn(async move { vexes.check(src_file_result?).await });
-    // }
-    //
-    // let mut problems = Vec::with_capacity(max_problem_channel_size);
-    // while let Some(res) = set.join_next().await {
-    //     problems.extend(res??);
-    //
-    //     if cmd_args.max_problems.is_exceeded_by(problems.len()) {
-    //         break;
-    //     }
-    // }
+    observers
+        .iter()
+        .flat_map(|obs| iter::repeat(&obs.vex_path).zip(&obs.on_close_project))
+        .try_for_each(|(obs_path, obs)| {
+            irritations.extend(obs.handle(
+                &Module::new(),
+                obs_path,
+                CloseProjectEvent::new(ctx.project_root.dupe()),
+            )?);
+            Ok::<_, Error>(())
+        })?;
 
     irritations.sort();
     if let MaxProblems::Limited(max) = max_problems {
@@ -262,15 +254,15 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
     }
     Ok(RunData {
         irritations,
-        num_files_scanned: paths.len(),
+        num_files_scanned: src_files.len(),
     })
 }
 
 fn walkdir(
     ctx: &Context,
     path: &Utf8Path,
-    ignores: &[CompiledFilePattern],
-    allows: &[CompiledFilePattern],
+    ignores: &[FilePattern],
+    allows: &[FilePattern],
     paths: &mut Vec<Utf8PathBuf>,
 ) -> Result<()> {
     if log_enabled!(log::Level::Trace) {
@@ -293,15 +285,15 @@ fn walkdir(
             action: IOAction::Read,
             cause,
         })?;
-        if !allows.iter().any(|p| p.matches_path(&entry_path)) {
-            let hidden = entry_path
+        let relative_path = Utf8Path::new(&entry_path.as_str()[ctx.project_root.as_str().len()..]);
+        if !allows.iter().any(|p| p.matches_path(relative_path)) {
+            let hidden = relative_path
                 .file_name()
                 .is_some_and(|name| name.starts_with('.'));
-            if hidden || ignores.iter().any(|p| p.matches_path(&entry_path)) {
+            if hidden || ignores.iter().any(|p| p.matches_path(relative_path)) {
                 if log_enabled!(log::Level::Info) {
-                    let ignore_path = entry_path.strip_prefix(ctx.project_root.as_ref())?;
                     let dir_marker = if metadata.is_dir() { "/" } else { "" };
-                    info!("ignoring /{ignore_path}{dir_marker}");
+                    info!("ignoring /{relative_path}{dir_marker}");
                 }
                 continue;
             }
@@ -331,15 +323,16 @@ fn dump(dump_args: DumpCmd) -> Result<()> {
             action: IOAction::Read,
             cause: e,
         })?);
-    let src_file = SourceFile::load(src_path)?;
-    if src_file.tree.root_node().has_error() {
+    let src_file = SourceFile::new(src_path)?;
+    let parsed_src_file = src_file.parse()?;
+    if parsed_src_file.tree.root_node().has_error() {
         return Err(Error::Unparseable {
             path: PrettyPath::new(Utf8Path::new(&dump_args.path)),
-            language: src_file.lang,
+            language: parsed_src_file.language,
         });
     }
 
-    println!("{}", src_file.tree.root_node().to_sexp());
+    println!("{}", parsed_src_file.tree.root_node().to_sexp());
 
     Ok(())
 }
@@ -480,11 +473,13 @@ mod test {
                 "vexes/var.star",
                 indoc! {r#"
                     def init():
-                        vex.language('rust')
-                        vex.query('(integer_literal) @num')
-                        vex.observe('match', on_match)
+                        vex.add_trigger(
+                            language='rust',
+                            query='(integer_literal) @num',
+                        )
+                        vex.observe('query_match', on_query_match)
 
-                    def on_match(event):
+                    def on_query_match(event):
                         vex.warn('oh no a number!', at=(event.captures['num'], 'num'))
                 "#},
             )

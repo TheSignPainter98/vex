@@ -15,7 +15,7 @@ use starlark::{
 use starlark_derive::{starlark_attrs, starlark_module, starlark_value, StarlarkAttrs};
 use tree_sitter::{Node as TSNode, Point};
 
-use crate::{error::Error, source_file::SourceFile};
+use crate::{error::Error, source_file::ParsedSourceFile};
 
 #[derive(new, Clone, Debug, PartialEq, Eq, ProvidesStaticType, NoSerialize, Allocative, Dupe)]
 pub struct Node<'v> {
@@ -23,7 +23,7 @@ pub struct Node<'v> {
     ts_node: &'v TSNode<'v>,
 
     #[allocative(skip)]
-    pub source_file: &'v SourceFile,
+    pub source_file: &'v ParsedSourceFile<'v>,
 }
 
 unsafe impl<'v> Trace<'v> for Node<'v> {
@@ -195,11 +195,13 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            vex.language('rust')
-                            vex.query('(binary_expression left: (integer_literal) @l_int) @bin_expr')
-                            vex.observe('match', on_match)
+                            vex.add_trigger(
+                                language='rust',
+                                query='(binary_expression left: (integer_literal) @l_int) @bin_expr',
+                            )
+                            vex.observe('query_match', on_query_match)
 
-                        def on_match(event):
+                        def on_query_match(event):
                             bin_expr = event.captures['bin_expr']
                             check['type'](bin_expr, 'Node')
                     "#,
@@ -227,11 +229,13 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            vex.language('rust')
-                            vex.query('(binary_expression left: (integer_literal) @l_int) @bin_expr')
-                            vex.observe('match', on_match)
+                            vex.add_trigger(
+                                language='rust',
+                                query='(binary_expression left: (integer_literal) @l_int) @bin_expr',
+                            )
+                            vex.observe('query_match', on_query_match)
 
-                        def on_match(event):
+                        def on_query_match(event):
                             bin_expr = event.captures['bin_expr']
 
                             check['type'](bin_expr, 'Node')
@@ -263,11 +267,13 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            vex.language('rust')
-                            vex.query('(binary_expression left: (integer_literal) @l_int) @bin_expr')
-                            vex.observe('match', on_match)
+                            vex.add_trigger(
+                                language='rust',
+                                query='(binary_expression left: (integer_literal) @l_int) @bin_expr',
+                            )
+                            vex.observe('query_match', on_query_match)
 
-                        def on_match(event):
+                        def on_query_match(event):
                             check['attrs'](event.captures['bin_expr'], ['kind', 'location', 'text'])
                     "#,
                     check_path = VexTest::CHECK_STARLARK_PATH,
@@ -294,16 +300,18 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            vex.language('rust')
-                            vex.query('''
-                                (binary_expression
-                                    left: (integer_literal) @l_int
-                                    right: (parenthesized_expression)
-                                ) @bin_expr
-                            ''')
-                            vex.observe('match', on_match)
+                            vex.add_trigger(
+                                language='rust',
+                                query='''
+                                    (binary_expression
+                                        left: (integer_literal) @l_int
+                                        right: (parenthesized_expression)
+                                    ) @bin_expr
+                                ''',
+                            )
+                            vex.observe('query_match', on_query_match)
 
-                        def on_match(event):
+                        def on_query_match(event):
                             captures = event.captures
                             check['eq'](captures['bin_expr'].kind, 'binary_expression')
                             check['eq'](captures['l_int'].kind, 'integer_literal')
@@ -332,16 +340,18 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            vex.language('rust')
-                            vex.query('''
-                                (binary_expression
-                                    left: (integer_literal) @l_int
-                                    right: (parenthesized_expression)
-                                ) @bin_expr
-                            ''')
-                            vex.observe('match', on_match)
+                            vex.add_trigger(
+                                language='rust',
+                                query='''
+                                    (binary_expression
+                                        left: (integer_literal) @l_int
+                                        right: (parenthesized_expression)
+                                    ) @bin_expr
+                                ''',
+                            )
+                            vex.observe('query_match', on_query_match)
 
-                        def on_match(event):
+                        def on_query_match(event):
                             location = event.captures['bin_expr'].location
 
                             check['type'](location, 'Location')
@@ -376,16 +386,18 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            vex.language('rust')
-                            vex.query('''
-                                (binary_expression
-                                    left: (integer_literal) @l_int
-                                    right: (parenthesized_expression)
-                                ) @bin_expr
-                            ''')
-                            vex.observe('match', on_match)
+                            vex.add_trigger(
+                                language='rust',
+                                query='''
+                                    (binary_expression
+                                        left: (integer_literal) @l_int
+                                        right: (parenthesized_expression)
+                                    ) @bin_expr
+                                ''',
+                            )
+                            vex.observe('query_match', on_query_match)
 
-                        def on_match(event):
+                        def on_query_match(event):
                             bin_expr = event.captures['bin_expr']
                             check['eq'](bin_expr.text(), '1 + (2 + 3)')
                     "#,

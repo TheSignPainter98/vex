@@ -1,5 +1,4 @@
 use camino::{Utf8Path, Utf8PathBuf};
-use glob::{MatchOptions, Pattern};
 use indoc::indoc;
 use serde::{Deserialize as Deserialise, Serialize as Serialise};
 
@@ -14,6 +13,7 @@ use std::{
 use crate::error::{Error, IOAction};
 use crate::result::Result;
 use crate::source_path::PrettyPath;
+use crate::trigger::RawFilePattern;
 
 #[derive(Debug)]
 pub struct Context {
@@ -43,10 +43,11 @@ impl Context {
         })
     }
 
-    pub fn init(project_root: Utf8PathBuf) -> Result<()> {
+    pub fn init(project_root: impl AsRef<Utf8Path>) -> Result<()> {
+        let project_root = project_root.as_ref();
         fs::create_dir_all(project_root.join(QueriesDir::default().as_str())).map_err(|cause| {
             Error::IO {
-                path: PrettyPath::new(&project_root),
+                path: PrettyPath::new(project_root),
                 action: IOAction::Write,
                 cause,
             }
@@ -55,13 +56,7 @@ impl Context {
     }
 
     pub fn vex_dir(&self) -> Utf8PathBuf {
-        self.project_root.join(
-            self.manifest
-                .queries_dir
-                .as_ref()
-                .unwrap_or(&QueriesDir::default())
-                .as_str(),
-        )
+        self.project_root.join(self.manifest.queries_dir.as_str())
     }
 }
 
@@ -73,27 +68,29 @@ impl Deref for Context {
     }
 }
 
-#[derive(Debug, Deserialise, Serialise, PartialEq)]
+#[derive(Debug, Default, Deserialise, Serialise, PartialEq)]
 pub struct Manifest {
     pub associations: Option<HashMap<String, String>>,
 
-    pub queries_dir: Option<QueriesDir>,
+    #[serde(default)]
+    pub queries_dir: QueriesDir,
 
-    #[serde(rename = "ignore")]
-    pub ignores: Option<IgnoreData>,
+    #[serde(default, rename = "ignore")]
+    pub ignores: IgnoreData,
 
-    #[serde(rename = "allow")]
-    pub allows: Option<Vec<FilePattern>>,
+    #[serde(default, rename = "allow")]
+    pub allows: Vec<RawFilePattern<String>>,
 }
 
 impl Manifest {
     const FILE_NAME: &'static str = "vex.toml";
     const DEFAULT_CONTENT: &'static str = indoc! {r#"
-        ignore = [ ".git/", ".gitignore", "/target/" ]
+        ignore = [ "vex.toml", "vexes/", ".git/", ".gitignore", "/target/" ]
     "#};
 
-    fn init(project_root: Utf8PathBuf) -> Result<()> {
-        match Manifest::acquire_file_in(&project_root) {
+    fn init(project_root: impl AsRef<Utf8Path>) -> Result<()> {
+        let project_root = project_root.as_ref();
+        match Manifest::acquire_file_in(project_root) {
             Ok((found_root, _)) => return Err(Error::AlreadyInited { found_root }),
             Err(Error::ManifestNotFound) => {}
             Err(e) => return Err(e),
@@ -168,17 +165,6 @@ impl Manifest {
     }
 }
 
-impl Default for Manifest {
-    fn default() -> Self {
-        Self {
-            associations: None,
-            queries_dir: Some(QueriesDir::default()),
-            ignores: Some(IgnoreData::default()),
-            allows: None,
-        }
-    }
-}
-
 #[derive(Debug, Deserialise, Serialise, PartialEq)]
 pub struct QueriesDir(String);
 
@@ -195,63 +181,31 @@ impl Default for QueriesDir {
 }
 
 #[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
-pub struct IgnoreData(pub Vec<FilePattern>);
+pub struct IgnoreData(Vec<RawFilePattern<String>>);
+
+impl IgnoreData {
+    pub fn into_inner(self) -> Vec<RawFilePattern<String>> {
+        self.0
+    }
+}
 
 impl Default for IgnoreData {
     fn default() -> Self {
         Self(
-            ["/.git", "/target"]
+            ["vex.toml", "vexes/", ".git/", ".gitignore", "/target/"]
                 .into_iter()
-                .map(FilePattern::new)
+                .map(Into::into)
+                .map(RawFilePattern::new)
                 .collect(),
         )
     }
 }
 
-#[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
-pub struct FilePattern(String);
+impl Deref for IgnoreData {
+    type Target = [RawFilePattern<String>];
 
-impl FilePattern {
-    pub fn new(pattern: impl Into<String>) -> Self {
-        Self(pattern.into())
-    }
-
-    pub fn compile(self, project_root: &Utf8Path) -> Result<CompiledFilePattern> {
-        Ok(CompiledFilePattern(Pattern::new(
-            if self.0.starts_with('/') {
-                // absolute
-                project_root.join(Utf8PathBuf::from(&self.0[1..]))
-            } else {
-                // relative
-                project_root
-                    .join(Utf8PathBuf::from("**".to_string()))
-                    .join(Utf8PathBuf::from(&self.0))
-            }
-            .as_str(),
-        )?))
-    }
-}
-
-#[cfg(test)]
-impl FilePattern {
-    fn as_str(&self) -> &str {
+    fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-#[derive(Debug)]
-pub struct CompiledFilePattern(Pattern);
-
-impl CompiledFilePattern {
-    pub fn matches_path(&self, path: &Utf8Path) -> bool {
-        self.0.matches_path_with(
-            path.as_std_path(),
-            MatchOptions {
-                case_sensitive: true,
-                require_literal_separator: true,
-                require_literal_leading_dot: true,
-            },
-        )
     }
 }
 
@@ -268,16 +222,14 @@ mod test {
     fn default_manifest_valid() {
         let init_manifest: Manifest =
             toml_edit::de::from_str(Manifest::DEFAULT_CONTENT).expect("default manifest invalid");
-        assert!(init_manifest.allows.is_none());
+        assert!(init_manifest.allows.is_empty());
         assert_eq!(
             init_manifest
                 .ignores
-                .expect("default ignores are not set")
-                .0
                 .iter()
-                .map(FilePattern::as_str)
+                .map(RawFilePattern::to_string)
                 .collect::<Vec<_>>(),
-            &[".git/", ".gitignore", "/target/"]
+            &["vex.toml", "vexes/", ".git/", ".gitignore", "/target/"]
         );
 
         let raw_manifest: Document = Manifest::DEFAULT_CONTENT.parse().unwrap();
@@ -339,5 +291,16 @@ mod test {
         );
 
         Ok(())
+    }
+
+    #[test]
+    fn defaults() {
+        let root_dir = tempfile::tempdir().unwrap();
+        let root_path = Utf8PathBuf::try_from(root_dir.path().to_path_buf()).unwrap();
+
+        Context::init(&root_path).unwrap();
+        let manifest = Context::acquire_in(&root_path).unwrap().manifest;
+
+        assert_eq!(manifest, Manifest::default());
     }
 }
