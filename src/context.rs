@@ -23,7 +23,7 @@ pub struct Context {
 
 impl Context {
     pub fn acquire() -> Result<Self> {
-        let (project_root, raw_data) = Manifest::acquire_file()?;
+        let (project_root, raw_data) = Manifest::acquire_content()?;
         let project_root = PrettyPath::new(&project_root);
         let data = toml_edit::de::from_str(&raw_data)?;
         Ok(Context {
@@ -34,7 +34,7 @@ impl Context {
 
     #[cfg(test)]
     pub fn acquire_in(dir: &Utf8Path) -> Result<Self> {
-        let (project_root, raw_data) = Manifest::acquire_file_in(dir)?;
+        let (project_root, raw_data) = Manifest::acquire_content_in(dir)?;
         let project_root = PrettyPath::new(&project_root);
         let data = toml_edit::de::from_str(&raw_data)?;
         Ok(Context {
@@ -90,7 +90,7 @@ impl Manifest {
 
     fn init(project_root: impl AsRef<Utf8Path>) -> Result<()> {
         let project_root = project_root.as_ref();
-        match Manifest::acquire_file_in(project_root) {
+        match Manifest::acquire_content_in(project_root) {
             Ok((found_root, _)) => return Err(Error::AlreadyInited { found_root }),
             Err(Error::ManifestNotFound) => {}
             Err(e) => return Err(e),
@@ -117,9 +117,8 @@ impl Manifest {
         Ok(())
     }
 
-    // TODO(kcza): rename this to acquire_content
-    fn acquire_file() -> Result<(Utf8PathBuf, String)> {
-        Self::acquire_file_in(&Utf8PathBuf::try_from(env::current_dir().map_err(
+    fn acquire_content() -> Result<(Utf8PathBuf, String)> {
+        Self::acquire_content_in(&Utf8PathBuf::try_from(env::current_dir().map_err(
             |cause| Error::IO {
                 path: PrettyPath::new(Utf8Path::new(".")),
                 action: IOAction::Read,
@@ -128,7 +127,7 @@ impl Manifest {
         )?)?)
     }
 
-    fn acquire_file_in(dir: &Utf8Path) -> Result<(Utf8PathBuf, String)> {
+    fn acquire_content_in(dir: &Utf8Path) -> Result<(Utf8PathBuf, String)> {
         let mut project_root = dir.to_path_buf();
         let mut manifest_file = loop {
             match File::open(project_root.join(Self::FILE_NAME)) {
