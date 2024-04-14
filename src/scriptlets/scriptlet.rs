@@ -42,8 +42,7 @@ impl PreinitingScriptlet {
     }
 
     fn new_from_str(path: SourcePath, code: String, toplevel: bool) -> Result<Self> {
-        let ast =
-            AstModule::parse(path.as_str(), code, &Dialect::Standard).map_err(Error::starlark)?;
+        let ast = AstModule::parse(path.as_str(), code, &Dialect::Standard)?;
         let loads_files = ast
             .loads()
             .into_iter()
@@ -84,9 +83,9 @@ impl PreinitingScriptlet {
                 eval.set_print_handler(&PrintHandler);
                 extra.insert_into(&mut eval);
                 let globals = Self::globals();
-                eval.eval_module(ast, &globals).map_err(Error::starlark)?;
+                eval.eval_module(ast, &globals)?;
             }
-            module.freeze().map_err(Error::starlark)?
+            module.freeze()?
         };
         Ok(InitingScriptlet {
             path,
@@ -125,10 +124,7 @@ impl InitingScriptlet {
             preinited_module,
         } = self;
 
-        let Some(init) = preinited_module
-            .get_option("init")
-            .map_err(Error::starlark)?
-        else {
+        let Some(init) = preinited_module.get_option("init")? else {
             if toplevel {
                 return Err(Error::NoInit(path.pretty_path.dupe()));
             }
@@ -150,10 +146,9 @@ impl InitingScriptlet {
                 let mut eval = Evaluator::new(&module);
                 eval.set_print_handler(&PrintHandler);
                 extra.insert_into(&mut eval);
-                eval.eval_function(init.value(), &[], &[])
-                    .map_err(Error::starlark)?;
+                eval.eval_function(init.value(), &[], &[])?;
             }
-            module.freeze().map_err(Error::starlark)?
+            module.freeze()?
         };
         let observer_data = FrozenObserverDataBuilder::get_from(&inited_module).build()?;
 
