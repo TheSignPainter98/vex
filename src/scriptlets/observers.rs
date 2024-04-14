@@ -10,7 +10,6 @@ use starlark::{
 use tree_sitter::Query;
 
 use crate::{
-    error::Error,
     irritation::Irritation,
     result::Result,
     scriptlets::{
@@ -75,8 +74,7 @@ pub trait Observer<'v> {
 
             let func = self.function().value(); // TODO(kcza): check thread safety! Can this unfrozen
                                                 // function mutate upvalues if it is a closure?
-            eval.eval_function(func, &[module.heap().alloc(event)], &[])
-                .map_err(Error::starlark)?;
+            eval.eval_function(func, &[module.heap().alloc(event)], &[])?;
         }
 
         let irritations = extra.irritations.into_inner().expect("lock poisoned");

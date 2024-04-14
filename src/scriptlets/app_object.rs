@@ -123,8 +123,8 @@ impl AppObject {
         fn warn<'v>(
             #[starlark(this)] _this: Value<'v>,
             #[starlark(require=pos)] message: &'v str,
-            #[starlark(require=named)] at: Option<StarlarkSourceAnnotation>,
-            #[starlark(require=named)] show_also: Option<Vec<StarlarkSourceAnnotation>>,
+            #[starlark(require=named)] at: Option<StarlarkSourceAnnotation<'v>>,
+            #[starlark(require=named)] show_also: Option<UnpackList<StarlarkSourceAnnotation<'v>>>,
             #[starlark(require=named)] extra_info: Option<&'v str>,
             eval: &mut Evaluator<'v, '_>,
         ) -> anyhow::Result<NoneType> {
@@ -154,7 +154,7 @@ impl AppObject {
                 renderer.set_source(at)
             }
             if let Some(show_also) = show_also {
-                renderer.set_show_also(show_also);
+                renderer.set_show_also(show_also.items);
             }
             if let Some(extra_info) = extra_info {
                 renderer.set_extra_info(extra_info);

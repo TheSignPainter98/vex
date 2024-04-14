@@ -30,21 +30,21 @@ pub struct QueryCaptures<'v> {
 impl QueryCaptures<'_> {
     #[starlark_module]
     fn methods(builder: &mut MethodsBuilder) {
-        fn keys<'v>(this: Value<'v>) -> anyhow::Result<QueryCapturesKeys<'v>> {
+        fn keys<'v>(this: Value<'v>) -> starlark::Result<QueryCapturesKeys<'v>> {
             let this = this
                 .request_value::<&'v QueryCaptures>()
                 .expect("receiver has wrong type");
             Ok(QueryCapturesKeys(this.dupe()))
         }
 
-        fn values<'v>(this: Value<'v>) -> anyhow::Result<QueryCapturesValues<'v>> {
+        fn values<'v>(this: Value<'v>) -> starlark::Result<QueryCapturesValues<'v>> {
             let this = this
                 .request_value::<&QueryCaptures>()
                 .expect("receiver has wrong type");
             Ok(QueryCapturesValues(this.dupe()))
         }
 
-        fn items<'v>(this: Value<'v>) -> anyhow::Result<QueryCapturesItems<'v>> {
+        fn items<'v>(this: Value<'v>) -> starlark::Result<QueryCapturesItems<'v>> {
             let this = this
                 .request_value::<&QueryCaptures>()
                 .expect("receiver has wrong type");
@@ -63,18 +63,18 @@ impl<'v> StarlarkValue<'v> for QueryCaptures<'v> {
         demand.provide_value(self)
     }
 
-    fn length(&self) -> anyhow::Result<i32> {
+    fn length(&self) -> starlark::Result<i32> {
         Ok(self.query.capture_names().len() as i32)
     }
 
-    fn is_in(&self, other: Value<'v>) -> anyhow::Result<bool> {
+    fn is_in(&self, other: Value<'v>) -> starlark::Result<bool> {
         let Some(name) = other.unpack_starlark_str() else {
             return Ok(false);
         };
         Ok(self.query.capture_index_for_name(name).is_some())
     }
 
-    fn at(&self, index: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+    fn at(&self, index: Value<'v>, heap: &'v Heap) -> starlark::Result<Value<'v>> {
         let Some(name) = index.unpack_starlark_str().map(StarlarkStr::as_str) else {
             return ValueError::unsupported_with(self, "[]", index);
         };
@@ -91,7 +91,7 @@ impl<'v> StarlarkValue<'v> for QueryCaptures<'v> {
         Ok(heap.alloc(node))
     }
 
-    fn iterate_collect(&self, heap: &'v Heap) -> anyhow::Result<Vec<Value<'v>>> {
+    fn iterate_collect(&self, heap: &'v Heap) -> starlark::Result<Vec<Value<'v>>> {
         Ok(QueryCapturesKeys::iterate_collect_names(
             self.query.capture_names(),
             heap,
@@ -141,7 +141,7 @@ impl<'v> QueryCapturesKeys<'v> {
 impl<'v> StarlarkValue<'v> for QueryCapturesKeys<'v> {
     type Canonical = Self;
 
-    fn iterate_collect(&self, heap: &'v Heap) -> anyhow::Result<Vec<Value<'v>>> {
+    fn iterate_collect(&self, heap: &'v Heap) -> starlark::Result<Vec<Value<'v>>> {
         Ok(Self::iterate_collect_names(
             self.0.query.capture_names(),
             heap,
@@ -176,7 +176,7 @@ struct QueryCapturesValues<'v>(QueryCaptures<'v>);
 impl<'v> StarlarkValue<'v> for QueryCapturesValues<'v> {
     type Canonical = Self;
 
-    fn iterate_collect(&self, heap: &'v Heap) -> anyhow::Result<Vec<Value<'v>>> {
+    fn iterate_collect(&self, heap: &'v Heap) -> starlark::Result<Vec<Value<'v>>> {
         let mut values = self
             .0
             .query_match
@@ -219,7 +219,7 @@ struct QueryCapturesItems<'v>(QueryCaptures<'v>);
 impl<'v> StarlarkValue<'v> for QueryCapturesItems<'v> {
     type Canonical = Self;
 
-    fn iterate_collect(&self, heap: &'v Heap) -> anyhow::Result<Vec<Value<'v>>> {
+    fn iterate_collect(&self, heap: &'v Heap) -> starlark::Result<Vec<Value<'v>>> {
         let values = {
             let mut captures = self
                 .0

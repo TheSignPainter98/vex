@@ -129,12 +129,18 @@ pub enum Error {
     },
 }
 
-impl Error {
-    pub fn starlark(err: anyhow::Error) -> Self {
-        match err.downcast().map_err(Error::Starlark) {
+impl From<anyhow::Error> for Error {
+    fn from(err: anyhow::Error) -> Self {
+        match err.downcast::<Error>() {
             Ok(err) => err,
-            Err(err) => err,
+            Err(err) => Error::Starlark(err),
         }
+    }
+}
+
+impl From<starlark::Error> for Error {
+    fn from(err: starlark::Error) -> Self {
+        err.into_anyhow().into()
     }
 }
 

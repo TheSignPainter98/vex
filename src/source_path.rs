@@ -99,7 +99,7 @@ impl PrettyPath {
 
     #[starlark_module]
     fn methods(builder: &mut MethodsBuilder) {
-        fn matches<'v>(this: Value<'v>, other: Value<'v>) -> anyhow::Result<bool> {
+        fn matches<'v>(this: Value<'v>, other: Value<'v>) -> starlark::Result<bool> {
             let this = this
                 .request_value::<&PrettyPath>()
                 .expect("receiver has incorrect type");
@@ -155,18 +155,18 @@ impl<'v> StarlarkValue<'v> for PrettyPath {
         RES.methods(Self::methods)
     }
 
-    fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {
+    fn equals(&self, other: Value<'v>) -> starlark::Result<bool> {
         Ok(other
             .request_value::<&Self>()
             .map(|other| self == other)
             .unwrap_or_default())
     }
 
-    fn length(&self) -> anyhow::Result<i32> {
+    fn length(&self) -> starlark::Result<i32> {
         Ok(self.len() as i32)
     }
 
-    fn is_in(&self, other: Value<'v>) -> anyhow::Result<bool> {
+    fn is_in(&self, other: Value<'v>) -> starlark::Result<bool> {
         let Some(str) = other.unpack_str() else {
             return Err(ValueError::IncorrectParameterTypeWithExpected(
                 "str".to_owned(),
@@ -177,13 +177,13 @@ impl<'v> StarlarkValue<'v> for PrettyPath {
         Ok(self.components().any(|c| c.as_str() == str))
     }
 
-    fn iterate_collect(&self, heap: &'v Heap) -> anyhow::Result<Vec<Value<'v>>> {
+    fn iterate_collect(&self, heap: &'v Heap) -> starlark::Result<Vec<Value<'v>>> {
         Ok(self.components().map(|c| heap.alloc(c.as_str())).collect())
     }
 
-    fn at(&self, index: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+    fn at(&self, index: Value<'v>, heap: &'v Heap) -> starlark::Result<Value<'v>> {
         let Some(mut index) = index.unpack_i32() else {
-            return ValueError::unsupported_with(self, "[]", index);
+            return ValueError::unsupported_with(self, "[]", index)?;
         };
         let n = self.len() as i32;
         if index >= n || index < -n {
@@ -209,7 +209,7 @@ impl<'v> StarlarkValue<'v> for PrettyPath {
         stop: Option<Value<'v>>,
         stride: Option<Value<'v>>,
         heap: &'v Heap,
-    ) -> anyhow::Result<Value<'v>> {
+    ) -> starlark::Result<Value<'v>> {
         let n = self.len() as i32;
         let start = start.and_then(Value::unpack_i32);
         let stop = stop.and_then(Value::unpack_i32);
@@ -291,7 +291,7 @@ mod test {
             self.try_run(to_run).unwrap()
         }
 
-        fn try_run(self, to_run: impl AsRef<str>) -> anyhow::Result<()> {
+        fn try_run(self, to_run: impl AsRef<str>) -> starlark::Result<()> {
             self.setup();
 
             let path = PrettyPath::new(Utf8Path::new(self.path.expect("path not set")));

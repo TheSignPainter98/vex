@@ -56,14 +56,14 @@ impl<'v> StarlarkValue<'v> for Node<'v> {
         demand.provide_value(self)
     }
 
-    fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {
+    fn equals(&self, other: Value<'v>) -> starlark::Result<bool> {
         let Some(other) = other.request_value::<&Self>() else {
             return Ok(false);
         };
         Ok(self == other)
     }
 
-    fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
+    fn write_hash(&self, hasher: &mut StarlarkHasher) -> starlark::Result<()> {
         hasher.write_usize(self.id());
         Ok(())
     }
