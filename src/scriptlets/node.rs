@@ -15,7 +15,7 @@ use starlark::{
 use starlark_derive::{starlark_attrs, starlark_module, starlark_value, StarlarkAttrs};
 use tree_sitter::{Node as TSNode, Point};
 
-use crate::source_file::ParsedSourceFile;
+use crate::{scriptlets::tree_walker::TreeWalker, source_file::ParsedSourceFile};
 
 #[derive(new, Clone, Debug, PartialEq, Eq, ProvidesStaticType, NoSerialize, Allocative, Dupe)]
 pub struct Node<'v> {
@@ -36,9 +36,9 @@ impl Node<'_> {
 
     #[starlark_module]
     fn methods(builder: &mut MethodsBuilder) {
-        // fn walk<'v>(this: Node<'v>) -> anyhow::Result<TreeWalker<'v>> {
-        //     Ok(TreeWalker::new(this.walk()))
-        // }
+        fn walk<'v>(this: Node<'v>) -> anyhow::Result<TreeWalker<'v>> {
+            Ok(TreeWalker::new(this.walk()))
+        }
 
         fn text<'v>(this: Node<'v>) -> anyhow::Result<&'v str> {
             Ok(this.utf8_text(this.source_file.content.as_bytes())?)
@@ -279,7 +279,7 @@ mod test {
                             )
 
                         def on_match(event):
-                            check['attrs'](event.captures['bin_expr'], ['kind', 'location', 'text'])
+                            check['attrs'](event.captures['bin_expr'], ['kind', 'location', 'text', 'walk'])
                     "#,
                     check_path = VexTest::CHECK_STARLARK_PATH,
                 },
