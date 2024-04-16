@@ -140,7 +140,17 @@ impl LoadStatementModule<'_> {
             return Err(invalid_load(InvalidLoadReason::Empty));
         }
 
-        if self_as_path.has_root() {
+        if let Some(forbidden_char) = self
+            .0
+            .chars()
+            .find(|c| !matches!(c, 'a'..='z' | '0'..='9' | '/' | '.' | '_'))
+        {
+            return Err(invalid_load(InvalidLoadReason::ForbiddenChar(
+                forbidden_char,
+            )));
+        }
+
+        if self_as_path.is_absolute() {
             return Err(invalid_load(InvalidLoadReason::Absolute));
         }
 
@@ -169,16 +179,6 @@ impl LoadStatementModule<'_> {
         }
         if stem.ends_with('_') {
             return Err(invalid_load(InvalidLoadReason::UnderscoreAtEndOfStem));
-        }
-
-        if let Some(forbidden_char) = self
-            .0
-            .chars()
-            .find(|c| !matches!(c, 'a'..='z' | '0'..='9' | '/' | '.' | '_'))
-        {
-            return Err(invalid_load(InvalidLoadReason::ForbiddenChar(
-                forbidden_char,
-            )));
         }
 
         if components
@@ -708,10 +708,12 @@ mod test {
         LoadTest::new("absolute-unix")
             .path("/aaa.star")
             .causes("load paths cannot be absolute");
-        // TODO(kcza): make consistent across OSes!
-        // LoadTest::new("absolute-windows")
-        //     .path("C:/aaa.star")
-        //     .invalid("load paths cannot be absolute");
+        LoadTest::new("absolute-windows-uppercase")
+            .path("C:/aaa.star")
+            .causes("load paths can only contain a-z, 0-9, `_`, `.` and `/`, found `C`");
+        LoadTest::new("absolute-windows-lowercase")
+            .path("c:/aaa.star")
+            .causes("load paths can only contain a-z, 0-9, `_`, `.` and `/`, found `:`");
         LoadTest::new("wrong-extension")
             .path("aaa.starlark")
             .causes("load paths must have the `.star` extension");
