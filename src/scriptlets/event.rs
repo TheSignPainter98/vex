@@ -5,10 +5,7 @@ use derive_new::new;
 use dupe::Dupe;
 use starlark::{
     starlark_simple_value,
-    values::{
-        none::NoneType, AllocValue, Freeze, Heap, NoSerialize, ProvidesStaticType, StarlarkValue,
-        Trace, Value,
-    },
+    values::{AllocValue, Heap, NoSerialize, ProvidesStaticType, StarlarkValue, Trace, Value},
 };
 use starlark_derive::{starlark_value, StarlarkAttrs};
 use strum::{EnumIter, IntoEnumIterator};
@@ -220,15 +217,7 @@ impl<'v> StarlarkValue<'v> for QueryMatchEvent<'v> {
 
 impl<'v> AllocValue<'v> for QueryMatchEvent<'v> {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_complex(self)
-    }
-}
-
-impl<'v> Freeze for QueryMatchEvent<'v> {
-    type Frozen = NoneType;
-
-    fn freeze(self, _freezer: &starlark::values::Freezer) -> anyhow::Result<Self::Frozen> {
-        Err(Error::Unfreezable(<Self as StarlarkValue>::TYPE).into())
+        heap.alloc_complex_no_freeze(self)
     }
 }
 

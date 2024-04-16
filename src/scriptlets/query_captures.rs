@@ -6,14 +6,14 @@ use dupe::Dupe;
 use starlark::{
     environment::{Methods, MethodsBuilder, MethodsStatic},
     values::{
-        none::NoneType, string::StarlarkStr, AllocValue, Demand, Freeze, Heap, NoSerialize,
-        ProvidesStaticType, StarlarkValue, Trace, Value, ValueError,
+        string::StarlarkStr, AllocValue, Demand, Heap, NoSerialize, ProvidesStaticType,
+        StarlarkValue, Trace, Value, ValueError,
     },
 };
 use starlark_derive::{starlark_module, starlark_value};
 use tree_sitter::{Query, QueryMatch as TSQueryMatch};
 
-use crate::{error::Error, scriptlets::node::Node, source_file::ParsedSourceFile};
+use crate::{scriptlets::node::Node, source_file::ParsedSourceFile};
 
 #[derive(new, Clone, Debug, ProvidesStaticType, NoSerialize, Allocative, Dupe)]
 pub struct QueryCaptures<'v> {
@@ -106,15 +106,7 @@ impl<'v> StarlarkValue<'v> for QueryCaptures<'v> {
 
 impl<'v> AllocValue<'v> for QueryCaptures<'v> {
     fn alloc_value(self, heap: &'v starlark::values::Heap) -> starlark::values::Value<'v> {
-        heap.alloc_complex(self)
-    }
-}
-
-impl Freeze for QueryCaptures<'_> {
-    type Frozen = NoneType;
-
-    fn freeze(self, _freezer: &starlark::values::Freezer) -> anyhow::Result<Self::Frozen> {
-        Err(Error::Unfreezable(Self::TYPE).into())
+        heap.alloc_complex_no_freeze(self)
     }
 }
 
@@ -151,15 +143,7 @@ impl<'v> StarlarkValue<'v> for QueryCapturesKeys<'v> {
 
 impl<'v> AllocValue<'v> for QueryCapturesKeys<'v> {
     fn alloc_value(self, heap: &'v starlark::values::Heap) -> starlark::values::Value<'v> {
-        heap.alloc_complex(self)
-    }
-}
-
-impl Freeze for QueryCapturesKeys<'_> {
-    type Frozen = NoneType;
-
-    fn freeze(self, _freezer: &starlark::values::Freezer) -> anyhow::Result<Self::Frozen> {
-        Err(Error::Unfreezable(Self::TYPE).into())
+        heap.alloc_complex_no_freeze(self)
     }
 }
 
@@ -194,15 +178,7 @@ impl<'v> StarlarkValue<'v> for QueryCapturesValues<'v> {
 
 impl<'v> AllocValue<'v> for QueryCapturesValues<'v> {
     fn alloc_value(self, heap: &'v starlark::values::Heap) -> starlark::values::Value<'v> {
-        heap.alloc_complex(self)
-    }
-}
-
-impl Freeze for QueryCapturesValues<'_> {
-    type Frozen = NoneType;
-
-    fn freeze(self, _freezer: &starlark::values::Freezer) -> anyhow::Result<Self::Frozen> {
-        Err(Error::Unfreezable(Self::TYPE).into())
+        heap.alloc_complex_no_freeze(self)
     }
 }
 
@@ -247,15 +223,7 @@ impl<'v> StarlarkValue<'v> for QueryCapturesItems<'v> {
 
 impl<'v> AllocValue<'v> for QueryCapturesItems<'v> {
     fn alloc_value(self, heap: &'v starlark::values::Heap) -> starlark::values::Value<'v> {
-        heap.alloc_complex(self)
-    }
-}
-
-impl Freeze for QueryCapturesItems<'_> {
-    type Frozen = NoneType;
-
-    fn freeze(self, _freezer: &starlark::values::Freezer) -> anyhow::Result<Self::Frozen> {
-        Err(Error::Unfreezable(Self::TYPE).into())
+        heap.alloc_complex_no_freeze(self)
     }
 }
 
