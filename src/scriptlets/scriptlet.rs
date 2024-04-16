@@ -213,10 +213,11 @@ impl LoadStatementModule<'_> {
             return Err(invalid_load(InvalidLoadReason::IncorrectExtension));
         }
 
-        let dumb_components = self.0.split('/').collect::<Vec<_>>();
-        if dumb_components.contains(&"") {
+        if self.0.contains("//") {
             return Err(invalid_load(InvalidLoadReason::DoubleSlash));
         }
+
+        let dumb_components = self.0.split('/').collect::<Vec<_>>();
         match components.first().expect("internal error: path empty") {
             Utf8Component::CurDir => {
                 if dumb_components[1..].contains(&".") {
