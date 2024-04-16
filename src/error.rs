@@ -103,9 +103,6 @@ pub enum Error {
     #[error("{0}")]
     Toml(#[from] toml_edit::de::Error),
 
-    #[error("cannot freeze a {0}")]
-    Unfreezable(&'static str),
-
     #[error(
         "unknown event '{name}'{}, expected one of: {}",
         suggestion.map(|suggestion| format!(" (did you mean '{suggestion}'?)")).unwrap_or_default(),

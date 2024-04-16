@@ -8,14 +8,14 @@ use starlark::{
     environment::{Methods, MethodsBuilder, MethodsStatic},
     starlark_simple_value,
     values::{
-        none::NoneType, AllocValue, Demand, Freeze, Heap, NoSerialize, ProvidesStaticType,
-        StarlarkValue, Trace, UnpackValue, Value,
+        AllocValue, Demand, Heap, NoSerialize, ProvidesStaticType, StarlarkValue, Trace,
+        UnpackValue, Value,
     },
 };
 use starlark_derive::{starlark_attrs, starlark_module, starlark_value, StarlarkAttrs};
 use tree_sitter::{Node as TSNode, Point};
 
-use crate::{error::Error, source_file::ParsedSourceFile};
+use crate::source_file::ParsedSourceFile;
 
 #[derive(new, Clone, Debug, PartialEq, Eq, ProvidesStaticType, NoSerialize, Allocative, Dupe)]
 pub struct Node<'v> {
@@ -101,15 +101,7 @@ impl<'v> UnpackValue<'v> for Node<'v> {
 
 impl<'v> AllocValue<'v> for Node<'v> {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_complex(self)
-    }
-}
-
-impl Freeze for Node<'_> {
-    type Frozen = NoneType;
-
-    fn freeze(self, _freezer: &starlark::values::Freezer) -> anyhow::Result<Self::Frozen> {
-        Err(Error::Unfreezable(Self::TYPE).into())
+        heap.alloc_complex_no_freeze(self)
     }
 }
 
