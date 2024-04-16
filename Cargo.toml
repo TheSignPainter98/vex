@@ -12,6 +12,7 @@ anyhow = "1.0.76"
 async-recursion = "1.0.5"
 camino = { version = "1.1.6", features = ["serde1"] }
 clap = { version = "4.4.11", features = ["derive"] }
+const_format = "0.2.32"
 derive-new = "0.6.0"
 derive_more = "0.99.17"
 dupe = "0.9.0"
@@ -22,6 +23,7 @@ joinery = "3.1.0"
 lazy_static = "1.4.0"
 log = { version = "0.4.20", features = ["std", "kv_unstable"] }
 num-traits = "0.2.17"
+regex = "1.10.3"
 serde = { version = "1.0.193", features = ["derive", "rc"] }
 starlark = "0.12.0"
 starlark_derive = "0.12.0"
@@ -32,11 +34,11 @@ thiserror = "1.0.51"
 toml_edit = { version = "0.21.0", features = ["serde"] }
 tree-sitter = "0.20.10"
 tree-sitter-rust = "0.20.4"
+uniquote = "4.0.0"
 
 [dev-dependencies]
 insta = { version = "1.36.1", features = ["yaml"] }
 pretty_assertions = "1.4.0"
-regex = "1.10.3"
 textwrap = { version = "0.16.1", default-features = false }
 
 [profile.dev.package]

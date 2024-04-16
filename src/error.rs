@@ -35,10 +35,10 @@ pub enum Error {
     #[error("import cycle detected: {}", .0.iter().join_with(" -> "))]
     ImportCycle(Vec<PrettyPath>),
 
-    #[error("cannot load {module} in {path}: {reason}")]
+    #[error("cannot load {load}: {reason}")]
     InvalidLoad {
-        path: PrettyPath,
-        module: String,
+        load: String,
+        module: PrettyPath,
         reason: InvalidLoadReason,
     },
 
@@ -163,44 +163,63 @@ pub enum IOAction {
 
 #[derive(Debug, Display)]
 pub enum InvalidLoadReason {
-    #[display(
-        fmt = "load paths cannot contain underscores which appear at component ends, found {_0}"
-    )]
-    HasBadUnderscoresInComponent(String),
+    #[display(fmt = "load paths cannot have underscores at component-ends")]
+    UnderscoresAtEndOfComponent,
 
-    #[display(fmt = "load paths can only contain a-z, 0-9 _, . and /, found {_0}")]
-    HasForbiddenChar(char),
+    #[display(fmt = "load paths cannot contain `//`")]
+    DoubleSlash,
 
-    #[display(fmt = "load paths must have .star extension, found `{}`", _0)]
-    HasIncorrectExtension(String),
+    #[display(fmt = "load paths can only contain a-z, 0-9, `_`, `.` and `/`, found `{_0}`")]
+    ForbiddenChar(char),
+
+    #[display(fmt = "load paths cannot have hidden components")]
+    HiddenComponent,
+
+    #[display(fmt = "load paths can only use `.` in the file extension")]
+    MidwayDot,
+
+    #[display(fmt = "load paths must have the `.star` extension")]
+    IncorrectExtension,
 
     #[display(fmt = "load paths can only have path operators at the start")]
-    HasMidwayPathOperator,
+    MidwayPathOperator,
 
-    #[display(fmt = "load paths cannot contain many successive dots, found {_0}")]
-    HasSuccessiveDots(String),
+    #[display(fmt = "load paths cannot contain multiple `./`")]
+    MultipleCurDirs,
+
+    #[display(fmt = "load paths cannot contain successive dots in file component")]
+    SuccessiveDots,
 
     #[display(fmt = "load paths cannot contain successive underscores")]
-    HasSuccessiveUnderscores,
+    SuccessiveUnderscores,
 
     #[display(
-        fmt = "load path components must be at least {} characters, found {_0}",
+        fmt = "load path components must be at least {} characters",
         LoadStatementModule::MIN_COMPONENT_LEN
     )]
-    HasTooShortComponent(String),
+    TooShortComponent,
 
     #[display(
-        fmt = "load path stem must be at least {} characters, found {_0}",
+        fmt = "load path stem must be at least {} characters",
         LoadStatementModule::MIN_COMPONENT_LEN
     )]
-    HasTooShortStem(String),
+    TooShortStem,
 
-    #[display(fmt = "load paths must not have underscores at the end of the stem, found {_0}")]
-    HasUnderscoreAtEndOfStem(String),
+    #[display(fmt = "load paths cannot have underscores at end of stem")]
+    UnderscoreAtEndOfStem,
 
     #[display(fmt = "load paths cannot be absolute")]
-    IsAbsolute,
+    Absolute,
 
     #[display(fmt = "load paths must be files, not directories")]
-    IsDir,
+    Dir,
+
+    #[display(fmt = "load paths cannot be empty")]
+    Empty,
+
+    #[display(fmt = "load paths cannot contain both `./` and `../`")]
+    MixedPathOperators,
+
+    #[display(fmt = "load path invalid, see docs")] // TODO(kcza): link to spec once public.
+    NonSpecific,
 }
