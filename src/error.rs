@@ -1,11 +1,12 @@
 use std::{io, num, path};
 
 use camino::Utf8PathBuf;
+use derive_more::Display;
 use joinery::JoinableIterator;
 use strum::IntoEnumIterator;
 
 use crate::{
-    scriptlets::{action::Action, event::EventType},
+    scriptlets::{action::Action, event::EventType, LoadStatementModule},
     source_path::PrettyPath,
     supported_language::SupportedLanguage,
 };
@@ -33,6 +34,13 @@ pub enum Error {
 
     #[error("import cycle detected: {}", .0.iter().join_with(" -> "))]
     ImportCycle(Vec<PrettyPath>),
+
+    #[error("cannot load {load}: {reason}")]
+    InvalidLoad {
+        load: String,
+        module: PrettyPath,
+        reason: InvalidLoadReason,
+    },
 
     #[error("{0}")]
     InvalidWarnCall(&'static str),
@@ -141,11 +149,74 @@ impl From<starlark::Error> for Error {
     }
 }
 
-#[derive(Debug, strum::Display)]
+#[derive(Debug, Display)]
 pub enum IOAction {
-    #[strum(serialize = "read")]
+    #[display(fmt = "read")]
     Read,
 
-    #[strum(serialize = "write")]
+    #[display(fmt = "write")]
     Write,
+}
+
+#[derive(Debug, Display)]
+pub enum InvalidLoadReason {
+    #[display(fmt = "load path cannot have underscores at component-ends")]
+    UnderscoresAtEndOfComponent,
+
+    #[display(fmt = "load path cannot contain `//`")]
+    DoubleSlash,
+
+    #[display(fmt = "load path can only contain a-z, 0-9, `_`, `.` and `/`, found `{_0}`")]
+    ForbiddenChar(char),
+
+    #[display(fmt = "load path cannot have hidden components")]
+    HiddenComponent,
+
+    #[display(fmt = "load path can only have a `.` in the file extension")]
+    MidwayDot,
+
+    #[display(fmt = "load path must have the `.star` extension")]
+    IncorrectExtension,
+
+    #[display(fmt = "load path can only have path operators at the start")]
+    MidwayPathOperator,
+
+    #[display(fmt = "load path cannot contain multiple `./`")]
+    MultipleCurDirs,
+
+    #[display(fmt = "load path cannot contain successive dots in file component")]
+    SuccessiveDots,
+
+    #[display(fmt = "load path cannot contain successive underscores")]
+    SuccessiveUnderscores,
+
+    #[display(
+        fmt = "load path components must be at least {} characters",
+        LoadStatementModule::MIN_COMPONENT_LEN
+    )]
+    TooShortComponent,
+
+    #[display(
+        fmt = "load path stem must be at least {} characters",
+        LoadStatementModule::MIN_COMPONENT_LEN
+    )]
+    TooShortStem,
+
+    #[display(fmt = "load path cannot have underscores at end of stem")]
+    UnderscoreAtEndOfStem,
+
+    #[display(fmt = "load path cannot be absolute")]
+    Absolute,
+
+    #[display(fmt = "load path must be files, not directories")]
+    Dir,
+
+    #[display(fmt = "load path cannot be empty")]
+    Empty,
+
+    #[display(fmt = "load path cannot contain both `./` and `../`")]
+    MixedPathOperators,
+
+    #[display(fmt = "load path invalid, see docs")] // TODO(kcza): link to spec once public.
+    NonSpecific,
 }

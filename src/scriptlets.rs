@@ -9,10 +9,11 @@ mod query_captures;
 mod scriptlet;
 mod store;
 
-pub use self::node::Node;
-pub use self::observers::{Observer, ScriptletObserverData};
-pub use self::query_captures::QueryCaptures;
-pub use self::store::{PreinitingStore, VexingStore};
+pub use node::Node;
+pub use observers::{Observer, ScriptletObserverData};
+pub use query_captures::QueryCaptures;
+pub use scriptlet::LoadStatementModule;
+pub use store::{PreinitingStore, VexingStore};
 
 #[cfg(test)]
 pub use print_handler::PrintHandler;
