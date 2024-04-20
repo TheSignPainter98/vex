@@ -682,43 +682,43 @@ mod test {
 
         LoadTest::new("dash")
             .path("---.star")
-            .causes("load paths can only contain a-z, 0-9, `_`, `.` and `/`, found `-`");
+            .causes("load path can only contain a-z, 0-9, `_`, `.` and `/`, found `-`");
         LoadTest::new("backslashes")
             .path(r".\\.\\aaa.star")
-            .causes(r"load paths can only contain a-z, 0-9, `_`, `.` and `/`, found `\`");
+            .causes(r"load path can only contain a-z, 0-9, `_`, `.` and `/`, found `\`");
         LoadTest::new("extra-starting-current-dir")
             .path("././aaa.star")
-            .causes("load paths cannot contain multiple `./`");
+            .causes("load path cannot contain multiple `./`");
         LoadTest::new("current-dir-in-parent-dir")
             .path(".././aaa.star")
-            .causes("load paths cannot contain both `./` and `../`");
+            .causes("load path cannot contain both `./` and `../`");
         LoadTest::new("parent-op-in-current-dir")
             .path("./../aaa.star")
-            .causes("load paths cannot contain both `./` and `../`");
+            .causes("load path cannot contain both `./` and `../`");
         LoadTest::new("midway-current-dir")
             .path("aaa/./bbb.star")
-            .causes("load paths can only have path operators at the start");
+            .causes("load path can only have path operators at the start");
         LoadTest::new("midway-parent-dir")
             .path("aaa/../bbb.star")
-            .causes("load paths can only have path operators at the start");
+            .causes("load path can only have path operators at the start");
         LoadTest::new("successive-slashes")
             .path("aaa//bbb.star")
-            .causes("load paths cannot contain `//`");
+            .causes("load path cannot contain `//`");
         LoadTest::new("empty")
             .path("")
-            .causes("load paths cannot be empty");
+            .causes("load path cannot be empty");
         LoadTest::new("absolute-unix")
             .path("/aaa.star")
-            .causes("load paths cannot be absolute");
+            .causes("load path cannot be absolute");
         LoadTest::new("absolute-windows-uppercase")
             .path("C:/aaa.star")
-            .causes("load paths can only contain a-z, 0-9, `_`, `.` and `/`, found `C`");
+            .causes("load path can only contain a-z, 0-9, `_`, `.` and `/`, found `C`");
         LoadTest::new("absolute-windows-lowercase")
             .path("c:/aaa.star")
-            .causes("load paths can only contain a-z, 0-9, `_`, `.` and `/`, found `:`");
+            .causes("load path can only contain a-z, 0-9, `_`, `.` and `/`, found `:`");
         LoadTest::new("wrong-extension")
             .path("aaa.starlark")
-            .causes("load paths must have the `.star` extension");
+            .causes("load path must have the `.star` extension");
         LoadTest::new("short-components")
             .path("aa/bb/ccc.star")
             .causes("load path components must be at least 3 characters");
@@ -730,48 +730,48 @@ mod test {
             .causes("load path stem must be at least 3 characters");
         LoadTest::new("uppercase-firbidden")
             .path("AAA.star")
-            .causes("load paths can only contain a-z, 0-9, `_`, `.` and `/`, found `A`");
+            .causes("load path can only contain a-z, 0-9, `_`, `.` and `/`, found `A`");
         LoadTest::new("invalid-rune-emoji")
             .path("🤸🪑🏌️.star")
-            .causes("load paths can only contain a-z, 0-9, `_`, `.` and `/`, found `🤸`");
+            .causes("load path can only contain a-z, 0-9, `_`, `.` and `/`, found `🤸`");
         LoadTest::new("no-stem")
             .path(".star")
             .causes("load path stem must be at least 3 characters");
         LoadTest::new("hidden-files")
             .path(".secret.star")
-            .causes("load paths cannot have hidden components");
+            .causes("load path cannot have hidden components");
         LoadTest::new("hidden-dirs")
             .path("aaa/.secret/aaa.star")
-            .causes("load paths cannot have hidden components");
+            .causes("load path cannot have hidden components");
         LoadTest::new("midway-dots")
             .path("aaa/b.b/ccc.star")
-            .causes("load paths can only use `.` in the file extension");
+            .causes("load path can only have a `.` in the file extension");
         LoadTest::new("many-extensions")
             .path("aaa/bbb.tar.star")
-            .causes("load paths must have the `.star` extension");
+            .causes("load path must have the `.star` extension");
         LoadTest::new("successive-dots-as-component")
             .path("aaa/.../bbb.star")
-            .causes("load paths cannot contain successive dots in file component");
+            .causes("load path cannot contain successive dots in file component");
         LoadTest::new("successive-dots-in-component")
             .path("aaa..bbb.star")
-            .causes("load paths cannot contain successive dots in file component");
+            .causes("load path cannot contain successive dots in file component");
         LoadTest::new("successive-underscores")
             .path("a__a.star")
-            .causes("load paths cannot contain successive underscores");
+            .causes("load path cannot contain successive underscores");
         LoadTest::new("leading-underscore")
             .path("_aaa.star")
-            .causes("load paths cannot have underscores at component-ends");
+            .causes("load path cannot have underscores at component-ends");
         LoadTest::new("midway-leading-underscore")
             .path("aaa/_bbb.star")
-            .causes("load paths cannot have underscores at component-ends");
+            .causes("load path cannot have underscores at component-ends");
         LoadTest::new("trailing-underscore")
             .path("aaa_/bbb.star")
-            .causes("load paths cannot have underscores at component-ends");
+            .causes("load path cannot have underscores at component-ends");
         LoadTest::new("trailing-underscore-before-extension")
             .path("aaa/bbb_.star")
-            .causes("load paths cannot have underscores at end of stem");
+            .causes("load path cannot have underscores at end of stem");
         LoadTest::new("underscore-before-dot")
             .path("aaa/b_.b.star")
-            .causes("load paths must have the `.star` extension");
+            .causes("load path must have the `.star` extension");
     }
 }

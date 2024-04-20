@@ -163,34 +163,34 @@ pub enum IOAction {
 
 #[derive(Debug, Display)]
 pub enum InvalidLoadReason {
-    #[display(fmt = "load paths cannot have underscores at component-ends")]
+    #[display(fmt = "load path cannot have underscores at component-ends")]
     UnderscoresAtEndOfComponent,
 
-    #[display(fmt = "load paths cannot contain `//`")]
+    #[display(fmt = "load path cannot contain `//`")]
     DoubleSlash,
 
-    #[display(fmt = "load paths can only contain a-z, 0-9, `_`, `.` and `/`, found `{_0}`")]
+    #[display(fmt = "load path can only contain a-z, 0-9, `_`, `.` and `/`, found `{_0}`")]
     ForbiddenChar(char),
 
-    #[display(fmt = "load paths cannot have hidden components")]
+    #[display(fmt = "load path cannot have hidden components")]
     HiddenComponent,
 
-    #[display(fmt = "load paths can only use `.` in the file extension")]
+    #[display(fmt = "load path can only have a `.` in the file extension")]
     MidwayDot,
 
-    #[display(fmt = "load paths must have the `.star` extension")]
+    #[display(fmt = "load path must have the `.star` extension")]
     IncorrectExtension,
 
-    #[display(fmt = "load paths can only have path operators at the start")]
+    #[display(fmt = "load path can only have path operators at the start")]
     MidwayPathOperator,
 
-    #[display(fmt = "load paths cannot contain multiple `./`")]
+    #[display(fmt = "load path cannot contain multiple `./`")]
     MultipleCurDirs,
 
-    #[display(fmt = "load paths cannot contain successive dots in file component")]
+    #[display(fmt = "load path cannot contain successive dots in file component")]
     SuccessiveDots,
 
-    #[display(fmt = "load paths cannot contain successive underscores")]
+    #[display(fmt = "load path cannot contain successive underscores")]
     SuccessiveUnderscores,
 
     #[display(
@@ -205,19 +205,19 @@ pub enum InvalidLoadReason {
     )]
     TooShortStem,
 
-    #[display(fmt = "load paths cannot have underscores at end of stem")]
+    #[display(fmt = "load path cannot have underscores at end of stem")]
     UnderscoreAtEndOfStem,
 
-    #[display(fmt = "load paths cannot be absolute")]
+    #[display(fmt = "load path cannot be absolute")]
     Absolute,
 
-    #[display(fmt = "load paths must be files, not directories")]
+    #[display(fmt = "load path must be files, not directories")]
     Dir,
 
-    #[display(fmt = "load paths cannot be empty")]
+    #[display(fmt = "load path cannot be empty")]
     Empty,
 
-    #[display(fmt = "load paths cannot contain both `./` and `../`")]
+    #[display(fmt = "load path cannot contain both `./` and `../`")]
     MixedPathOperators,
 
     #[display(fmt = "load path invalid, see docs")] // TODO(kcza): link to spec once public.
