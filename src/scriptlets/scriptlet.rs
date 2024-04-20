@@ -150,7 +150,8 @@ impl LoadStatementModule<'_> {
             )));
         }
 
-        if self_as_path.is_absolute() {
+        let is_unix_absolute = cfg!(target_os = "windows") && self_as_path.starts_with("/"); // Ensure consistent messaging.
+        if self_as_path.is_absolute() || is_unix_absolute {
             return Err(invalid_load(InvalidLoadReason::Absolute));
         }
 
