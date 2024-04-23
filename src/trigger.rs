@@ -8,10 +8,7 @@ use serde::{Deserialize, Serialize};
 use starlark_derive::Trace;
 use tree_sitter::Query;
 
-use crate::{
-    error::Error, result::Result, source_file::ParsedSourceFile,
-    supported_language::SupportedLanguage,
-};
+use crate::{error::Error, result::Result, supported_language::SupportedLanguage};
 
 pub trait TriggerCause {
     fn matches(&self, trigger: &Trigger) -> bool;
@@ -54,17 +51,11 @@ pub struct ContentTrigger {
     pub query: Option<Query>,
 }
 
-impl ContentTrigger {
-    pub fn matches(&self, src_file: &ParsedSourceFile) -> bool {
-        self.language == src_file.language
-    }
-}
-
 #[derive(Debug, Allocative)]
 pub struct FilePattern(#[allocative(skip)] Pattern);
 
 impl FilePattern {
-    pub fn matches_path(&self, path: &Utf8Path) -> bool {
+    pub fn matches(&self, path: &Utf8Path) -> bool {
         self.0.matches_path_with(
             path.as_std_path(),
             MatchOptions {
@@ -282,7 +273,7 @@ mod test {
                     .test_paths
                     .iter()
                     .filter(|test_path| {
-                        pattern.matches_path(&Utf8PathBuf::from(self.root_dir).join(test_path))
+                        pattern.matches(&Utf8PathBuf::from(self.root_dir).join(test_path))
                     })
                     .copied()
                     .collect::<Vec<_>>();

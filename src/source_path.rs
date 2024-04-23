@@ -14,6 +14,8 @@ use starlark::{
 };
 use starlark_derive::{starlark_value, ProvidesStaticType};
 
+use crate::trigger::{Trigger, TriggerCause};
+
 #[derive(Clone, Debug, PartialEq, Eq, Dupe)]
 pub struct SourcePath {
     pub abs_path: Arc<Utf8Path>,
@@ -51,6 +53,18 @@ impl AsRef<str> for SourcePath {
 impl Display for SourcePath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.pretty_path.fmt(f)
+    }
+}
+
+impl TriggerCause for SourcePath {
+    fn matches(&self, trigger: &Trigger) -> bool {
+        if trigger.path_patterns.is_empty() {
+            return true;
+        }
+        trigger
+            .path_patterns
+            .iter()
+            .any(|pattern| pattern.matches(&self.pretty_path))
     }
 }
 
