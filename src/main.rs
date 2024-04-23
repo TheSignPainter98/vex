@@ -285,7 +285,8 @@ fn walkdir(
             action: IOAction::Read,
             cause,
         })?;
-        let relative_path = Utf8Path::new(&entry_path.as_str()[ctx.project_root.as_str().len()..]);
+        let relative_path =
+            Utf8Path::new(&entry_path.as_str()[1 + ctx.project_root.as_str().len()..]);
         if !allows.iter().any(|p| p.matches_path(relative_path)) {
             let hidden = relative_path
                 .file_name()
