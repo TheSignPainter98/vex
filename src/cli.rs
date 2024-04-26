@@ -26,7 +26,11 @@ pub struct Args {
 
     /// Print help information, use `--help` for more detail
     #[arg(short, long, action=ArgAction::Help, global=true)]
-    pub help: Option<bool>,
+    help: Option<bool>,
+
+    /// Print version information
+    #[arg(long, action=ArgAction::Version, global=true)]
+    version: Option<bool>,
 }
 
 #[cfg(test)]
