@@ -10,6 +10,8 @@ Therefore, automation is required and this is where `vex` comes in.
 `vex` is a hackable linter, intended to act as an enforcer for subjective, project-local style preferences.
 Taking input of a set of [Starlark][starlark] scripts which express the style rules, it scans the source directory to identify and report problems.
 
+`vex` supports Linux, macos and Windows, as well as a variety of languages (run `vex languages` for an up-to-date list).
+
 ## Installation
 
 To install `vex`, type and run—
