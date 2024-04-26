@@ -58,7 +58,7 @@ To react to this query matching something, add an observer for the `query_match`
 Now, let’s fill in that observer.
 Let’s say we want to enforce that every time two integer literals appear in a binary expression, a significantly smaller one should appear first (perhaps so the reader isn’t too distracted by the large number that they neglect to read the smaller one).
 To do this, write our `on_query_match` function as follows.
-```bash
+```python
 def on_query_match(event):
     left_operand = event.captures['left_operand']
     right_operand = event.captures['right_operand']
