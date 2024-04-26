@@ -9,13 +9,7 @@ use clap::{
 use crate::error::Error;
 
 #[derive(Debug, Parser)]
-#[command(
-    author,
-    version,
-    about,
-    disable_help_flag = true,
-    disable_version_flag = true
-)]
+#[command(author, version, about, disable_help_flag = true)]
 pub struct Args {
     #[command(subcommand)]
     pub command: Command,
@@ -26,7 +20,7 @@ pub struct Args {
 
     /// Print help information, use `--help` for more detail
     #[arg(short, long, action=ArgAction::Help, global=true)]
-    pub help: Option<bool>,
+    help: Option<bool>,
 }
 
 #[cfg(test)]
