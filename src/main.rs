@@ -351,6 +351,8 @@ mod test {
     use std::{fs::File, io::Write, path};
 
     use indoc::indoc;
+    use insta::assert_yaml_snapshot;
+    use joinery::JoinableIterator;
     use tempfile::TempDir;
 
     use crate::vextest::VexTest;
@@ -505,5 +507,39 @@ mod test {
             .unwrap()
             .into_irritations();
         assert_eq!(irritations.len(), MAX as usize);
+    }
+
+    #[test]
+    fn readme() {
+        // Dumb hacky test to serve until mdbook docs are made and tested.
+        let collate_snippets = |language| {
+            include_str!("../README.md")
+                .lines()
+                .scan(false, |collate_starlark, line| {
+                    Some(if line.starts_with("```") {
+                        *collate_starlark = line[3..].starts_with(language);
+                        None
+                    } else if *collate_starlark {
+                        Some(line)
+                    } else {
+                        None
+                    })
+                })
+                .flatten()
+                .join_with("\n")
+                .to_string()
+        };
+        let collated_starlark_snippets = collate_snippets("python");
+        let collated_rust_snippets = collate_snippets("rust");
+        let irritations = VexTest::new("README-snippets")
+            .with_scriptlet("vexes/test.star", collated_starlark_snippets)
+            .with_source_file("src/main.rs", collated_rust_snippets)
+            .try_run()
+            .unwrap()
+            .into_irritations()
+            .into_iter()
+            .map(|irr| irr.to_string())
+            .collect::<Vec<_>>();
+        assert_yaml_snapshot!(irritations);
     }
 }
