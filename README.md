@@ -68,7 +68,7 @@ def on_query_match(event):
     if int(left_operand.text()) >= int(right_operand.text()) / 100:
         vex.warn(
             'large numbers should come later',
-            at=(bin_expr, 'left operand larger than right'),
+            at=(left_operand, 'large operand found here'),
         )
 ```
 Et voilà, you now have a lint!
