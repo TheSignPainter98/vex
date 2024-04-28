@@ -165,7 +165,7 @@ impl<'v> IrritationRenderer<'v> {
 
     fn relevant_range(node: &Node<'v>) -> Range<usize> {
         let Range { start, end } = node.byte_range();
-        let content = node.source_file.content;
+        let content = &node.source_file.content;
         let start = content[..start]
             .rfind(['\n', '\r'])
             .map(|i| i + 1)

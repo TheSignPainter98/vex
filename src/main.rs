@@ -22,13 +22,14 @@ mod vex;
 #[cfg(test)]
 mod vextest;
 
-use std::{env, fs, iter, process::ExitCode};
+use std::{cell::OnceCell, env, fs, iter, process::ExitCode};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser as _;
 use cli::{DumpCmd, MaxProblems};
 use dupe::Dupe;
 use log::{info, log_enabled, trace, warn};
+use source_file::SourceFile;
 use starlark::environment::Module;
 use strum::IntoEnumIterator;
 use tree_sitter::QueryCursor;
@@ -45,7 +46,6 @@ use crate::{
         event::{CloseFileEvent, OpenFileEvent, OpenProjectEvent, QueryMatchEvent},
         Observer, PreinitingStore, QueryCaptures, VexingStore,
     },
-    source_file::SourceFile,
     source_path::{PrettyPath, SourcePath},
     supported_language::SupportedLanguage,
     trigger::FilePattern,
@@ -126,7 +126,7 @@ impl RunData {
 }
 
 fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<RunData> {
-    let src_files = {
+    let files = {
         let mut paths = Vec::new();
         let ignores = ctx
             .ignores
@@ -170,48 +170,53 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
             Ok::<_, Error>(())
         })?;
 
-    for src_file in &src_files {
-        let file_observers = store.observers_for(src_file).collect::<Vec<_>>();
-        file_observers
-            .iter()
-            .try_for_each(|(trigger_id, observer)| {
+    for file in &files {
+        let parsed_file_cell = OnceCell::new(); // TODO(kcza): replace with LazyCell once
+                                                // sufficiently stable (tracking issue https://github.com/rust-lang/rust/issues/109736)
+        store
+            .observers_for(file)
+            .filter_map(|(trigger_id, observer)| {
+                if let Ok(parsed_file) = parsed_file_cell.get_or_init(|| file.parse()) {
+                    Some((parsed_file, trigger_id, observer))
+                } else {
+                    None
+                }
+            })
+            .try_for_each(|(parsed_file, trigger_id, observer)| {
                 observer.on_open_file.iter().try_for_each(|on_open_file| {
                     irritations.extend(on_open_file.handle(
                         &Module::new(),
                         &observer.vex_path,
-                        OpenFileEvent::new(src_file.path.pretty_path.dupe(), trigger_id.dupe()),
+                        OpenFileEvent::new(parsed_file.path.pretty_path.dupe(), trigger_id.dupe()),
                     )?);
                     Ok::<_, Error>(())
                 })?;
 
-                if let Ok(parsed_src_file) = src_file.parse() {
-                    observer
-                        .trigger_queries()
-                        .try_for_each(|(trigger_id, query)| {
-                            QueryCursor::new()
-                                .matches(
-                                    query,
-                                    parsed_src_file.tree.root_node(),
-                                    parsed_src_file.content.as_bytes(),
-                                )
-                                .try_for_each(|qmatch| {
-                                    let captures =
-                                        QueryCaptures::new(query, &qmatch, &parsed_src_file);
-                                    observer.on_match.iter().try_for_each(|on_match| {
-                                        irritations.extend(on_match.handle(
-                                            &Module::new(),
-                                            &observer.vex_path,
-                                            QueryMatchEvent::new(
-                                                src_file.path.pretty_path.dupe(),
-                                                captures.dupe(),
-                                                trigger_id.cloned(),
-                                            ),
-                                        )?);
-                                        Ok::<_, Error>(())
-                                    })
+                observer
+                    .trigger_queries()
+                    .try_for_each(|(trigger_id, query)| {
+                        QueryCursor::new()
+                            .matches(
+                                query,
+                                parsed_file.tree.root_node(),
+                                parsed_file.content.as_bytes(),
+                            )
+                            .try_for_each(|qmatch| {
+                                let captures = QueryCaptures::new(query, &qmatch, parsed_file);
+                                observer.on_match.iter().try_for_each(|on_match| {
+                                    irritations.extend(on_match.handle(
+                                        &Module::new(),
+                                        &observer.vex_path,
+                                        QueryMatchEvent::new(
+                                            parsed_file.path.pretty_path.dupe(),
+                                            captures.dupe(),
+                                            trigger_id.cloned(),
+                                        ),
+                                    )?);
+                                    Ok::<_, Error>(())
                                 })
-                        })?;
-                }
+                            })
+                    })?;
 
                 observer
                     .on_close_file
@@ -221,11 +226,10 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
                             &Module::new(),
                             &observer.vex_path,
                             CloseFileEvent::new(
-                                src_file.path.pretty_path.dupe(),
+                                parsed_file.path.pretty_path.dupe(),
                                 trigger_id.dupe(),
                             ),
                         )?);
-
                         Ok::<_, Error>(())
                     })?;
 
@@ -254,7 +258,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
     }
     Ok(RunData {
         irritations,
-        num_files_scanned: src_files.len(),
+        num_files_scanned: files.len(),
     })
 }
 
@@ -287,11 +291,11 @@ fn walkdir(
         })?;
         let relative_path =
             Utf8Path::new(&entry_path.as_str()[1 + ctx.project_root.as_str().len()..]);
-        if !allows.iter().any(|p| p.matches_path(relative_path)) {
+        if !allows.iter().any(|p| p.matches(relative_path)) {
             let hidden = relative_path
                 .file_name()
                 .is_some_and(|name| name.starts_with('.'));
-            if hidden || ignores.iter().any(|p| p.matches_path(relative_path)) {
+            if hidden || ignores.iter().any(|p| p.matches(relative_path)) {
                 if log_enabled!(log::Level::Info) {
                     let dir_marker = if metadata.is_dir() { "/" } else { "" };
                     info!("ignoring /{relative_path}{dir_marker}");
@@ -324,16 +328,15 @@ fn dump(dump_args: DumpCmd) -> Result<()> {
             action: IOAction::Read,
             cause: e,
         })?);
-    let src_file = SourceFile::new(src_path)?;
-    let parsed_src_file = src_file.parse()?;
-    if parsed_src_file.tree.root_node().has_error() {
+    let src_file = SourceFile::new(src_path)?.parse()?;
+    if src_file.tree.root_node().has_error() {
         return Err(Error::Unparseable {
             path: PrettyPath::new(Utf8Path::new(&dump_args.path)),
-            language: parsed_src_file.language,
+            language: src_file.language,
         });
     }
 
-    println!("{}", parsed_src_file.tree.root_node().to_sexp());
+    println!("{}", src_file.tree.root_node().to_sexp());
 
     Ok(())
 }

@@ -24,7 +24,7 @@ pub struct QueryCaptures<'v> {
     pub query_match: &'v TSQueryMatch<'v, 'v>,
 
     #[allocative(skip)]
-    source_file: &'v ParsedSourceFile<'v>,
+    source_file: &'v ParsedSourceFile,
 }
 
 impl QueryCaptures<'_> {
