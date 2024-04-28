@@ -12,31 +12,33 @@ use crate::{error::Error, result::Result};
 #[derive(Copy, Clone, Debug, Dupe, EnumIter, Subcommand, Enum, Allocative, PartialEq, Eq)]
 pub enum SupportedLanguage {
     Go,
+    Python,
     Rust,
 }
 
 impl SupportedLanguage {
     pub fn name(&self) -> &'static str {
-        use SupportedLanguage::*;
         match self {
-            Go => "go",
-            Rust => "rust",
+            Self::Go => "go",
+            Self::Python => "python",
+            Self::Rust => "rust",
         }
     }
 
     pub fn try_from_extension(extension: &str) -> Result<Self> {
         match extension {
             "go" => Ok(Self::Go),
+            "py" => Ok(Self::Python),
             "rs" => Ok(Self::Rust),
             _ => Err(Error::UnknownExtension(extension.into())),
         }
     }
 
     pub fn ts_language(&self) -> Language {
-        use SupportedLanguage::*;
         match self {
-            Rust => tree_sitter_rust::language(),
-            Go => tree_sitter_go::language(),
+            Self::Go => tree_sitter_go::language(),
+            Self::Python => tree_sitter_python::language(),
+            Self::Rust => tree_sitter_rust::language(),
         }
     }
 }
@@ -46,8 +48,9 @@ impl FromStr for SupportedLanguage {
 
     fn from_str(s: &str) -> Result<Self> {
         match s {
-            "rust" => Ok(Self::Rust),
             "go" => Ok(Self::Go),
+            "python" => Ok(Self::Python),
+            "rust" => Ok(Self::Rust),
             _ => Err(Error::UnknownLanguage(s.to_string())),
         }
     }

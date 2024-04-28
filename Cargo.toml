@@ -34,6 +34,7 @@ thiserror = "1.0.51"
 toml_edit = { version = "0.21.0", features = ["serde"] }
 tree-sitter = "0.20.10"
 tree-sitter-go = "0.20.0"
+tree-sitter-python = "0.20.4"
 tree-sitter-rust = "0.20.4"
 uniquote = "4.0.0"
 
