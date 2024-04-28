@@ -11,23 +11,23 @@ use crate::{error::Error, result::Result};
 
 #[derive(Copy, Clone, Debug, Dupe, EnumIter, Subcommand, Enum, Allocative, PartialEq, Eq)]
 pub enum SupportedLanguage {
-    Rust,
     Go,
+    Rust,
 }
 
 impl SupportedLanguage {
     pub fn name(&self) -> &'static str {
         use SupportedLanguage::*;
         match self {
-            Rust => "rust",
             Go => "go",
+            Rust => "rust",
         }
     }
 
     pub fn try_from_extension(extension: &str) -> Result<Self> {
         match extension {
-            "rs" => Ok(Self::Rust),
             "go" => Ok(Self::Go),
+            "rs" => Ok(Self::Rust),
             _ => Err(Error::UnknownExtension(extension.into())),
         }
     }
