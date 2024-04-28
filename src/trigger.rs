@@ -139,8 +139,6 @@ mod test {
                 main_content: indoc! {r#"
                     package main
 
-                    )))) // TODO(kcza): why is this not a syntax error??
-
                     import "fmt"
 
                     func main() {
