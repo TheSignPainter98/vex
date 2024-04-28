@@ -516,8 +516,8 @@ mod test {
             include_str!("../README.md")
                 .lines()
                 .scan(false, |collate_starlark, line| {
-                    Some(if line.starts_with("```") {
-                        *collate_starlark = line[3..].starts_with(language);
+                    Some(if let Some(stripped) = line.strip_prefix("```") {
+                        *collate_starlark = stripped.starts_with(language);
                         None
                     } else if *collate_starlark {
                         Some(line)
