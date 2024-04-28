@@ -126,29 +126,60 @@ mod test {
 
     #[test]
     fn supported_language() {
-        let language_tests = [(
-            "rust",
-            "src/main.rs",
-            indoc! {r#"
-                fn main() {
-                    println!("Hello, world!");
-                }
-            "#},
-        )];
-        for (language, _, _) in language_tests {
-            let mut test = VexTest::new(language).with_scriptlet(
-                "vexes/test.star",
-                formatdoc! {r#"
-                    def init():
-                        vex.add_trigger(language='{language}')
-                        vex.observe('open_file', on_open_file)
+        struct LanguageTest {
+            language: &'static str,
+            main_path: &'static str,
+            main_content: &'static str,
+        }
 
-                    def on_open_file(event):
-                        vex.warn('matched %s' % event.path)
+        let language_tests = [
+            LanguageTest {
+                language: "go",
+                main_path: "main.go",
+                main_content: indoc! {r#"
+                    package main
+
+                    import "fmt"
+
+                    func main() {
+                        fmt.Println("Hello, world!")
+                    }
                 "#},
+            },
+            LanguageTest {
+                language: "rust",
+                main_path: "src/main.rs",
+                main_content: indoc! {r#"
+                    fn main() {
+                        println!("Hello, world!");
+                    }
+                "#},
+            },
+        ];
+        for language_test in &language_tests {
+            let mut test = VexTest::new(language_test.language).with_scriptlet(
+                "vexes/test.star",
+                formatdoc! {
+                    r#"
+                        def init():
+                            vex.add_trigger(language='{language}')
+                            vex.observe('open_file', on_open_file)
+                            vex.observe('close_file', on_close_file)
+
+                        def on_open_file(event):
+                            vex.warn('language={language}: opened %s' % event.path)
+
+                        def on_close_file(event):
+                            vex.warn('language={language}: closed %s' % event.path)
+                    "#,
+                    language = language_test.language,
+                },
             );
-            for (_, path, content) in language_tests {
-                test = test.with_source_file(path, content);
+            for other_language_test in &language_tests {
+                test = test.with_source_file(
+                    other_language_test.main_path,
+                    other_language_test.main_content,
+                );
             }
 
             let run_data = test.try_run().unwrap();
@@ -158,7 +189,7 @@ mod test {
                 "wrong number of files scanned"
             );
             assert_eq!(
-                language_tests.len(),
+                2,
                 run_data.irritations.len(),
                 "wrong number of irritations lodged: got {:?}",
                 run_data
