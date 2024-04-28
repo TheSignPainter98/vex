@@ -171,7 +171,8 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
         })?;
 
     for file in &files {
-        let parsed_file_cell = OnceCell::new();
+        let parsed_file_cell = OnceCell::new(); // TODO(kcza): replace with LazyCell once
+                                                // sufficiently stable (tracking issue https://github.com/rust-lang/rust/issues/109736)
         store
             .observers_for(file)
             .filter_map(|(trigger_id, observer)| {
