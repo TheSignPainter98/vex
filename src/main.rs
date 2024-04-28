@@ -151,7 +151,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
         paths
             .into_iter()
             .map(|p| SourcePath::new(&p, &ctx.project_root))
-            .map(|sp| SourceFile::new(sp))
+            .map(SourceFile::new)
             .collect::<Result<Vec<_>>>()?
     };
 
@@ -171,11 +171,11 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
         })?;
 
     for file in &files {
-        let parsed_file = OnceCell::new();
+        let parsed_file_cell = OnceCell::new();
         store
-            .observers_for(&file)
+            .observers_for(file)
             .filter_map(|(trigger_id, observer)| {
-                if let Ok(parsed_file) = parsed_file.get_or_init(|| file.parse()) {
+                if let Ok(parsed_file) = parsed_file_cell.get_or_init(|| file.parse()) {
                     Some((parsed_file, trigger_id, observer))
                 } else {
                     None
@@ -201,7 +201,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
                                 parsed_file.content.as_bytes(),
                             )
                             .try_for_each(|qmatch| {
-                                let captures = QueryCaptures::new(query, &qmatch, &parsed_file);
+                                let captures = QueryCaptures::new(query, &qmatch, parsed_file);
                                 observer.on_match.iter().try_for_each(|on_match| {
                                     irritations.extend(on_match.handle(
                                         &Module::new(),
