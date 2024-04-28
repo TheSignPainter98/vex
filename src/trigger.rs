@@ -147,6 +147,17 @@ mod test {
                 "#},
             },
             LanguageTest {
+                language: "python",
+                main_path: "main.py",
+                main_content: indoc! {r#"
+                    def main():
+                        print('Hello, world!')
+
+                    if __name__ == '__main__':
+                        main()
+                "#},
+            },
+            LanguageTest {
                 language: "rust",
                 main_path: "src/main.rs",
                 main_content: indoc! {r#"
