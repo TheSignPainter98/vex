@@ -222,10 +222,14 @@ mod test {
                     test = test.with_source_file(file.path, file.content);
                 }
             }
+            test = test.with_source_file(
+                "file-with.unknown-extension",
+                "I appear to have burst into flames.",
+            );
 
             let run_data = test.try_run().unwrap();
             assert_eq!(
-                language_tests
+                1 + language_tests
                     .iter()
                     .map(|lt| lt.files.len())
                     .sum::<usize>(),

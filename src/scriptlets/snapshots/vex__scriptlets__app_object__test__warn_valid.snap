@@ -4,6 +4,6 @@ expression: irritations
 ---
 - "warning[name_of_vex]: test-0"
 - "warning[name_of_vex]: test-1\n = info: some hopefully useful extra info"
-- "warning[name_of_vex]: test-2\n --> main.rs:2:17\n  |\n2 |         let x = 1 + 2;\n  |                 ----- node bin_expr found here\n  |"
-- "warning[name_of_vex]: test-3\n --> main.rs:2:17\n  |\n2 |         let x = 1 + 2;\n  |                 ----- node bin_expr found here\n  |                 - info: node l found here\n  |                     - info: node r found here\n  |"
-- "warning[name_of_vex]: test-4\n --> main.rs:2:17\n  |\n2 |         let x = 1 + 2;\n  |                 ----- node bin_expr found here\n  |                 - info: node l found here\n  |                     - info: node r found here\n  |\n  = info: some hopefully useful extra info"
+- "warning[name_of_vex]: test-2\n --> main.rs:2:13\n  |\n2 |     let x = 1 + 2;\n  |             ----- node bin_expr found here\n  |"
+- "warning[name_of_vex]: test-3\n --> main.rs:2:13\n  |\n2 |     let x = 1 + 2;\n  |             ----- node bin_expr found here\n  |             - info: node l found here\n  |                 - info: node r found here\n  |"
+- "warning[name_of_vex]: test-4\n --> main.rs:2:13\n  |\n2 |     let x = 1 + 2;\n  |             ----- node bin_expr found here\n  |             - info: node l found here\n  |                 - info: node r found here\n  |\n  = info: some hopefully useful extra info"
