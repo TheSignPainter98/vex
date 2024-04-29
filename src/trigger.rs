@@ -142,6 +142,7 @@ mod test {
                     LanguageTestFile {
                         path: "main.c",
                         content: indoc! {r#"
+                            #include <stdio.h>
                             #include "main.h"
 
                             void main(void) {
@@ -152,7 +153,7 @@ mod test {
                     LanguageTestFile {
                         path: "main.h",
                         content: indoc! {r#"
-                            void main(void);
+                            void some_prototype(void);
                         "#},
                     },
                 ],
