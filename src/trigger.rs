@@ -128,43 +128,74 @@ mod test {
     fn supported_language() {
         struct LanguageTest {
             language: &'static str,
-            main_path: &'static str,
-            main_content: &'static str,
+            files: &'static [LanguageTestFile],
+        }
+        struct LanguageTestFile {
+            path: &'static str,
+            content: &'static str,
         }
 
         let language_tests = [
             LanguageTest {
+                language: "c",
+                files: &[
+                    LanguageTestFile {
+                        path: "main.c",
+                        content: indoc! {r#"
+                            #include <stdio.h>
+                            #include "main.h"
+
+                            void main(void) {
+                                printf("Hello, world!\n");
+                            }
+                        "#},
+                    },
+                    LanguageTestFile {
+                        path: "main.h",
+                        content: indoc! {r#"
+                            void some_prototype(void);
+                        "#},
+                    },
+                ],
+            },
+            LanguageTest {
                 language: "go",
-                main_path: "main.go",
-                main_content: indoc! {r#"
-                    package main
+                files: &[LanguageTestFile {
+                    path: "main.go",
+                    content: indoc! {r#"
+                        package main
 
-                    import "fmt"
+                        import "fmt"
 
-                    func main() {
-                        fmt.Println("Hello, world!")
-                    }
-                "#},
+                        func main() {
+                            fmt.Println("Hello, world!")
+                        }
+                    "#},
+                }],
             },
             LanguageTest {
                 language: "python",
-                main_path: "main.py",
-                main_content: indoc! {r#"
-                    def main():
-                        print('Hello, world!')
+                files: &[LanguageTestFile {
+                    path: "main.py",
+                    content: indoc! {r#"
+                        def main():
+                            print('Hello, world!')
 
-                    if __name__ == '__main__':
-                        main()
-                "#},
+                        if __name__ == '__main__':
+                            main()
+                    "#},
+                }],
             },
             LanguageTest {
                 language: "rust",
-                main_path: "src/main.rs",
-                main_content: indoc! {r#"
-                    fn main() {
-                        println!("Hello, world!");
-                    }
-                "#},
+                files: &[LanguageTestFile {
+                    path: "src/main.rs",
+                    content: indoc! {r#"
+                        fn main() {
+                            println!("Hello, world!");
+                        }
+                    "#},
+                }],
             },
         ];
         for language_test in &language_tests {
@@ -187,20 +218,22 @@ mod test {
                 },
             );
             for other_language_test in &language_tests {
-                test = test.with_source_file(
-                    other_language_test.main_path,
-                    other_language_test.main_content,
-                );
+                for file in other_language_test.files {
+                    test = test.with_source_file(file.path, file.content);
+                }
             }
 
             let run_data = test.try_run().unwrap();
             assert_eq!(
-                language_tests.len(),
+                language_tests
+                    .iter()
+                    .map(|lt| lt.files.len())
+                    .sum::<usize>(),
                 run_data.num_files_scanned,
                 "wrong number of files scanned"
             );
             assert_eq!(
-                2,
+                2 * language_test.files.len(),
                 run_data.irritations.len(),
                 "wrong number of irritations lodged: got {:?}",
                 run_data
