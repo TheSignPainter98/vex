@@ -452,7 +452,7 @@ mod test {
         let err = dump(cmd).unwrap_err();
 
         // Assertion relaxed due to strange Github Actions Windows and Macos runner path handling.
-        let expected = format!("cannot parse {}", test_file.path.as_str());
+        let expected = format!("cannot parse {}", PrettyPath::new(&test_file.path));
         assert!(
             err.to_string().ends_with(&expected),
             "unexpected error: expected {expected} but got {err}"
@@ -465,7 +465,10 @@ mod test {
         let args = Args::try_parse_from(["vex", "dump", test_file.path.as_str()]).unwrap();
         let cmd = args.command.into_dump_cmd().unwrap();
         let err = dump(cmd).unwrap_err();
-        assert_eq!(err.to_string(), format!("cannot parse {}", test_file.path));
+        assert_eq!(
+            err.to_string(),
+            format!("cannot parse {}", PrettyPath::new(&test_file.path))
+        );
     }
 
     #[test]
