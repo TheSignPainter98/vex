@@ -330,12 +330,12 @@ fn walkdir(
 }
 
 fn dump(dump_args: DumpCmd) -> Result<()> {
-    let src_path =
-        SourcePath::new_absolute(&dump_args.path.canonicalize_utf8().map_err(|e| Error::IO {
-            path: PrettyPath::new(Utf8Path::new(&dump_args.path)),
-            action: IOAction::Read,
-            cause: e,
-        })?);
+    let cwd = Utf8PathBuf::try_from(env::current_dir().map_err(|e| Error::IO {
+        path: PrettyPath::new(Utf8Path::new(&dump_args.path)),
+        action: IOAction::Read,
+        cause: e,
+    })?)?;
+    let src_path = SourcePath::new_in(&dump_args.path, &cwd);
     let src_file = SourceFile::new(src_path)?.parse()?;
     println!("{}", src_file.tree.root_node().to_sexp());
 
