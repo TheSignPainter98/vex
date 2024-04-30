@@ -34,7 +34,7 @@ impl SourcePath {
 
     pub fn new_in(path: &Utf8Path, base_dir: &Utf8Path) -> Self {
         Self {
-            abs_path: base_dir.join(&path).into(),
+            abs_path: base_dir.join(path).into(),
             pretty_path: PrettyPath::new(path),
         }
     }
