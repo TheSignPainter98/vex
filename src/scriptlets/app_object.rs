@@ -274,11 +274,11 @@ mod test {
                     .with_source_file(
                         "src/main.rs",
                         indoc! {r#"
-                    fn main() {
-                        let x = 1 + 2;
-                        println!("{x}");
-                    }
-                    "#},
+                            fn main() {
+                                let x = 1 + 2;
+                                println!("{x}");
+                            }
+                        "#},
                     )
                     .try_run()
                     .unwrap_err()
@@ -330,7 +330,6 @@ mod test {
                         let x = 1 + 2;
                         println!("{x}");
                     }
-                .into_iter()
                 "#},
             )
             .try_run()
@@ -400,7 +399,6 @@ mod test {
                         let x = 1 + 2;
                         println!("{x}");
                     }
-                .into_iter()
                 "#},
             )
             .returns_error("cannot display `show_also` without an `at` argument")
@@ -452,7 +450,6 @@ mod test {
                         let x = 1 + 2;
                         println!("{x}");
                     }
-                .into_iter()
                 "#},
             )
             .try_run()

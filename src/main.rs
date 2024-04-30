@@ -171,6 +171,12 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
         })?;
 
     for file in &files {
+        if !file.parseable() {
+            if log_enabled!(log::Level::Info) {
+                info!("skipping {}", file.path());
+            }
+            continue;
+        }
         let parsed_file_cell = OnceCell::new(); // TODO(kcza): replace with LazyCell once
                                                 // sufficiently stable (tracking issue https://github.com/rust-lang/rust/issues/109736)
         store
@@ -289,16 +295,18 @@ fn walkdir(
             action: IOAction::Read,
             cause,
         })?;
-        let relative_path =
-            Utf8Path::new(&entry_path.as_str()[1 + ctx.project_root.as_str().len()..]);
-        if !allows.iter().any(|p| p.matches(relative_path)) {
-            let hidden = relative_path
+        let is_dir = metadata.is_dir();
+
+        let project_relative_path =
+            Utf8Path::new(&entry_path.as_str()[ctx.project_root.as_str().len()..]);
+        if !allows.iter().any(|p| p.matches(project_relative_path)) {
+            let hidden = project_relative_path
                 .file_name()
                 .is_some_and(|name| name.starts_with('.'));
-            if hidden || ignores.iter().any(|p| p.matches(relative_path)) {
+            if hidden || ignores.iter().any(|p| p.matches(project_relative_path)) {
                 if log_enabled!(log::Level::Info) {
-                    let dir_marker = if metadata.is_dir() { "/" } else { "" };
-                    info!("ignoring /{relative_path}{dir_marker}");
+                    let dir_marker = if is_dir { "/" } else { "" };
+                    info!("ignoring {project_relative_path}{dir_marker}");
                 }
                 continue;
             }
@@ -309,7 +317,7 @@ fn walkdir(
                 let symlink_path = entry_path.strip_prefix(ctx.project_root.as_ref())?;
                 info!("ignoring /{symlink_path} (symlink)");
             }
-        } else if metadata.is_dir() {
+        } else if is_dir {
             walkdir(ctx, &entry_path, ignores, allows, paths)?;
         } else if metadata.is_file() {
             paths.push(entry_path);
@@ -322,20 +330,13 @@ fn walkdir(
 }
 
 fn dump(dump_args: DumpCmd) -> Result<()> {
-    let src_path =
-        SourcePath::new_absolute(&dump_args.path.canonicalize_utf8().map_err(|e| Error::IO {
-            path: PrettyPath::new(Utf8Path::new(&dump_args.path)),
-            action: IOAction::Read,
-            cause: e,
-        })?);
+    let cwd = Utf8PathBuf::try_from(env::current_dir().map_err(|e| Error::IO {
+        path: PrettyPath::new(Utf8Path::new(&dump_args.path)),
+        action: IOAction::Read,
+        cause: e,
+    })?)?;
+    let src_path = SourcePath::new_in(&dump_args.path, &cwd);
     let src_file = SourceFile::new(src_path)?.parse()?;
-    if src_file.tree.root_node().has_error() {
-        return Err(Error::Unparseable {
-            path: PrettyPath::new(Utf8Path::new(&dump_args.path)),
-            language: src_file.language,
-        });
-    }
-
     println!("{}", src_file.tree.root_node().to_sexp());
 
     Ok(())
@@ -451,7 +452,7 @@ mod test {
         let err = dump(cmd).unwrap_err();
 
         // Assertion relaxed due to strange Github Actions Windows and Macos runner path handling.
-        let expected = "no-extension has no file extension";
+        let expected = format!("cannot parse {}", PrettyPath::new(&test_file.path));
         assert!(
             err.to_string().ends_with(&expected),
             "unexpected error: expected {expected} but got {err}"
@@ -466,7 +467,7 @@ mod test {
         let err = dump(cmd).unwrap_err();
         assert_eq!(
             err.to_string(),
-            format!("unknown extension 'unknown-extension'")
+            format!("cannot parse {}", PrettyPath::new(&test_file.path))
         );
     }
 

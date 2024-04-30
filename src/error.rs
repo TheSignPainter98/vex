@@ -62,9 +62,6 @@ pub enum Error {
     // TODO(kcza): rename this to 'observer'
     NoCallbacks(PrettyPath),
 
-    #[error("{0} has no file extension")]
-    NoExtension(PrettyPath),
-
     #[error("{0} declares no init function")]
     NoInit(PrettyPath),
 
@@ -127,8 +124,11 @@ pub enum Error {
     #[error("unsupported language '{0}'")]
     UnknownLanguage(String),
 
+    #[error("cannot parse {0}")]
+    Unparseable(PrettyPath),
+
     #[error("cannot parse {path} as {language}")]
-    Unparseable {
+    UnparseableAsLanguage {
         path: PrettyPath,
         language: SupportedLanguage,
     },
