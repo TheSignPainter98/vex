@@ -34,7 +34,7 @@ impl<'v> QueryCaptures<'v> {
         let mut captures: SmallVec<[_; 10]> = names
             .iter()
             .zip(quantifiers)
-            .map(|(name, quantifier)| (name, Capture::new(*quantifier)))
+            .map(|(name, quantifier)| (*name, Capture::new(*quantifier)))
             .collect();
         qmatch.captures.iter().for_each(|r#match| {
             let (_, ref mut capture) = captures[r#match.index as usize];
@@ -608,10 +608,10 @@ mod test {
                 (expression_statement) @mandatory_expression ; one
             )
         "};
-        let query = Query::new(language, query_source).unwrap();
+        let query = Query::new(&language, query_source).unwrap();
         let tree = {
             let mut parser = Parser::new();
-            parser.set_language(language).unwrap();
+            parser.set_language(&language).unwrap();
             let tree = parser.parse(content, None).unwrap();
             assert!(!tree.root_node().has_error());
             tree

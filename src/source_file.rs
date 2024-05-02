@@ -1,5 +1,6 @@
 use std::fs;
 
+use allocative::Allocative;
 use dupe::Dupe;
 use log::{info, log_enabled};
 use tree_sitter::{Parser, Tree};
@@ -48,11 +49,12 @@ impl SourceFile {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Allocative)]
 pub struct ParsedSourceFile {
     pub path: SourcePath,
     pub content: String,
     pub language: SupportedLanguage,
+    #[allocative(skip)]
     pub tree: Tree,
 }
 
