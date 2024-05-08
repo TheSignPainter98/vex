@@ -28,7 +28,9 @@ use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser as _;
 use cli::{DumpCmd, MaxProblems};
 use dupe::Dupe;
+use lazy_static::lazy_static;
 use log::{info, log_enabled, trace, warn};
+use owo_colors::{OwoColorize, Stream, Style};
 use source_file::SourceFile;
 use starlark::environment::Module;
 use strum::IntoEnumIterator;
@@ -75,7 +77,7 @@ fn run() -> Result<ExitCode> {
         Command::Init => init(),
     }?;
 
-    Ok(logger::report())
+    Ok(logger::exit_code())
 }
 
 fn list_languages() -> Result<()> {
@@ -92,6 +94,10 @@ fn list_lints() -> Result<()> {
     Ok(())
 }
 
+lazy_static! {
+    static ref SUCCESS_STYLE: Style = Style::new().green().bold();
+}
+
 fn check(cmd_args: CheckCmd) -> Result<()> {
     let ctx = Context::acquire()?;
     let store = PreinitingStore::new(&ctx)?.preinit()?.init()?;
@@ -106,6 +112,11 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
             "found {} across {}",
             Plural::new(irritations.len(), "problem", "problems"),
             Plural::new(num_files_scanned, "file", "files"),
+        );
+    } else {
+        println!(
+            "{}",
+            "all good!".if_supports_color(Stream::Stdout, |text| text.style(*SUCCESS_STYLE))
         );
     }
 
@@ -348,7 +359,14 @@ fn init() -> Result<()> {
         action: IOAction::Read,
         cause,
     })?)?;
-    Context::init(cwd)
+    Context::init(&cwd)?;
+    println!(
+        "{} {}",
+        "vex project inited in"
+            .if_supports_color(Stream::Stdout, |text| text.style(*SUCCESS_STYLE)),
+        cwd.if_supports_color(Stream::Stdout, |text| text.style(*SUCCESS_STYLE)),
+    );
+    Ok(())
 }
 
 #[cfg(test)]
