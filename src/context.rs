@@ -52,7 +52,48 @@ impl Context {
                 cause,
             }
         })?;
-        Manifest::init(project_root)
+        Manifest::init(project_root)?;
+
+        let example_vex_path = Utf8PathBuf::from(project_root)
+            .join(QueriesDir::default().0)
+            .join("example.star");
+        const EXAMPLE_VEX_CONTENT: &str = indoc! {r#"
+            def init():
+                vex.observe('open_project', on_open_project)
+
+            def on_open_project(event):
+                vex.search(
+                    'rust',
+                    '(integer_literal) @lit',
+                    on_match,
+                )
+
+            def on_match(event):
+                lit = event.captures['lit']
+                lit_text = lit.text()
+
+                if lit_text.startswith('0x') or lit_text.startswith('0b'):
+                    return
+
+                if len(lit_text) > 6 and '_' not in lit_text:
+                    vex.warn(
+                        'large unbroken integer literal',
+                        at=(lit, 'consider adding underscores')
+                    )
+        "#};
+        File::create(&example_vex_path)
+            .map_err(|cause| Error::IO {
+                path: PrettyPath::new(&example_vex_path),
+                action: IOAction::Create,
+                cause,
+            })?
+            .write_all(EXAMPLE_VEX_CONTENT.as_bytes())
+            .map_err(|cause| Error::IO {
+                path: PrettyPath::new(&example_vex_path),
+                action: IOAction::Write,
+                cause,
+            })?;
+        Ok(())
     }
 
     pub fn vex_dir(&self) -> Utf8PathBuf {
@@ -210,10 +251,11 @@ impl Deref for IgnoreData {
 
 #[cfg(test)]
 mod test {
+    use insta::assert_yaml_snapshot;
     use regex::Regex;
     use toml_edit::Document;
 
-    use crate::scriptlets::PreinitingStore;
+    use crate::{cli::MaxProblems, scriptlets::PreinitingStore, RunData};
 
     use super::*;
 
@@ -269,6 +311,34 @@ mod test {
             "incorrect error, expected {} but got {err}",
             re.as_str()
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn init_example() -> Result<()> {
+        let tempdir = tempfile::tempdir().unwrap();
+        let tempdir_path = Utf8PathBuf::try_from(tempdir.path().to_owned())?;
+
+        File::create(tempdir_path.join("test.rs"))
+            .unwrap()
+            .write_all(
+                indoc! {r#"
+                fn func() -> i32 {
+                    1234567890
+                    + 0x1234567890
+                    + 0b1111111111
+                }
+            "#}
+                .as_bytes(),
+            )
+            .unwrap();
+
+        Context::init(&tempdir_path)?;
+        let ctx = Context::acquire_in(&tempdir_path)?;
+        let store = PreinitingStore::new(&ctx)?.preinit()?.init()?;
+        let RunData { irritations, .. } = crate::vex(&ctx, &store, MaxProblems::Unlimited)?;
+        assert_yaml_snapshot!(irritations);
 
         Ok(())
     }

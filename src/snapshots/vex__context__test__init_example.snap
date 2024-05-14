@@ -1,0 +1,15 @@
+---
+source: src/context.rs
+expression: irritations
+---
+- code_source:
+    path:
+      path: test.rs
+    byte_range:
+      start: 23
+      end: 33
+  vex_path:
+    path: example.star
+  other_code_sources: []
+  extra_info_present: false
+  rendered: "warning[example]: large unbroken integer literal\n --> test.rs:2:5\n  |\n2 |     1234567890\n  |     ---------- consider adding underscores\n  |"

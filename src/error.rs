@@ -135,6 +135,9 @@ impl From<starlark::Error> for Error {
 
 #[derive(Debug, Display)]
 pub enum IOAction {
+    #[display(fmt = "create")]
+    Create,
+
     #[display(fmt = "read")]
     Read,
 
