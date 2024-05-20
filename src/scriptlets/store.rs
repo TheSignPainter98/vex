@@ -3,26 +3,23 @@ use std::{collections::BTreeMap, fs, io::ErrorKind, iter};
 use camino::Utf8PathBuf;
 use dupe::Dupe;
 use log::{info, log_enabled};
-use starlark::{environment::FrozenModule, eval::FileLoader};
+use starlark::{environment::FrozenModule, eval::FileLoader, values::FrozenHeap};
 
 use crate::{
     context::Context,
     error::{Error, IOAction},
     result::Result,
     scriptlets::{
-        scriptlet::{InitingScriptlet, PreinitingScriptlet, VexingScriptlet},
-        ScriptletObserverData,
+        scriptlet::{InitingScriptlet, PreinitingScriptlet},
+        ObserverData,
     },
-    source_file::SourceFile,
     source_path::{PrettyPath, SourcePath},
-    trigger::{TriggerCause, TriggerId},
 };
 
 type StoreIndex = usize;
 
 #[derive(Debug)]
 pub struct PreinitingStore {
-    project_root: PrettyPath,
     vex_dir: Utf8PathBuf,
     path_indices: BTreeMap<PrettyPath, StoreIndex>,
     store: Vec<PreinitingScriptlet>,
@@ -31,7 +28,6 @@ pub struct PreinitingStore {
 impl PreinitingStore {
     pub fn new(ctx: &Context) -> Result<Self> {
         let mut ret = Self {
-            project_root: ctx.project_root.dupe(),
             vex_dir: ctx.vex_dir(),
             path_indices: BTreeMap::new(),
             store: Vec::new(),
@@ -110,23 +106,20 @@ impl PreinitingStore {
         self.sort();
         self.linearise_store()?;
 
-        let Self {
-            store,
-            project_root,
-            ..
-        } = self;
+        let Self { store, .. } = self;
 
+        let frozen_heap = FrozenHeap::new();
         let mut initing_store = Vec::with_capacity(store.len());
         let mut cache = PreinitedModuleCache::new();
         for scriptlet in store.into_iter() {
-            let preinited_scriptlet = scriptlet.preinit(&cache)?;
+            let preinited_scriptlet = scriptlet.preinit(&cache, &frozen_heap)?;
             cache.cache(&preinited_scriptlet);
             initing_store.push(preinited_scriptlet);
         }
 
         Ok(InitingStore {
-            project_root,
             store: initing_store,
+            frozen_heap,
         })
     }
 
@@ -327,21 +320,28 @@ impl FileLoader for &PreinitedModuleCache {
 
 #[derive(Debug)]
 pub struct InitingStore {
-    project_root: PrettyPath,
     store: Vec<InitingScriptlet>,
+    frozen_heap: FrozenHeap,
 }
 
 impl InitingStore {
     pub fn init(self) -> Result<VexingStore> {
-        let Self {
-            project_root,
-            store,
-        } = self;
-        let store = store
-            .into_iter()
-            .map(|scriptlet| scriptlet.init(&project_root))
-            .collect::<Result<_>>()?;
-        Ok(VexingStore { store })
+        let Self { store, frozen_heap } = self;
+        let num_scripts = store.len();
+
+        let observer_data = store.into_iter().try_fold(
+            ObserverData::with_capacity(4 * num_scripts),
+            |mut data, scriptlet| {
+                data.extend(scriptlet.init(&frozen_heap)?);
+                Ok::<_, Error>(data)
+            },
+        )?;
+
+        Ok(VexingStore {
+            num_scripts,
+            observer_data,
+            frozen_heap,
+        })
     }
 
     pub fn vexes(&self) -> impl Iterator<Item = &InitingScriptlet> {
@@ -351,27 +351,42 @@ impl InitingStore {
 
 #[derive(Debug)]
 pub struct VexingStore {
-    #[allow(unused)]
-    store: Vec<VexingScriptlet>,
+    num_scripts: usize,
+    observer_data: ObserverData,
+    frozen_heap: FrozenHeap,
 }
 
 impl VexingStore {
-    pub fn observers(&self) -> impl Iterator<Item = &ScriptletObserverData> {
-        self.store.iter().filter_map(VexingScriptlet::observer_data)
+    pub fn observer_data(&self) -> &ObserverData {
+        &self.observer_data
     }
 
-    pub fn observers_for<'v>(
-        &'v self,
-        src_file: &'v SourceFile,
-    ) -> impl Iterator<Item = (Option<TriggerId>, &ScriptletObserverData)> {
-        self.store
-            .iter()
-            .filter_map(VexingScriptlet::observer_data)
-            .filter_map(|obs| {
-                obs.triggers
-                    .iter()
-                    .find(|trigger| src_file.matches(trigger))
-                    .map(|trigger| (trigger.id.dupe(), obs))
-            })
+    pub fn frozen_heap(&self) -> &FrozenHeap {
+        &self.frozen_heap
     }
+
+    pub fn project_queries_hint(&self) -> usize {
+        2 * self.num_scripts
+    }
+
+    pub fn file_queries_hint(&self) -> usize {
+        0
+    }
+
+    // pub fn file_observers(&self) -> impl Iterator<Item = &ObserverData> {
+    //     // self.store.iter().filter_map(VexingScriptlet::observer_data)
+    // }
+
+    // pub fn file_observers_for<'v>(
+    //     &'v self,
+    //     src_file: &'v SourceFile,
+    // ) -> impl Iterator<Item = (Option<TriggerId>, &ObserverData)> {
+    //     self.file_observers()
+    //         .filter_map(|obs| {
+    //             obs.triggers
+    //                 .iter()
+    //                 .find(|trigger| src_file.matches(trigger))
+    //                 .map(|trigger| (trigger.id.dupe(), obs))
+    //         })
+    // }
 }

@@ -1,0 +1,18 @@
+---
+source: src/scriptlets/scriptlet.rs
+expression: "VexTest::new(\"no-query-match-listener\").with_scriptlet(\"vexes/test.star\",\n            indoc! {\n                    r#\"\n                    def init():\n                        vex.observe('open_project', on_open_project)\n\n                    def on_open_project(event):\n                        vex.find(\n                            language='rust',\n                            query='(binary_expression)',\n                        )\n                \"#\n                }).try_run().unwrap_err()"
+---
+Traceback (most recent call last):
+  File <builtin>, in <module>
+  * test.star:5, in on_open_project
+      vex.find(
+error: Missing parameter `on_match` for call to find
+ --> test.star:5:5
+  |
+5 |       vex.find(
+  |  _____^
+6 | |         language='rust',
+7 | |         query='(binary_expression)',
+8 | |     )
+  | |_____^
+  |

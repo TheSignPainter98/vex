@@ -248,15 +248,18 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            vex.add_trigger(
+                            vex.observe('open_project', on_open_project)
+
+                        def on_open_project(event):
+                            vex.find(
                                 language = 'rust',
                                 query='''
                                     (binary_expression
                                         left: (integer_literal) @l_int
                                     ) @bin_expr
                                 ''',
+                                on_match=on_query_match,
                             )
-                            vex.observe('query_match', on_query_match)
 
                         def on_query_match(event):
                             captures = event.captures
@@ -286,15 +289,18 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            vex.add_trigger(
+                            vex.observe('open_project', on_open_project)
+
+                        def on_open_project(event):
+                            vex.find(
                                 language='rust',
                                 query='''
                                     (binary_expression
                                         left: (integer_literal) @l_int
                                     ) @bin_expr
-                                '''
+                                ''',
+                                on_match=on_query_match,
                             )
-                            vex.observe('query_match', on_query_match)
 
                         def on_query_match(event):
                             captures = event.captures
@@ -324,15 +330,18 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            vex.add_trigger(
+                            vex.observe('open_project', on_open_project)
+
+                        def on_open_project(event):
+                            vex.find(
                                 language='rust',
                                 query='''
                                     (binary_expression
                                         left: (integer_literal) @l_int
                                     ) @bin_expr
                                 ''',
+                                on_match=on_query_match,
                             )
-                            vex.observe('query_match', on_query_match)
 
                         def on_query_match(event):
                             captures = event.captures
@@ -363,15 +372,18 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            vex.add_trigger(
+                            vex.observe('open_project', on_open_project)
+
+                        def on_open_project(event):
+                            vex.find(
                                 language='rust',
                                 query='''
                                     (binary_expression
                                         left: (integer_literal) @l_int
                                     ) @bin_expr
                                 ''',
+                                on_match=on_query_match,
                             )
-                            vex.observe('query_match', on_query_match)
 
                         def on_query_match(event):
                             captures = event.captures
@@ -402,15 +414,18 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            vex.add_trigger(
+                            vex.observe('open_project', on_open_project)
+
+                        def on_open_project(event):
+                            vex.find(
                                 language='rust',
                                 query='''
                                     (binary_expression
                                         left: (integer_literal) @l_int
                                     ) @bin_expr
                                 ''',
+                                on_match=on_query_match,
                             )
-                            vex.observe('query_match', on_query_match)
 
                         def on_query_match(event):
                             captures = event.captures
@@ -445,15 +460,18 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            vex.add_trigger(
+                            vex.observe('open_project', on_open_project)
+
+                        def on_open_project(event):
+                            vex.find(
                                 language='rust',
                                 query='''
                                     (binary_expression
                                         left: (integer_literal) @l_int
                                     ) @bin_expr
                                 ''',
+                                on_match=on_query_match,
                             )
-                            vex.observe('query_match', on_query_match)
 
                         def on_query_match(event):
                             captures = event.captures
@@ -487,15 +505,18 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            vex.add_trigger(
+                            vex.observe('open_project', on_open_project)
+
+                        def on_open_project(event):
+                            vex.find(
                                 language='rust',
                                 query='''
                                     (binary_expression
                                         left: (integer_literal) @l_int
                                     ) @bin_expr
                                 ''',
+                                on_match=on_query_match,
                             )
-                            vex.observe('query_match', on_query_match)
 
                         def on_query_match(event):
                             captures = event.captures
@@ -530,7 +551,10 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            vex.add_trigger(
+                            vex.observe('open_project', on_open_project)
+
+                        def on_open_project(event):
+                            vex.find(
                                 language='rust',
                                 query='''
                                     (binary_expression
@@ -543,8 +567,8 @@ mod test {
                                         ) @e
                                     ) @all
                                 ''',
+                                on_match=on_query_match,
                             )
-                            vex.observe('query_match', on_query_match)
 
                         def on_query_match(event):
                             captures = event.captures

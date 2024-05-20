@@ -7,7 +7,7 @@ use serde::Serialize;
 
 use crate::{logger, scriptlets::Node, source_path::PrettyPath};
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Allocative, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Allocative, Serialize)]
 #[non_exhaustive]
 pub struct Irritation {
     code_source: Option<IrritationSource>,
@@ -17,7 +17,7 @@ pub struct Irritation {
     pub(crate) rendered: String,
 }
 
-#[derive(Debug, PartialEq, Eq, Allocative, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Allocative, Serialize)]
 pub struct IrritationSource {
     path: PrettyPath,
     #[allocative(skip)]

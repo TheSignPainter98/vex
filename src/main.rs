@@ -22,15 +22,18 @@ mod vex;
 #[cfg(test)]
 mod vextest;
 
-use std::{cell::OnceCell, env, fs, iter, process::ExitCode};
+use std::{env, fs, process::ExitCode};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser as _;
 use cli::{DumpCmd, MaxProblems};
 use dupe::Dupe;
 use log::{info, log_enabled, trace, warn};
+use scriptlets::{
+    event::{Event, QueryMatchEvent},
+    Intent,
+};
 use source_file::SourceFile;
-use starlark::environment::Module;
 use strum::IntoEnumIterator;
 use tree_sitter::QueryCursor;
 
@@ -42,9 +45,8 @@ use crate::{
     plural::Plural,
     result::Result,
     scriptlets::{
-        event::CloseProjectEvent,
-        event::{CloseFileEvent, OpenFileEvent, OpenProjectEvent, QueryMatchEvent},
-        Observer, PreinitingStore, QueryCaptures, VexingStore,
+        event::{OpenFileEvent, OpenProjectEvent},
+        PreinitingStore, QueryCaptures, VexingStore,
     },
     source_path::{PrettyPath, SourcePath},
     supported_language::SupportedLanguage,
@@ -156,104 +158,94 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
     };
 
     let mut irritations = vec![];
-
-    let observers = store.observers().collect::<Vec<_>>();
-    observers
-        .iter()
-        .flat_map(|obs| iter::repeat(&obs.vex_path).zip(&obs.on_open_project))
-        .try_for_each(|(obs_path, obs)| {
-            irritations.extend(obs.handle(
-                &Module::new(),
-                obs_path,
-                OpenProjectEvent::new(ctx.project_root.dupe()),
-            )?);
-            Ok::<_, Error>(())
-        })?;
+    let frozen_heap = store.frozen_heap();
+    let project_queries = {
+        let mut project_queries = Vec::with_capacity(store.project_queries_hint());
+        let path = ctx.project_root.dupe();
+        store
+            .observer_data()
+            .handle(Event::OpenProject(OpenProjectEvent::new(path)), frozen_heap)?
+            .iter()
+            .for_each(|intent| match intent {
+                Intent::Find {
+                    language,
+                    query,
+                    on_match,
+                } => project_queries.push((*language, query.dupe(), on_match.dupe())),
+                Intent::Observe { .. } => panic!("internal error: non-init observe"),
+                Intent::Warn(irr) => irritations.push(irr.clone()),
+            });
+        project_queries
+    };
 
     for file in &files {
-        if !file.parseable() {
+        let Some(language) = file.language() else {
             if log_enabled!(log::Level::Info) {
                 info!("skipping {}", file.path());
             }
             continue;
+        };
+
+        let file_queries = {
+            let mut file_queries = Vec::with_capacity(store.file_queries_hint());
+            let path = file.path().pretty_path.dupe();
+            store
+                .observer_data()
+                .handle(Event::OpenFile(OpenFileEvent::new(path)), frozen_heap)?
+                .iter()
+                .for_each(|intent| match intent {
+                    Intent::Find {
+                        language,
+                        query,
+                        on_match,
+                    } => file_queries.push((*language, query.dupe(), on_match.dupe())),
+                    Intent::Warn(irr) => irritations.push(irr.clone()),
+                    Intent::Observe { .. } => panic!("internal error: non-init observe"),
+                });
+            file_queries
+        };
+
+        if project_queries
+            .iter()
+            .chain(file_queries.iter())
+            .all(|(l, _, _)| *l != language)
+        {
+            continue; // The user doesn't care about this file.
         }
-        let parsed_file_cell = OnceCell::new(); // TODO(kcza): replace with LazyCell once
-                                                // sufficiently stable (tracking issue https://github.com/rust-lang/rust/issues/109736)
-        store
-            .observers_for(file)
-            .filter_map(|(trigger_id, observer)| {
-                if let Ok(parsed_file) = parsed_file_cell.get_or_init(|| file.parse()) {
-                    Some((parsed_file, trigger_id, observer))
-                } else {
-                    None
-                }
-            })
-            .try_for_each(|(parsed_file, trigger_id, observer)| {
-                observer.on_open_file.iter().try_for_each(|on_open_file| {
-                    irritations.extend(on_open_file.handle(
-                        &Module::new(),
-                        &observer.vex_path,
-                        OpenFileEvent::new(parsed_file.path.pretty_path.dupe(), trigger_id.dupe()),
-                    )?);
-                    Ok::<_, Error>(())
-                })?;
+        let parsed_file = file.parse()?;
+        project_queries
+            .iter()
+            .chain(file_queries.iter())
+            .filter(|(l, _, _)| *l == language)
+            .try_for_each(|(_, query, on_match)| {
+                QueryCursor::new()
+                    .matches(
+                        query,
+                        parsed_file.tree.root_node(),
+                        parsed_file.content.as_bytes(),
+                    )
+                    .try_for_each(|qmatch| {
+                        let event = {
+                            let path = &parsed_file.path.pretty_path;
+                            let captures = QueryCaptures::new(query, &qmatch, &parsed_file);
+                            Event::QueryMatch(QueryMatchEvent::new(path.dupe(), captures))
+                        };
+                        on_match.handle(event, frozen_heap)?.iter().for_each(
+                            |intent| match intent {
+                                Intent::Find { .. } => {
+                                    panic!("internal error: find intended during find")
+                                }
+                                Intent::Warn(irr) => irritations.push(irr.clone()),
+                                Intent::Observe { .. } => {
+                                    panic!("internal error: non-init observe")
+                                }
+                            },
+                        );
 
-                observer
-                    .trigger_queries()
-                    .try_for_each(|(trigger_id, query)| {
-                        QueryCursor::new()
-                            .matches(
-                                query,
-                                parsed_file.tree.root_node(),
-                                parsed_file.content.as_bytes(),
-                            )
-                            .try_for_each(|qmatch| {
-                                let captures = QueryCaptures::new(query, &qmatch, parsed_file);
-                                observer.on_match.iter().try_for_each(|on_match| {
-                                    irritations.extend(on_match.handle(
-                                        &Module::new(),
-                                        &observer.vex_path,
-                                        QueryMatchEvent::new(
-                                            parsed_file.path.pretty_path.dupe(),
-                                            captures.dupe(),
-                                            trigger_id.cloned(),
-                                        ),
-                                    )?);
-                                    Ok::<_, Error>(())
-                                })
-                            })
-                    })?;
-
-                observer
-                    .on_close_file
-                    .iter()
-                    .try_for_each(|on_close_file| {
-                        irritations.extend(on_close_file.handle(
-                            &Module::new(),
-                            &observer.vex_path,
-                            CloseFileEvent::new(
-                                parsed_file.path.pretty_path.dupe(),
-                                trigger_id.dupe(),
-                            ),
-                        )?);
                         Ok::<_, Error>(())
-                    })?;
-
-                Ok::<_, Error>(())
+                    })
             })?;
     }
-
-    observers
-        .iter()
-        .flat_map(|obs| iter::repeat(&obs.vex_path).zip(&obs.on_close_project))
-        .try_for_each(|(obs_path, obs)| {
-            irritations.extend(obs.handle(
-                &Module::new(),
-                obs_path,
-                CloseProjectEvent::new(ctx.project_root.dupe()),
-            )?);
-            Ok::<_, Error>(())
-        })?;
 
     irritations.sort();
     if let MaxProblems::Limited(max) = max_problems {
@@ -480,11 +472,14 @@ mod test {
                 "vexes/var.star",
                 indoc! {r#"
                     def init():
-                        vex.add_trigger(
+                        vex.observe('open_project', on_open_project)
+
+                    def on_open_project(event):
+                        vex.find(
                             language='rust',
                             query='(integer_literal) @num',
+                            on_match=on_query_match,
                         )
-                        vex.observe('query_match', on_query_match)
 
                     def on_query_match(event):
                         vex.warn('oh no a number!', at=(event.captures['num'], 'num'))

@@ -36,11 +36,13 @@ vex init
 
 To create a lint, in the newly-created `vexes/` directory create a new file called `<my_lint_name>.star`.
 Open that file in your editor and let’s set up your script.
-First, let’s add some triggers to tell `vex` when to run your script.
-To add a new trigger which finds binary expressions between integers in all Rust files in the project, type the following—
+First, let’s tell `vex` that when opening the project at the start of its run, we intend to—in this example—find binary expressions.
 ```python
 def init():
-    vex.add_trigger(
+    vex.observe('open_project', on_open_project)
+
+def on_open_project(event):
+    vex.find(
         language='rust',
         query='''
             (binary_expression
@@ -48,17 +50,17 @@ def init():
                 right: (integer_literal) @right_operand
             ) @bin_expr
         ''',
-    )
 ```
 Note that in this [Scheme][scheme] query, we have labelled certain nodes for later use: `@left_operand`, `@right-operand` and `@bin_expr`.
 (The file structure this query will be checked against can be found by running `vex dump path/to/file`.)
 
-To react to a syntax-tree node being found which matches the above query, add an observer for the `query_match` event (we’ll call this observer `on_query_match`) by typing the following in the `init` function—
+To react to a syntax-tree node being found which matches the above query, add an observer for the `query_match` event (we’ll call this observer `on_query_match`) by completing the call to `vex.find`—
 ```python
-    vex.observe('query_match', on_query_match)
+        on_match=on_query_match,
+    )
 ```
 
-Now, let’s fill in that observer.
+Now, let’s fill in that `on_match` callback function.
 Let’s say we want to enforce that every time two integer literals appear in a binary expression, a significantly smaller one should appear first (perhaps so the reader isn’t too distracted by the large number that they neglect to read the smaller one).
 To do this, write our `on_query_match` function as follows.
 ```python
