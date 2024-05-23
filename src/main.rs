@@ -475,13 +475,13 @@ mod test {
                         vex.observe('open_project', on_open_project)
 
                     def on_open_project(event):
-                        vex.find(
-                            language='rust',
-                            query='(integer_literal) @num',
-                            on_match=on_query_match,
+                        vex.search(
+                            'rust',
+                            '(integer_literal) @num',
+                            on_match,
                         )
 
-                    def on_query_match(event):
+                    def on_match(event):
                         vex.warn('oh no a number!', at=(event.captures['num'], 'num'))
                 "#},
             )

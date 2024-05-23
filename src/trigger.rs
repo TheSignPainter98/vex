@@ -206,13 +206,13 @@ mod test {
                             vex.observe('open_project', on_open_project)
 
                         def on_open_project(event):
-                            vex.find(
-                                language='{language}',
-                                query='{query}',
-                                on_match=on_query_match,
+                            vex.search(
+                                '{language}',
+                                '{query}',
+                                on_match,
                             )
 
-                        def on_query_match(event):
+                        def on_match(event):
                             vex.warn('language={language}: opened and matched %s' % event.path)
                     "#,
                     language = language_test.language,
@@ -261,13 +261,13 @@ mod test {
                         vex.observe('open_project', on_open_project)
 
                     def on_open_project(event):
-                        vex.find(
-                            language='brainfuck',
-                            query='(binary_expression)',
-                            on_match=on_query_match,
+                        vex.search(
+                            'brainfuck',
+                            '(binary_expression)',
+                            on_match,
                         )
 
-                    def on_query_match(event):
+                    def on_match(event):
                         pass
                 "#},
             )
@@ -284,13 +284,13 @@ mod test {
                         vex.observe('open_project', on_open_project)
 
                     def on_open_project(event):
-                        vex.find(
-                            language='rust',
-                            query='',
-                            on_match=on_query_match,
+                        vex.search(
+                            'rust',
+                            '',
+                            on_match,
                         )
 
-                    def on_query_match(event):
+                    def on_match(event):
                         pass
                 "#},
             )
@@ -303,13 +303,13 @@ mod test {
                         vex.observe('open_project', on_open_project)
 
                     def on_open_project(event):
-                        vex.find(
-                            language='rust',
-                            query='(binary_expression', # Missing closing bracket
-                            on_match=on_query_match,
+                        vex.search(
+                            'rust',
+                            '(binary_expression', # Missing closing bracket
+                            on_match,
                         )
 
-                    def on_query_match(event):
+                    def on_match(event):
                         pass
                 "#},
             )
@@ -478,12 +478,12 @@ mod test {
     //             indoc! {r#"
     //                 def init():
     //                     vex.add_trigger(
-    //                         language='rust',
+    //                         'rust',
     //                         path=['mod_name_1/', 'mod_name_2/'],
     //                     )
-    //                     vex.observe('open_file', on_query_match)
+    //                     vex.observe('open_file', on_match)
     //
-    //                 def on_query_match(event):
+    //                 def on_match(event):
     //                     vex.warn(str(event.path))
     //             "#},
     //         )
@@ -536,12 +536,12 @@ mod test {
     //             indoc! {r#"
     //                 def init():
     //                     vex.add_trigger(
-    //                         language='rust',
+    //                         'rust',
     //                         path='mod_name/',
     //                     )
-    //                     vex.observe('open_file', on_query_match)
+    //                     vex.observe('open_file', on_match)
     //
-    //                 def on_query_match(event):
+    //                 def on_match(event):
     //                     vex.warn(str(event.path))
     //             "#},
     //         )
@@ -573,13 +573,13 @@ mod test {
     //             indoc! {r#"
     //                 def init():
     //                     vex.add_trigger(
-    //                         language='rust',
-    //                         query='(binary_expression)',
+    //                         'rust',
+    //                         '(binary_expression)',
     //                         path='mod_name/',
     //                     )
-    //                     vex.observe('query_match', on_query_match)
+    //                     vex.observe('query_match', on_match)
     //
-    //                 def on_query_match(event):
+    //                 def on_match(event):
     //                     vex.warn(str(event.path))
     //             "#},
     //         )

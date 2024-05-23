@@ -402,7 +402,11 @@ mod test {
                 "#},
             )
             .returns_error(r"test\.star observes no events");
-        assert_snapshot!(VexTest::new("no-language")
+    }
+
+    #[test]
+    fn bad_search() {
+        assert_snapshot!(VexTest::new("no-args")
             .with_scriptlet(
                 "vexes/test.star",
                 indoc! {r#"
@@ -410,15 +414,12 @@ mod test {
                         vex.observe('open_project', on_open_project)
 
                     def on_open_project(event):
-                        vex.find(
-                            query='(source_file)',
-                            on_match=lambda x: x,
-                        )
+                        vex.search()
                 "#},
             )
             .try_run()
             .unwrap_err());
-        assert_snapshot!(VexTest::new("no-queries")
+        assert_snapshot!(VexTest::new("no-query")
             .with_scriptlet(
                 "vexes/test.star",
                 indoc! {r#"
@@ -426,9 +427,8 @@ mod test {
                         vex.observe('open_project', on_open_project)
 
                     def on_open_project(event):
-                        vex.find(
-                            language='rust',
-                            on_match=lambda x: x,
+                        vex.search(
+                            'rust',
                         )
                 "#},
             )
@@ -442,9 +442,9 @@ mod test {
                         vex.observe('open_project', on_open_project)
 
                     def on_open_project(event):
-                        vex.find(
-                            language='rust',
-                            query='(binary_expression)',
+                        vex.search(
+                            'rust',
+                            '(binary_expression)',
                         )
                 "#},
             )
@@ -491,9 +491,9 @@ mod test {
             }
         };
         test_preiniting_availability(
-            "vex.find",
+            "vex.search",
             Unavailable,
-            "vex.find(language='rust', query='(source_file)', on_match=lambda x: x)",
+            "vex.search('rust', '(source_file)', lambda x: x)",
         );
         test_preiniting_availability(
             "vex.observe",
@@ -545,9 +545,9 @@ mod test {
             }
         };
         test_vexing_open_availability(
-            "vex.find",
+            "vex.search",
             Available,
-            "vex.find(language='rust', query='(source_file)', on_match=lambda x: x)",
+            "vex.search('rust', '(source_file)', lambda x: x)",
         );
         test_vexing_open_availability(
             "vex.observe",
@@ -565,13 +565,13 @@ mod test {
                             vex.observe('open_project', on_open_project)
 
                         def on_open_project(event):
-                            vex.find(
-                                language='rust',
-                                query='(source_file)',
-                                on_match=on_query_match,
+                            vex.search(
+                                'rust',
+                                '(source_file)',
+                                on_match,
                             )
 
-                        def on_query_match(event):
+                        def on_match(event):
                             {call}
                     "#},
                 )
@@ -596,9 +596,9 @@ mod test {
             }
         };
         test_vexing_match_availability(
-            "vex.find",
+            "vex.search",
             Unavailable,
-            "vex.find(language='rust', query='(source_file)', on_match=lambda x: x)",
+            "vex.search('rust', '(source_file)', lambda x: x)",
         );
         test_vexing_match_availability(
             "vex.observe",

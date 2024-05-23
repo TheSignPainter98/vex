@@ -251,17 +251,17 @@ mod test {
                             vex.observe('open_project', on_open_project)
 
                         def on_open_project(event):
-                            vex.find(
-                                language = 'rust',
-                                query='''
+                            vex.search(
+                                'rust',
+                                '''
                                     (binary_expression
                                         left: (integer_literal) @l_int
                                     ) @bin_expr
                                 ''',
-                                on_match=on_query_match,
+                                on_match,
                             )
 
-                        def on_query_match(event):
+                        def on_match(event):
                             captures = event.captures
                             check['type'](captures, 'QueryCaptures')
                     "#,
@@ -292,17 +292,17 @@ mod test {
                             vex.observe('open_project', on_open_project)
 
                         def on_open_project(event):
-                            vex.find(
-                                language='rust',
-                                query='''
+                            vex.search(
+                                'rust',
+                                '''
                                     (binary_expression
                                         left: (integer_literal) @l_int
                                     ) @bin_expr
                                 ''',
-                                on_match=on_query_match,
+                                on_match,
                             )
 
-                        def on_query_match(event):
+                        def on_match(event):
                             captures = event.captures
                             check['eq'](len(captures), 2)
                     "#,
@@ -333,17 +333,17 @@ mod test {
                             vex.observe('open_project', on_open_project)
 
                         def on_open_project(event):
-                            vex.find(
-                                language='rust',
-                                query='''
+                            vex.search(
+                                'rust',
+                                '''
                                     (binary_expression
                                         left: (integer_literal) @l_int
                                     ) @bin_expr
                                 ''',
-                                on_match=on_query_match,
+                                on_match,
                             )
 
-                        def on_query_match(event):
+                        def on_match(event):
                             captures = event.captures
                             check['in']('bin_expr', captures)
                             check['in']('l_int', captures)
@@ -375,17 +375,17 @@ mod test {
                             vex.observe('open_project', on_open_project)
 
                         def on_open_project(event):
-                            vex.find(
-                                language='rust',
-                                query='''
+                            vex.search(
+                                'rust',
+                                '''
                                     (binary_expression
                                         left: (integer_literal) @l_int
                                     ) @bin_expr
                                 ''',
-                                on_match=on_query_match,
+                                on_match,
                             )
 
-                        def on_query_match(event):
+                        def on_match(event):
                             captures = event.captures
                             check['eq'](str(captures), "QueryCaptures")
                             check['eq'](str(captures), repr(captures))
@@ -417,17 +417,17 @@ mod test {
                             vex.observe('open_project', on_open_project)
 
                         def on_open_project(event):
-                            vex.find(
-                                language='rust',
-                                query='''
+                            vex.search(
+                                'rust',
+                                '''
                                     (binary_expression
                                         left: (integer_literal) @l_int
                                     ) @bin_expr
                                 ''',
-                                on_match=on_query_match,
+                                on_match,
                             )
 
-                        def on_query_match(event):
+                        def on_match(event):
                             captures = event.captures
 
                             expected_keys = sorted(['bin_expr', 'l_int'])
@@ -463,17 +463,17 @@ mod test {
                             vex.observe('open_project', on_open_project)
 
                         def on_open_project(event):
-                            vex.find(
-                                language='rust',
-                                query='''
+                            vex.search(
+                                'rust',
+                                '''
                                     (binary_expression
                                         left: (integer_literal) @l_int
                                     ) @bin_expr
                                 ''',
-                                on_match=on_query_match,
+                                on_match,
                             )
 
-                        def on_query_match(event):
+                        def on_match(event):
                             captures = event.captures
 
                             check['type'](captures.keys(), "QueryCapturesKeys")
@@ -508,17 +508,17 @@ mod test {
                             vex.observe('open_project', on_open_project)
 
                         def on_open_project(event):
-                            vex.find(
-                                language='rust',
-                                query='''
+                            vex.search(
+                                'rust',
+                                '''
                                     (binary_expression
                                         left: (integer_literal) @l_int
                                     ) @bin_expr
                                 ''',
-                                on_match=on_query_match,
+                                on_match,
                             )
 
-                        def on_query_match(event):
+                        def on_match(event):
                             captures = event.captures
 
                             check['type'](captures.values(), "QueryCapturesValues")
@@ -554,9 +554,9 @@ mod test {
                             vex.observe('open_project', on_open_project)
 
                         def on_open_project(event):
-                            vex.find(
-                                language='rust',
-                                query='''
+                            vex.search(
+                                'rust',
+                                '''
                                     (binary_expression
                                         left: (integer_literal) @a
                                         right: (parenthesized_expression
@@ -567,10 +567,10 @@ mod test {
                                         ) @e
                                     ) @all
                                 ''',
-                                on_match=on_query_match,
+                                on_match,
                             )
 
-                        def on_query_match(event):
+                        def on_match(event):
                             captures = event.captures
 
                             check['type'](captures.items(), "QueryCapturesItems")

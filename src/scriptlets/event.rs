@@ -265,10 +265,10 @@ mod test {
                                 vex.observe('{event_name}', on_{event_name})
 
                         def on_open_project(event):
-                            vex.find(
-                                language='rust',
-                                query='(binary_expression) @bin_expr',
-                                on_match=on_{event_name},
+                            vex.search(
+                                'rust',
+                                '(binary_expression) @bin_expr',
+                                on_{event_name},
                             )
 
                         def on_{event_name}(event):
@@ -300,10 +300,10 @@ mod test {
                                 vex.observe('{event_name}', on_{event_name})
 
                         def on_open_project(event):
-                            vex.find(
-                                language='rust',
-                                query='(binary_expression) @bin_expr',
-                                on_match=on_{event_name},
+                            vex.search(
+                                'rust',
+                                '(binary_expression) @bin_expr',
+                                on_{event_name},
                             )
 
                         def on_{event_name}(event):
@@ -326,10 +326,10 @@ mod test {
                                 vex.observe('{event_name}', on_{event_name})
 
                         def on_open_project(event):
-                            vex.find(
-                                language='rust',
-                                query='(binary_expression) @bin_expr',
-                                on_match=on_{event_name},
+                            vex.search(
+                                'rust',
+                                '(binary_expression) @bin_expr',
+                                on_{event_name},
                             )
 
                         def on_{event_name}(event):
@@ -405,13 +405,13 @@ mod test {
                             vex.observe('open_project', on_open_project)
 
                         def on_open_project(event):
-                            vex.find(
-                                language='rust',
-                                query='(binary_expression left: (integer_literal) @l_int) @bin_expr',
-                                on_match=on_query_match,
+                            vex.search(
+                                'rust',
+                                '(binary_expression left: (integer_literal) @l_int) @bin_expr',
+                                on_match,
                             )
 
-                        def on_query_match(event):
+                        def on_match(event):
                             captures = event.captures
 
                             expected_fields = ['l_int', 'bin_expr']
