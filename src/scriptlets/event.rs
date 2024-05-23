@@ -7,54 +7,83 @@ use starlark::{
     starlark_simple_value,
     values::{AllocValue, Heap, NoSerialize, ProvidesStaticType, StarlarkValue, Trace, Value},
 };
-use starlark_derive::{starlark_value, StarlarkAttrs};
-use strum::{EnumIter, IntoEnumIterator};
+use starlark_derive::starlark_value;
+use strum::{Display, EnumIter, IntoEnumIterator};
 
-use crate::{error::Error, scriptlets::QueryCaptures, source_path::PrettyPath, trigger::TriggerId};
+use crate::{error::Error, result::Result, scriptlets::QueryCaptures, source_path::PrettyPath};
 
 const PATH_ATTR_NAME: &str = "path";
 const NAME_ATTR_NAME: &str = "name";
-const TRIGGER_ID_NAME: &str = "trigger_id";
 
-pub trait Event {
-    const TYPE: EventType;
+#[derive(Clone, Debug, Dupe, ProvidesStaticType, NoSerialize, Allocative, Trace)]
+pub enum Event<'v> {
+    OpenProject(OpenProjectEvent),
+    OpenFile(OpenFileEvent),
+    Match(MatchEvent<'v>),
 }
 
-#[derive(Copy, Clone, Debug, EnumIter, PartialEq, Eq, Allocative)]
-pub enum EventType {
-    OpenProject,
-    OpenFile,
-    QueryMatch,
-    CloseFile,
-    CloseProject,
-}
-
-impl EventType {
-    fn name(&self) -> &'static str {
+impl<'v> Event<'v> {
+    pub fn kind(&self) -> EventKind {
         match self {
-            EventType::OpenProject => "open_project",
-            EventType::OpenFile => "open_file",
-            EventType::QueryMatch => "query_match",
-            EventType::CloseFile => "close_file",
-            EventType::CloseProject => "close_project",
+            Self::OpenProject(_) => EventKind::OpenProject,
+            Self::OpenFile(_) => EventKind::OpenFile,
+            Self::Match(_) => EventKind::Match,
+        }
+    }
+
+    pub fn into_value_on(self, heap: &'v Heap) -> Value<'v> {
+        match self {
+            Self::OpenProject(e) => heap.alloc(e),
+            Self::OpenFile(e) => heap.alloc(e),
+            Self::Match(e) => heap.alloc(e),
         }
     }
 }
 
-impl FromStr for EventType {
-    type Err = anyhow::Error;
+#[derive(Copy, Clone, Debug, PartialEq, Eq, EnumIter, Display, Allocative)]
+pub enum EventKind {
+    OpenProject,
+    OpenFile,
+    Match,
+}
 
-    fn from_str(s: &str) -> anyhow::Result<Self> {
+impl EventKind {
+    pub fn parseable(&self) -> bool {
+        match self {
+            Self::OpenProject | Self::OpenFile => true,
+            Self::Match => false,
+        }
+    }
+
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::OpenProject => "open_project",
+            Self::OpenFile => "open_file",
+            Self::Match => "match",
+        }
+    }
+
+    pub fn pretty_name(&self) -> &'static str {
+        match self {
+            Self::OpenProject => "opening project",
+            Self::OpenFile => "opening file",
+            Self::Match => "handling match",
+        }
+    }
+}
+
+impl FromStr for EventKind {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self> {
         match s {
-            "open_project" => Ok(EventType::OpenProject),
-            "open_file" => Ok(EventType::OpenFile),
-            "query_match" => Ok(EventType::QueryMatch),
-            "close_file" => Ok(EventType::CloseFile),
-            "close_project" => Ok(EventType::CloseProject),
+            "open_project" => Ok(Self::OpenProject),
+            "open_file" => Ok(Self::OpenFile),
             _ => Err(Error::UnknownEvent {
                 name: s.to_owned(),
                 suggestion: {
-                    let (event, distance) = EventType::iter()
+                    let (event, distance) = Self::iter()
+                        .filter(Self::parseable)
                         .map(|event| (event, strsim::damerau_levenshtein(s, event.name())))
                         .min_by_key(|(_, distance)| *distance)
                         .unwrap();
@@ -64,15 +93,8 @@ impl FromStr for EventType {
                         None
                     }
                 },
-            }
-            .into()),
+            }),
         }
-    }
-}
-
-impl Display for EventType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.name().fmt(f)
     }
 }
 
@@ -83,8 +105,10 @@ pub struct OpenProjectEvent {
 }
 starlark_simple_value!(OpenProjectEvent);
 
-impl Event for OpenProjectEvent {
-    const TYPE: EventType = EventType::OpenProject;
+impl OpenProjectEvent {
+    fn event_kind() -> EventKind {
+        EventKind::OpenProject
+    }
 }
 
 #[starlark_value(type = "OpenProjectEvent")]
@@ -98,7 +122,7 @@ impl<'v> StarlarkValue<'v> for OpenProjectEvent {
 
     fn get_attr(&self, attr: &str, heap: &'v Heap) -> Option<Value<'v>> {
         match attr {
-            NAME_ATTR_NAME => Some(heap.alloc(heap.alloc_str(<Self as Event>::TYPE.name()))),
+            NAME_ATTR_NAME => Some(heap.alloc(heap.alloc_str(Self::event_kind().name()))),
             PATH_ATTR_NAME => Some(heap.alloc(self.path.dupe())),
             _ => None,
         }
@@ -119,182 +143,17 @@ impl Display for OpenProjectEvent {
 pub struct OpenFileEvent {
     #[allocative(skip)]
     path: PrettyPath,
-
-    trigger_id: Option<TriggerId>,
 }
 starlark_simple_value!(OpenFileEvent);
 
-impl Event for OpenFileEvent {
-    const TYPE: EventType = EventType::OpenFile;
+impl OpenFileEvent {
+    fn event_kind() -> EventKind {
+        EventKind::OpenFile
+    }
 }
 
 #[starlark_value(type = "OpenFileEvent")]
 impl<'v> StarlarkValue<'v> for OpenFileEvent {
-    fn dir_attr(&self) -> Vec<String> {
-        [NAME_ATTR_NAME, PATH_ATTR_NAME, TRIGGER_ID_NAME]
-            .into_iter()
-            .map(Into::into)
-            .collect()
-    }
-
-    fn get_attr(&self, attr: &str, heap: &'v Heap) -> Option<Value<'v>> {
-        match attr {
-            NAME_ATTR_NAME => Some(heap.alloc(heap.alloc_str(<Self as Event>::TYPE.name()))),
-            PATH_ATTR_NAME => Some(heap.alloc(self.path.dupe())),
-            TRIGGER_ID_NAME => {
-                Some(heap.alloc(self.trigger_id.as_ref().map(|id| id.as_str().to_owned())))
-            }
-            _ => None,
-        }
-    }
-
-    fn has_attr(&self, attr: &str, _: &'v Heap) -> bool {
-        [NAME_ATTR_NAME, PATH_ATTR_NAME, TRIGGER_ID_NAME].contains(&attr)
-    }
-}
-
-impl Display for OpenFileEvent {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        <Self as StarlarkValue>::TYPE.fmt(f)
-    }
-}
-
-#[derive(new, Clone, Debug, ProvidesStaticType, NoSerialize, Allocative, Trace)]
-pub struct QueryMatchEvent<'v> {
-    #[allocative(skip)]
-    path: PrettyPath,
-
-    #[allocative(skip)]
-    query_captures: QueryCaptures<'v>,
-
-    trigger_id: Option<TriggerId>,
-}
-
-impl QueryMatchEvent<'_> {
-    const QUERY_CAPTURES_ATTR_NAME: &'static str = "captures";
-}
-
-impl Event for QueryMatchEvent<'_> {
-    const TYPE: EventType = EventType::QueryMatch;
-}
-
-#[starlark_value(type = "QueryMatchEvent")]
-impl<'v> StarlarkValue<'v> for QueryMatchEvent<'v> {
-    fn dir_attr(&self) -> Vec<String> {
-        [
-            NAME_ATTR_NAME,
-            PATH_ATTR_NAME,
-            Self::QUERY_CAPTURES_ATTR_NAME,
-            TRIGGER_ID_NAME,
-        ]
-        .into_iter()
-        .map(Into::into)
-        .collect()
-    }
-
-    fn get_attr(&self, attr: &str, heap: &'v Heap) -> Option<Value<'v>> {
-        match attr {
-            NAME_ATTR_NAME => Some(heap.alloc(heap.alloc_str(<Self as Event>::TYPE.name()))),
-            PATH_ATTR_NAME => Some(heap.alloc(self.path.dupe())),
-            Self::QUERY_CAPTURES_ATTR_NAME => Some(heap.alloc(self.query_captures.dupe())),
-            TRIGGER_ID_NAME => {
-                Some(heap.alloc(self.trigger_id.as_ref().map(|id| id.as_str().to_owned())))
-            }
-            _ => None,
-        }
-    }
-
-    fn has_attr(&self, attr: &str, _heap: &'v Heap) -> bool {
-        [
-            NAME_ATTR_NAME,
-            PATH_ATTR_NAME,
-            Self::QUERY_CAPTURES_ATTR_NAME,
-            TRIGGER_ID_NAME,
-        ]
-        .contains(&attr)
-    }
-}
-
-impl<'v> AllocValue<'v> for QueryMatchEvent<'v> {
-    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_complex_no_freeze(self)
-    }
-}
-
-impl Display for QueryMatchEvent<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        <Self as StarlarkValue>::TYPE.fmt(f)
-    }
-}
-
-#[derive(new, Clone, Debug, Dupe, PartialEq, Eq, ProvidesStaticType, NoSerialize, Allocative)]
-pub struct CloseFileEvent {
-    #[allocative(skip)]
-    path: PrettyPath,
-
-    trigger_id: Option<TriggerId>,
-}
-starlark_simple_value!(CloseFileEvent);
-
-impl Event for CloseFileEvent {
-    const TYPE: EventType = EventType::CloseFile;
-}
-
-#[starlark_value(type = "CloseFileEvent")]
-impl<'v> StarlarkValue<'v> for CloseFileEvent {
-    fn dir_attr(&self) -> Vec<String> {
-        [NAME_ATTR_NAME, PATH_ATTR_NAME, TRIGGER_ID_NAME]
-            .into_iter()
-            .map(Into::into)
-            .collect()
-    }
-
-    fn get_attr(&self, attr: &str, heap: &'v Heap) -> Option<Value<'v>> {
-        match attr {
-            NAME_ATTR_NAME => Some(heap.alloc(heap.alloc_str(<Self as Event>::TYPE.name()))),
-            PATH_ATTR_NAME => Some(heap.alloc(self.path.dupe())),
-            TRIGGER_ID_NAME => {
-                Some(heap.alloc(self.trigger_id.as_ref().map(|id| id.as_str().to_owned())))
-            }
-            _ => None,
-        }
-    }
-
-    fn has_attr(&self, attr: &str, _: &'v Heap) -> bool {
-        [NAME_ATTR_NAME, PATH_ATTR_NAME, TRIGGER_ID_NAME].contains(&attr)
-    }
-}
-
-impl Display for CloseFileEvent {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        <Self as StarlarkValue>::TYPE.fmt(f)
-    }
-}
-
-#[derive(
-    new,
-    Clone,
-    Debug,
-    Dupe,
-    PartialEq,
-    Eq,
-    ProvidesStaticType,
-    NoSerialize,
-    Allocative,
-    StarlarkAttrs,
-)]
-pub struct CloseProjectEvent {
-    #[allocative(skip)]
-    path: PrettyPath,
-}
-starlark_simple_value!(CloseProjectEvent);
-
-impl Event for CloseProjectEvent {
-    const TYPE: EventType = EventType::CloseProject;
-}
-
-#[starlark_value(type = "CloseProjectEvent")]
-impl<'v> StarlarkValue<'v> for CloseProjectEvent {
     fn dir_attr(&self) -> Vec<String> {
         [NAME_ATTR_NAME, PATH_ATTR_NAME]
             .into_iter()
@@ -304,7 +163,7 @@ impl<'v> StarlarkValue<'v> for CloseProjectEvent {
 
     fn get_attr(&self, attr: &str, heap: &'v Heap) -> Option<Value<'v>> {
         match attr {
-            NAME_ATTR_NAME => Some(heap.alloc(heap.alloc_str(<Self as Event>::TYPE.name()))),
+            NAME_ATTR_NAME => Some(heap.alloc(heap.alloc_str(Self::event_kind().name()))),
             PATH_ATTR_NAME => Some(heap.alloc(self.path.dupe())),
             _ => None,
         }
@@ -315,7 +174,68 @@ impl<'v> StarlarkValue<'v> for CloseProjectEvent {
     }
 }
 
-impl Display for CloseProjectEvent {
+impl Display for OpenFileEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        <Self as StarlarkValue>::TYPE.fmt(f)
+    }
+}
+
+#[derive(new, Clone, Dupe, Debug, ProvidesStaticType, NoSerialize, Allocative, Trace)]
+pub struct MatchEvent<'v> {
+    #[allocative(skip)]
+    path: PrettyPath,
+
+    #[allocative(skip)]
+    query_captures: QueryCaptures<'v>,
+}
+
+impl MatchEvent<'_> {
+    const QUERY_CAPTURES_ATTR_NAME: &'static str = "captures";
+
+    fn event_kind() -> EventKind {
+        EventKind::Match
+    }
+}
+
+#[starlark_value(type = "MatchEvent")]
+impl<'v> StarlarkValue<'v> for MatchEvent<'v> {
+    fn dir_attr(&self) -> Vec<String> {
+        [
+            NAME_ATTR_NAME,
+            PATH_ATTR_NAME,
+            Self::QUERY_CAPTURES_ATTR_NAME,
+        ]
+        .into_iter()
+        .map(Into::into)
+        .collect()
+    }
+
+    fn get_attr(&self, attr: &str, heap: &'v Heap) -> Option<Value<'v>> {
+        match attr {
+            NAME_ATTR_NAME => Some(heap.alloc(heap.alloc_str(Self::event_kind().name()))),
+            PATH_ATTR_NAME => Some(heap.alloc(self.path.dupe())),
+            Self::QUERY_CAPTURES_ATTR_NAME => Some(heap.alloc(self.query_captures.dupe())),
+            _ => None,
+        }
+    }
+
+    fn has_attr(&self, attr: &str, _heap: &'v Heap) -> bool {
+        [
+            NAME_ATTR_NAME,
+            PATH_ATTR_NAME,
+            Self::QUERY_CAPTURES_ATTR_NAME,
+        ]
+        .contains(&attr)
+    }
+}
+
+impl<'v> AllocValue<'v> for MatchEvent<'v> {
+    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+        heap.alloc_complex_no_freeze(self)
+    }
+}
+
+impl Display for MatchEvent<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         <Self as StarlarkValue>::TYPE.fmt(f)
     }
@@ -339,13 +259,17 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            vex.add_trigger(
-                                language='rust',
-                                query='(binary_expression) @bin_expr',
+                            if '{event_name}' == 'match':
+                                vex.observe('open_project', on_open_project)
+                            else:
+                                vex.observe('{event_name}', on_{event_name})
+
+                        def on_open_project(event):
+                            vex.search(
+                                'rust',
+                                '(binary_expression) @bin_expr',
+                                on_{event_name},
                             )
-                            if '{event_name}' != 'query_match':
-                                vex.observe('query_match', lambda x: x) # Make the error checker happy.
-                            vex.observe('{event_name}', on_{event_name})
 
                         def on_{event_name}(event):
                             fail('error-marker')
@@ -370,13 +294,17 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            vex.add_trigger(
-                                language='rust',
-                                query='(binary_expression) @bin_expr',
+                            if '{event_name}' == 'match':
+                                vex.observe('open_project', on_open_project)
+                            else:
+                                vex.observe('{event_name}', on_{event_name})
+
+                        def on_open_project(event):
+                            vex.search(
+                                'rust',
+                                '(binary_expression) @bin_expr',
+                                on_{event_name},
                             )
-                            if '{event_name}' != 'query_match':
-                                vex.observe('query_match', lambda x: x) # Make the error checker happy.
-                            vex.observe('{event_name}', on_{event_name})
 
                         def on_{event_name}(event):
                             check['type'](event, '{type_name}')
@@ -392,13 +320,17 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            vex.add_trigger(
-                                language='rust',
-                                query='(binary_expression) @bin_expr',
+                            if '{event_name}' == 'match':
+                                vex.observe('open_project', on_open_project)
+                            else:
+                                vex.observe('{event_name}', on_{event_name})
+
+                        def on_open_project(event):
+                            vex.search(
+                                'rust',
+                                '(binary_expression) @bin_expr',
+                                on_{event_name},
                             )
-                            if '{event_name}' != 'query_match':
-                                vex.observe('query_match', lambda x: x) # Make the error checker happy.
-                            vex.observe('{event_name}', on_{event_name})
 
                         def on_{event_name}(event):
                             check['attrs'](event, ['{attrs_repr}'])
@@ -432,37 +364,24 @@ mod test {
 
     #[test]
     fn on_open_file_event() {
-        test_event_common_properties(
-            "open_file",
-            "OpenFileEvent",
-            &["name", "path", "trigger_id"],
-        );
+        test_event_common_properties("open_file", "OpenFileEvent", &["name", "path"]);
 
         let run_data = VexTest::new("many-matching-triggers-one-event")
             .with_scriptlet(
                 "vexes/test.star",
                 indoc! {r#"
-                    expected_trigger = 'trigger-1'
-                    other_trigger = 'trigger-2'
-
                     def init():
-                        vex.add_trigger(
-                            id=expected_trigger,
-                            path="src/"
-                        )
-                        vex.add_trigger(
-                            id=other_trigger,
-                            path='main.rs'
-                        )
                         vex.observe('open_file', on_open_file)
 
                     def on_open_file(event):
+                        if 'main.rs' not in event.path:
+                            return
+
                         vex.warn("opened file %s" % event.path)
-                        if event.trigger_id != expected_trigger:
-                            fail("expected event to be caused by trigger '%s' but got '%s'" % (expected_trigger, event.trigger_id))
                 "#},
             )
             .with_source_file("src/main.rs", r#"fn main() { println!("hello, world!"); }"#)
+            .with_source_file("src/unused.rs", r#"fn other() { }"#)
             .try_run()
             .unwrap();
         assert_eq!(1, run_data.irritations.len());
@@ -470,11 +389,7 @@ mod test {
 
     #[test]
     fn on_match_event() {
-        test_event_common_properties(
-            "query_match",
-            "QueryMatchEvent",
-            &["name", "captures", "path", "trigger_id"],
-        );
+        test_event_common_properties("match", "MatchEvent", &["name", "captures", "path"]);
 
         VexTest::new("captures")
             .with_scriptlet(
@@ -483,13 +398,16 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            vex.add_trigger(
-                                language='rust',
-                                query='(binary_expression left: (integer_literal) @l_int) @bin_expr',
-                            )
-                            vex.observe('query_match', on_query_match)
+                            vex.observe('open_project', on_open_project)
 
-                        def on_query_match(event):
+                        def on_open_project(event):
+                            vex.search(
+                                'rust',
+                                '(binary_expression left: (integer_literal) @l_int) @bin_expr',
+                                on_match,
+                            )
+
+                        def on_match(event):
                             captures = event.captures
 
                             expected_fields = ['l_int', 'bin_expr']
@@ -511,48 +429,5 @@ mod test {
                 "#},
             )
             .assert_irritation_free();
-    }
-
-    #[test]
-    fn on_close_file_event() {
-        test_event_common_properties(
-            "close_file",
-            "CloseFileEvent",
-            &["name", "path", "trigger_id"],
-        );
-
-        let run_data = VexTest::new("many-matching-triggers-one-event")
-            .with_scriptlet(
-                "vexes/test.star",
-                indoc! {r#"
-                    expected_trigger = 'trigger-1'
-                    other_trigger = 'trigger-2'
-
-                    def init():
-                        vex.add_trigger(
-                            id=expected_trigger,
-                            path="src/"
-                        )
-                        vex.add_trigger(
-                            id=other_trigger,
-                            path='main.rs'
-                        )
-                        vex.observe('close_file', on_close_file)
-
-                    def on_close_file(event):
-                        vex.warn("closed file %s" % event.path)
-                        if event.trigger_id != expected_trigger:
-                            fail("expected event to be caused by trigger '%s' but got '%s'" % (expected_trigger, event.trigger_id))
-                "#},
-            )
-            .with_source_file("src/main.rs", r#"fn main() { println!("hello, world!"); }"#)
-            .try_run()
-            .unwrap();
-        assert_eq!(1, run_data.irritations.len());
-    }
-
-    #[test]
-    fn on_close_project_event() {
-        test_event_common_properties("close_project", "CloseProjectEvent", &["name", "path"]);
     }
 }

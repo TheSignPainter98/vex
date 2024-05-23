@@ -9,7 +9,6 @@ use crate::{
     result::Result,
     source_path::SourcePath,
     supported_language::SupportedLanguage,
-    trigger::{Trigger, TriggerCause},
 };
 
 #[derive(Debug)]
@@ -32,8 +31,8 @@ impl SourceFile {
         &self.path
     }
 
-    pub fn parseable(&self) -> bool {
-        self.language.is_some()
+    pub fn language(&self) -> Option<SupportedLanguage> {
+        self.language
     }
 
     pub fn parse(&self) -> Result<ParsedSourceFile> {
@@ -72,18 +71,6 @@ impl SourceFile {
             tree,
             language,
         })
-    }
-}
-
-impl TriggerCause for SourceFile {
-    fn matches(&self, trigger: &Trigger) -> bool {
-        if let Some(content_trigger) = &trigger.content_trigger {
-            if !self.language.is_some_and(|l| l == content_trigger.language) {
-                return false;
-            }
-        }
-
-        self.path.matches(trigger)
     }
 }
 

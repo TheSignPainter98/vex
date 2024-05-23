@@ -9,7 +9,6 @@ edition = "2021"
 allocative = "0.3.1"
 annotate-snippets = "0.10.0"
 anyhow = "1.0.76"
-async-recursion = "1.0.5"
 camino = { version = "1.1.6", features = ["serde1"] }
 clap = { version = "4.4.11", features = ["derive"] }
 const_format = "0.2.32"
@@ -44,6 +43,10 @@ uniquote = "4.0.0"
 insta = { version = "1.36.1", features = ["yaml"] }
 pretty_assertions = "1.4.0"
 textwrap = { version = "0.16.1", default-features = false }
+
+[profile.release]
+lto = "fat"
+strip = "symbols"
 
 [profile.dev.package]
 insta.opt-level = 3
