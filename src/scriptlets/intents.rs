@@ -3,18 +3,18 @@ use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 use allocative::Allocative;
+use derive_more::Display;
 use starlark::values::{AllocValue, Freeze, StarlarkValue, Value};
 use starlark_derive::{starlark_value, NoSerialize, ProvidesStaticType, Trace};
 use tree_sitter::Query;
 
-use crate::irritation::Irritation;
-use crate::scriptlets::event::EventKind;
-use crate::supported_language::SupportedLanguage;
+use crate::{
+    irritation::Irritation,
+    scriptlets::{event::EventKind, observers::UnfrozenObserver, Observer},
+    supported_language::SupportedLanguage,
+};
 
-use super::observers::UnfrozenObserver;
-use super::Observer;
-
-#[derive(Debug, derive_more::Display, ProvidesStaticType, NoSerialize, Allocative, Trace)]
+#[derive(Debug, Display, ProvidesStaticType, NoSerialize, Allocative, Trace)]
 #[display(fmt = "Intents")]
 pub struct UnfrozenIntents<'v>(RefCell<Vec<UnfrozenIntent<'v>>>);
 
@@ -112,9 +112,7 @@ impl<'v> Freeze for UnfrozenIntent<'v> {
     }
 }
 
-#[derive(
-    Clone, Debug, derive_more::Display, ProvidesStaticType, NoSerialize, Allocative, Trace,
-)]
+#[derive(Clone, Debug, Display, ProvidesStaticType, NoSerialize, Allocative, Trace)]
 #[display(fmt = "Intents")]
 pub struct Intents(Vec<Intent>);
 

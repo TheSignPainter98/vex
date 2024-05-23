@@ -6,47 +6,6 @@ use glob::{MatchOptions, Pattern};
 use serde::{Deserialize, Serialize};
 
 use crate::{error::Error, result::Result};
-//
-// pub trait TriggerCause {
-//     fn matches(&self, trigger: &Trigger) -> bool;
-// }
-//
-// #[derive(Debug, Allocative)]
-// pub struct Trigger {
-//     pub id: Option<TriggerId>,
-//     pub content_trigger: Option<ContentTrigger>,
-//     pub path_patterns: Vec<FilePattern>,
-// }
-//
-// impl Default for Trigger {
-//     fn default() -> Self {
-//         Self {
-//             id: None,
-//             content_trigger: None,
-//             path_patterns: Vec::with_capacity(0),
-//         }
-//     }
-// }
-//
-// #[derive(Clone, Debug, PartialEq, Eq, Dupe, Allocative, Trace)]
-// pub struct TriggerId(Arc<str>);
-//
-// impl TriggerId {
-//     pub fn new(id: &str) -> Self {
-//         Self(Arc::from(id))
-//     }
-//
-//     pub fn as_str(&self) -> &str {
-//         self.0.as_ref()
-//     }
-// }
-//
-// #[derive(Debug, Allocative)]
-// pub struct ContentTrigger {
-//     pub language: SupportedLanguage,
-//     #[allocative(skip)]
-//     pub query: Option<Query>,
-// }
 
 #[derive(Debug, Allocative)]
 pub struct FilePattern(#[allocative(skip)] Pattern);
@@ -114,6 +73,8 @@ impl<S: AsRef<str>> Display for RawFilePattern<S> {
 
 #[cfg(test)]
 mod test {
+    use super::*;
+
     use indoc::{formatdoc, indoc};
 
     use crate::{irritation::Irritation, vextest::VexTest};
@@ -316,294 +277,157 @@ mod test {
             .returns_error("Invalid syntax");
     }
 
-    // #[test]
-    // fn path_globbing() {
-    //     #[must_use]
-    //     struct PathGlobTest {
-    //         name: &'static str,
-    //         root_dir: &'static str,
-    //         test_paths: &'static [&'static str],
-    //         path_pattern: Option<&'static str>,
-    //         expected_matches: Option<&'static [&'static str]>,
-    //     }
-    //
-    //     impl PathGlobTest {
-    //         fn new(
-    //             name: &'static str,
-    //             root_dir: &'static str,
-    //             test_paths: &'static [&'static str],
-    //         ) -> Self {
-    //             Self {
-    //                 name,
-    //                 root_dir,
-    //                 test_paths,
-    //                 path_pattern: None,
-    //                 expected_matches: None,
-    //             }
-    //         }
-    //
-    //         fn path_pattern(mut self, path_pattern: &'static str) -> Self {
-    //             self.path_pattern = Some(path_pattern);
-    //             self
-    //         }
-    //
-    //         fn matches(mut self, expected_matches: &'static [&'static str]) {
-    //             self.expected_matches = Some(expected_matches);
-    //             self.run()
-    //         }
-    //
-    //         fn run(self) {
-    //             eprintln!("running test {}...", self.name);
-    //
-    //             let path_pattern = self.path_pattern.unwrap();
-    //             let pattern = RawFilePattern::new(path_pattern)
-    //                 .compile(self.root_dir)
-    //                 .unwrap();
-    //             let matches = self
-    //                 .test_paths
-    //                 .iter()
-    //                 .filter(|test_path| {
-    //                     pattern.matches(&Utf8PathBuf::from(self.root_dir).join(test_path))
-    //                 })
-    //                 .copied()
-    //                 .collect::<Vec<_>>();
-    //             assert_eq!(matches, self.expected_matches.unwrap(),);
-    //         }
-    //     }
-    //
-    //     let root_dir = "/some-project";
-    //     let test_paths = &[
-    //         "/foo.rs",
-    //         "/bar.rs",
-    //         "/foo",
-    //         "/bar/foo",
-    //         "/bar/foo.rs",
-    //         "/baz/bar/foo.rs",
-    //         "/qux/baz/bar/foo.rs",
-    //         "/qux/baz/bar/bar.rs",
-    //         "/qux/baz/bar/baz.go",
-    //     ];
-    //
-    //     PathGlobTest::new("empty", root_dir, test_paths)
-    //         .path_pattern("")
-    //         .matches(test_paths);
-    //
-    //     // File filter tests.
-    //     PathGlobTest::new("nonexistent-file", root_dir, test_paths)
-    //         .path_pattern("i_do_not_exist.rs")
-    //         .matches(&[]);
-    //     PathGlobTest::new("full-file-name", root_dir, test_paths)
-    //         .path_pattern("foo.rs")
-    //         .matches(&[
-    //             "/foo.rs",
-    //             "/bar/foo.rs",
-    //             "/baz/bar/foo.rs",
-    //             "/qux/baz/bar/foo.rs",
-    //         ]);
-    //     PathGlobTest::new("full-file-name-absolute", root_dir, test_paths)
-    //         .path_pattern("/foo.rs")
-    //         .matches(&["/foo.rs"]);
-    //     PathGlobTest::new("file-stem", root_dir, test_paths)
-    //         .path_pattern("foo")
-    //         .matches(&["/foo", "/bar/foo"]);
-    //     PathGlobTest::new("file-stem-absolute", root_dir, test_paths)
-    //         .path_pattern("/foo")
-    //         .matches(&["/foo"]);
-    //     PathGlobTest::new("file-glob", root_dir, test_paths)
-    //         .path_pattern("*.rs")
-    //         .matches(&[
-    //             "/foo.rs",
-    //             "/bar.rs",
-    //             "/bar/foo.rs",
-    //             "/baz/bar/foo.rs",
-    //             "/qux/baz/bar/foo.rs",
-    //             "/qux/baz/bar/bar.rs",
-    //         ]);
-    //
-    //     // Dir filter tests.
-    //     PathGlobTest::new("nonexistent-dir", root_dir, test_paths)
-    //         .path_pattern("i_do_not_exist/")
-    //         .matches(&[]);
-    //     PathGlobTest::new("dir", root_dir, test_paths)
-    //         .path_pattern("bar/")
-    //         .matches(&[
-    //             "/bar/foo",
-    //             "/bar/foo.rs",
-    //             "/baz/bar/foo.rs",
-    //             "/qux/baz/bar/foo.rs",
-    //             "/qux/baz/bar/bar.rs",
-    //             "/qux/baz/bar/baz.go",
-    //         ]);
-    //     PathGlobTest::new("dir-absolute", root_dir, test_paths)
-    //         .path_pattern("/bar/")
-    //         .matches(&["/bar/foo", "/bar/foo.rs"]);
-    //     PathGlobTest::new("root", root_dir, test_paths)
-    //         .path_pattern("/")
-    //         .matches(test_paths);
-    //     PathGlobTest::new("multi-part", root_dir, test_paths)
-    //         .path_pattern("baz/bar/")
-    //         .matches(&[
-    //             "/baz/bar/foo.rs",
-    //             "/qux/baz/bar/foo.rs",
-    //             "/qux/baz/bar/bar.rs",
-    //             "/qux/baz/bar/baz.go",
-    //         ]);
-    //     PathGlobTest::new("dir-glob", root_dir, test_paths)
-    //         .path_pattern("qux/**/baz/**")
-    //         .matches(&[
-    //             "/qux/baz/bar/foo.rs",
-    //             "/qux/baz/bar/bar.rs",
-    //             "/qux/baz/bar/baz.go",
-    //         ]);
-    //     PathGlobTest::new("dir-glob-with-file", root_dir, test_paths)
-    //         .path_pattern("qux/**/foo.rs")
-    //         .matches(&["/qux/baz/bar/foo.rs"]);
-    // }
-    //
-    // #[test]
-    // fn malformed_glob() {
-    //     let pattern = "[".to_string();
-    //     let err = RawFilePattern::new(&pattern).compile("").unwrap_err();
-    //     assert_eq!(
-    //         r#"cannot compile "[": invalid range pattern at position 1"#,
-    //         err.to_string()
-    //     );
-    // }
-    //
-    // #[test]
-    // fn many_paths() {
-    //     let run_data = VexTest::new("language-with-path")
-    //         .with_scriptlet(
-    //             "vexes/test.star",
-    //             indoc! {r#"
-    //                 def init():
-    //                     vex.add_trigger(
-    //                         'rust',
-    //                         path=['mod_name_1/', 'mod_name_2/'],
-    //                     )
-    //                     vex.observe('open_file', on_match)
-    //
-    //                 def on_match(event):
-    //                     vex.warn(str(event.path))
-    //             "#},
-    //         )
-    //         .with_source_file(
-    //             "src/main.rs",
-    //             indoc! {r#"
-    //                 mod mod_name_1;
-    //                 mod mod_name_2;
-    //                 mod mod_name_3;
-    //
-    //                 fn main() {
-    //                     println!("{}", mod_name_1::func());
-    //                 }
-    //             "#},
-    //         )
-    //         .with_source_file(
-    //             "src/mod_name_1/mod.rs",
-    //             indoc! {r#"
-    //                 fn func() -> &'static str {
-    //                     "hello, world!"
-    //                 }
-    //             "#},
-    //         )
-    //         .with_source_file(
-    //             "src/mod_name_2/mod.rs",
-    //             indoc! {r#"
-    //                 fn func() -> &'static str {
-    //                     "hello, world!"
-    //                 }
-    //             "#},
-    //         )
-    //         .with_source_file(
-    //             "src/mod_name_3/mod.rs",
-    //             indoc! {r#"
-    //                 fn func() -> &'static str {
-    //                     "hello, world!"
-    //                 }
-    //             "#},
-    //         )
-    //         .try_run()
-    //         .unwrap();
-    //     assert_eq!(2, run_data.irritations.len());
-    // }
-    //
-    // #[test]
-    // fn path_interactions() {
-    //     let run_data = VexTest::new("language-with-path")
-    //         .with_scriptlet(
-    //             "vexes/test.star",
-    //             indoc! {r#"
-    //                 def init():
-    //                     vex.add_trigger(
-    //                         'rust',
-    //                         path='mod_name/',
-    //                     )
-    //                     vex.observe('open_file', on_match)
-    //
-    //                 def on_match(event):
-    //                     vex.warn(str(event.path))
-    //             "#},
-    //         )
-    //         .with_source_file(
-    //             "src/main.rs",
-    //             indoc! {r#"
-    //                 mod mod_name;
-    //
-    //                 fn main() {
-    //                     println!("{}", mod_name::func());
-    //                 }
-    //             "#},
-    //         )
-    //         .with_source_file(
-    //             "src/mod_name/mod.rs",
-    //             indoc! {r#"
-    //                 fn func() -> &'static str {
-    //                     "hello, world!"
-    //                 }
-    //             "#},
-    //         )
-    //         .try_run()
-    //         .unwrap();
-    //     assert_eq!(1, run_data.irritations.len());
-    //
-    //     let run_data = VexTest::new("query-with-path")
-    //         .with_scriptlet(
-    //             "vexes/test.star",
-    //             indoc! {r#"
-    //                 def init():
-    //                     vex.add_trigger(
-    //                         'rust',
-    //                         '(binary_expression)',
-    //                         path='mod_name/',
-    //                     )
-    //                     vex.observe('query_match', on_match)
-    //
-    //                 def on_match(event):
-    //                     vex.warn(str(event.path))
-    //             "#},
-    //         )
-    //         .with_source_file(
-    //             "src/main.rs",
-    //             indoc! {r#"
-    //                 mod mod_name;
-    //
-    //                 fn main() {
-    //                     let x = mod_name::func() + 3;
-    //                     println!("{x}");
-    //                 }
-    //             "#},
-    //         )
-    //         .with_source_file(
-    //             "src/mod_name/mod.rs",
-    //             indoc! {r#"
-    //                 fn func() -> i32 {
-    //                     1 + 2
-    //                 }
-    //             "#},
-    //         )
-    //         .try_run()
-    //         .unwrap();
-    //     assert_eq!(1, run_data.irritations.len());
-    // }
+    #[test]
+    fn path_globbing() {
+        #[must_use]
+        struct PathGlobTest {
+            name: &'static str,
+            root_dir: &'static str,
+            test_paths: &'static [&'static str],
+            path_pattern: Option<&'static str>,
+            expected_matches: Option<&'static [&'static str]>,
+        }
+
+        impl PathGlobTest {
+            fn new(
+                name: &'static str,
+                root_dir: &'static str,
+                test_paths: &'static [&'static str],
+            ) -> Self {
+                Self {
+                    name,
+                    root_dir,
+                    test_paths,
+                    path_pattern: None,
+                    expected_matches: None,
+                }
+            }
+
+            fn path_pattern(mut self, path_pattern: &'static str) -> Self {
+                self.path_pattern = Some(path_pattern);
+                self
+            }
+
+            fn matches(mut self, expected_matches: &'static [&'static str]) {
+                self.expected_matches = Some(expected_matches);
+                self.run()
+            }
+
+            fn run(self) {
+                eprintln!("running test {}...", self.name);
+
+                let path_pattern = self.path_pattern.unwrap();
+                let pattern = RawFilePattern::new(path_pattern)
+                    .compile(self.root_dir)
+                    .unwrap();
+                let matches = self
+                    .test_paths
+                    .iter()
+                    .filter(|test_path| {
+                        pattern.matches(&Utf8PathBuf::from(self.root_dir).join(test_path))
+                    })
+                    .copied()
+                    .collect::<Vec<_>>();
+                assert_eq!(matches, self.expected_matches.unwrap(),);
+            }
+        }
+
+        let root_dir = "/some-project";
+        let test_paths = &[
+            "/foo.rs",
+            "/bar.rs",
+            "/foo",
+            "/bar/foo",
+            "/bar/foo.rs",
+            "/baz/bar/foo.rs",
+            "/qux/baz/bar/foo.rs",
+            "/qux/baz/bar/bar.rs",
+            "/qux/baz/bar/baz.go",
+        ];
+
+        PathGlobTest::new("empty", root_dir, test_paths)
+            .path_pattern("")
+            .matches(test_paths);
+
+        // File filter tests.
+        PathGlobTest::new("nonexistent-file", root_dir, test_paths)
+            .path_pattern("i_do_not_exist.rs")
+            .matches(&[]);
+        PathGlobTest::new("full-file-name", root_dir, test_paths)
+            .path_pattern("foo.rs")
+            .matches(&[
+                "/foo.rs",
+                "/bar/foo.rs",
+                "/baz/bar/foo.rs",
+                "/qux/baz/bar/foo.rs",
+            ]);
+        PathGlobTest::new("full-file-name-absolute", root_dir, test_paths)
+            .path_pattern("/foo.rs")
+            .matches(&["/foo.rs"]);
+        PathGlobTest::new("file-stem", root_dir, test_paths)
+            .path_pattern("foo")
+            .matches(&["/foo", "/bar/foo"]);
+        PathGlobTest::new("file-stem-absolute", root_dir, test_paths)
+            .path_pattern("/foo")
+            .matches(&["/foo"]);
+        PathGlobTest::new("file-glob", root_dir, test_paths)
+            .path_pattern("*.rs")
+            .matches(&[
+                "/foo.rs",
+                "/bar.rs",
+                "/bar/foo.rs",
+                "/baz/bar/foo.rs",
+                "/qux/baz/bar/foo.rs",
+                "/qux/baz/bar/bar.rs",
+            ]);
+
+        // Dir filter tests.
+        PathGlobTest::new("nonexistent-dir", root_dir, test_paths)
+            .path_pattern("i_do_not_exist/")
+            .matches(&[]);
+        PathGlobTest::new("dir", root_dir, test_paths)
+            .path_pattern("bar/")
+            .matches(&[
+                "/bar/foo",
+                "/bar/foo.rs",
+                "/baz/bar/foo.rs",
+                "/qux/baz/bar/foo.rs",
+                "/qux/baz/bar/bar.rs",
+                "/qux/baz/bar/baz.go",
+            ]);
+        PathGlobTest::new("dir-absolute", root_dir, test_paths)
+            .path_pattern("/bar/")
+            .matches(&["/bar/foo", "/bar/foo.rs"]);
+        PathGlobTest::new("root", root_dir, test_paths)
+            .path_pattern("/")
+            .matches(test_paths);
+        PathGlobTest::new("multi-part", root_dir, test_paths)
+            .path_pattern("baz/bar/")
+            .matches(&[
+                "/baz/bar/foo.rs",
+                "/qux/baz/bar/foo.rs",
+                "/qux/baz/bar/bar.rs",
+                "/qux/baz/bar/baz.go",
+            ]);
+        PathGlobTest::new("dir-glob", root_dir, test_paths)
+            .path_pattern("qux/**/baz/**")
+            .matches(&[
+                "/qux/baz/bar/foo.rs",
+                "/qux/baz/bar/bar.rs",
+                "/qux/baz/bar/baz.go",
+            ]);
+        PathGlobTest::new("dir-glob-with-file", root_dir, test_paths)
+            .path_pattern("qux/**/foo.rs")
+            .matches(&["/qux/baz/bar/foo.rs"]);
+    }
+
+    #[test]
+    fn malformed_glob() {
+        let pattern = "[".to_string();
+        let err = RawFilePattern::new(&pattern).compile("").unwrap_err();
+        assert_eq!(
+            r#"cannot compile "[": invalid range pattern at position 1"#,
+            err.to_string()
+        );
+    }
 }

@@ -18,13 +18,16 @@ use crate::{
     error::{Error, IOAction, InvalidLoadReason},
     result::Result,
     scriptlets::{
-        action::Action, app_object::AppObject, extra_data::UnfrozenInvocationData,
-        print_handler::PrintHandler, store::PreinitedModuleCache, ObserverData,
+        action::Action,
+        app_object::AppObject,
+        event::EventKind,
+        extra_data::{InvocationData, UnfrozenInvocationData},
+        print_handler::PrintHandler,
+        store::PreinitedModuleCache,
+        Intent, ObserverData,
     },
     source_path::{PrettyPath, SourcePath},
 };
-
-use super::{event::EventKind, extra_data::InvocationData, Intent};
 
 #[derive(Debug)]
 pub struct PreinitingScriptlet {

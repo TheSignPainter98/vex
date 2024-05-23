@@ -14,7 +14,7 @@ use crate::{
 // TODO(kcza): box this!
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("{what} unavailable while {}", .action.name())]
+    #[error("{what} unavailable while {}", .action.pretty_name())]
     ActionUnavailable { what: &'static str, action: Action },
 
     #[error("already inited in a parent directory {found_root}")]

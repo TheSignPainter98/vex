@@ -11,13 +11,14 @@ use starlark_derive::{starlark_value, NoSerialize, ProvidesStaticType, Trace};
 use crate::{
     result::Result,
     scriptlets::{
-        action::Action, event::Event, extra_data::UnfrozenInvocationData,
+        action::Action,
+        event::{Event, EventKind},
+        extra_data::{InvocationData, UnfrozenInvocationData},
         print_handler::PrintHandler,
+        Intents,
     },
     source_path::PrettyPath,
 };
-
-use super::{event::EventKind, extra_data::InvocationData, Intents};
 
 #[derive(Debug, derive_more::Display, NoSerialize, ProvidesStaticType, Allocative)]
 #[display(fmt = "ObserverData")]
@@ -126,149 +127,3 @@ impl Observer {
         Ok(InvocationData::get_from(&handler_module).intents().clone())
     }
 }
-
-// pub trait Observer<'v> {
-//     type Event: 'v;
-//
-//     fn vex_path(&self) -> &PrettyPath;
-//
-//     fn callback(&self) -> &OwnedFrozenValue;
-//
-//     fn handle(
-//         &self,
-//         module: &'v Module,
-//         event: Self::Event,
-//     ) -> Result<(Vec<Irritation>, ObserverDataBuilder<'v>)>
-//     where
-//         Self::Event: StarlarkValue<'v> + AllocValue<'v> + Event,
-//     {
-//         let extra = InvocationData::new(
-//             Action::Vexing(<Self::Event as Event>::TYPE),
-//             self.vex_path().dupe(),
-//         );
-//
-//         {
-//             let mut eval = Evaluator::new(module);
-//             eval.set_print_handler(&PrintHandler);
-//             extra.insert_into(&mut eval);
-//
-//             let func = self.callback().value(); // TODO(kcza): check thread safety! Can this unfrozen
-//                                                 // function mutate upvalues if it is a closure?
-//             eval.eval_function(func, &[module.heap().alloc(event)], &[])?;
-//         }
-//
-//         let irritations = extra.irritations.into_inner().expect("lock poisoned");
-//         Ok(irritations)
-//     }
-// }
-
-// #[derive(Clone, Debug, Dupe, new)]
-// pub struct OpenProjectObserver {
-//     vex_path: PrettyPath,
-//     callback: OwnedFrozenValue,
-// }
-//
-// impl Observer<'_> for OpenProjectObserver {
-//     type Event = OpenProjectEvent;
-//
-//     fn vex_path(&self) -> &PrettyPath {
-//         &self.vex_path
-//     }
-//
-//     fn callback(&self) -> &OwnedFrozenValue {
-//         &self.callback
-//     }
-// }
-//
-// #[derive(Clone, Debug, Dupe, new)]
-// pub struct OpenFileObserver {
-//     vex_path: PrettyPath,
-//     callback: OwnedFrozenValue,
-// }
-//
-// impl Observer<'_> for OpenFileObserver {
-//     type Event = OpenFileEvent;
-//
-//     fn vex_path(&self) -> &PrettyPath {
-//         &self.vex_path
-//     }
-//
-//     fn callback(&self) -> &OwnedFrozenValue {
-//         &self.callback
-//     }
-// }
-//
-// #[derive(Debug, Allocative)]
-// pub struct QueryObserver<'v> {
-//     pub language: SupportedLanguage,
-//
-//     #[allocative(skip)]
-//     pub query: Query,
-//
-//     pub on_match: Value<'v>,
-// }
-//
-// #[derive(Debug, Allocative)]
-// pub struct FrozenQueryObserver {
-//     pub language: SupportedLanguage,
-//
-//     #[allocative(skip)]
-//     pub query: Query,
-//
-//     pub on_match: OwnedFrozenValue,
-// }
-//
-// impl<'v> Observer<'v> for FrozenQueryObserver {
-//     type Event = QueryMatchEvent<'v>;
-//
-//     fn vex_path(&self) -> &PrettyPath {
-//         &self.vex_path
-//     }
-//
-//     fn callback(&self) -> &OwnedFrozenValue {
-//         &self.on_match
-//     }
-// }
-//
-// #[derive(Debug)]
-// pub struct MatchObserver {
-//     vex_path: PrettyPath,
-//     query: Query,
-//     callback: OwnedFrozenValue,
-// }
-//
-// #[derive(Clone, Debug, Dupe, new)]
-// pub struct CloseFileObserver {
-//     vex_path: PrettyPath,
-//     callback: OwnedFrozenValue,
-// }
-//
-// impl Observer<'_> for CloseFileObserver {
-//     type Event = CloseFileEvent;
-//
-//     fn vex_path(&self) -> &PrettyPath {
-//         &self.vex_path
-//     }
-//
-//     fn callback(&self) -> &OwnedFrozenValue {
-//         &self.callback
-//     }
-// }
-//
-// #[derive(Clone, Debug, Dupe, new)]
-// pub struct CloseProjectObserver {
-//     vex_path: PrettyPath,
-//     callback: OwnedFrozenValue,
-// }
-//
-// impl Observer<'_> for CloseProjectObserver {
-//     type Event = CloseProjectEvent;
-//
-//     fn vex_path(&self) -> &PrettyPath {
-//         &self.vex_path
-//     }
-//
-//     fn callback(&self) -> &OwnedFrozenValue {
-//         &self.callback
-//     }
-// }

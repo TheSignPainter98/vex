@@ -372,21 +372,4 @@ impl VexingStore {
     pub fn file_queries_hint(&self) -> usize {
         0
     }
-
-    // pub fn file_observers(&self) -> impl Iterator<Item = &ObserverData> {
-    //     // self.store.iter().filter_map(VexingScriptlet::observer_data)
-    // }
-
-    // pub fn file_observers_for<'v>(
-    //     &'v self,
-    //     src_file: &'v SourceFile,
-    // ) -> impl Iterator<Item = (Option<TriggerId>, &ObserverData)> {
-    //     self.file_observers()
-    //         .filter_map(|obs| {
-    //             obs.triggers
-    //                 .iter()
-    //                 .find(|trigger| src_file.matches(trigger))
-    //                 .map(|trigger| (trigger.id.dupe(), obs))
-    //         })
-    // }
 }

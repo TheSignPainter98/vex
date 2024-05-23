@@ -199,8 +199,8 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
                         query,
                         on_match,
                     } => file_queries.push((*language, query.dupe(), on_match.dupe())),
-                    Intent::Warn(irr) => irritations.push(irr.clone()),
                     Intent::Observe { .. } => panic!("internal error: non-init observe"),
+                    Intent::Warn(irr) => irritations.push(irr.clone()),
                 });
             file_queries
         };
@@ -210,7 +210,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
             .chain(file_queries.iter())
             .all(|(l, _, _)| *l != language)
         {
-            continue; // The user doesn't care about this file.
+            continue; // No need to parse, the user will never search this.
         }
         let parsed_file = file.parse()?;
         project_queries
@@ -235,10 +235,10 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
                                 Intent::Find { .. } => {
                                     panic!("internal error: find intended during find")
                                 }
-                                Intent::Warn(irr) => irritations.push(irr.clone()),
                                 Intent::Observe { .. } => {
                                     panic!("internal error: non-init observe")
                                 }
+                                Intent::Warn(irr) => irritations.push(irr.clone()),
                             },
                         );
 
