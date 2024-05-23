@@ -54,13 +54,13 @@ def on_open_project(event):
 Note that in this [Scheme][scheme] query, we have labelled certain nodes for later use: `@left_operand`, `@right-operand` and `@bin_expr`.
 (The file structure this query will be checked against can be found by running `vex dump path/to/file`.)
 
-To react to a syntax-tree node being found which matches the above query, add an observer for the `query_match` event (we’ll call this observer `on_match`) by completing the call to `vex.search`—
+To react to a syntax-tree node being found which matches the above query, add a callback function (we’ll call this `on_match`)—
 ```python
         on_match,
     )
 ```
 
-Now, let’s fill in that `on_match` callback function.
+Now, let’s fill in that `on_match` function.
 Let’s say we want to enforce that every time two integer literals appear in a binary expression, a significantly smaller one should appear first (perhaps so the reader isn’t too distracted by the large number that they neglect to read the smaller one).
 To do this, write our `on_match` function as follows.
 ```python

@@ -19,7 +19,7 @@ const NAME_ATTR_NAME: &str = "name";
 pub enum Event<'v> {
     OpenProject(OpenProjectEvent),
     OpenFile(OpenFileEvent),
-    QueryMatch(QueryMatchEvent<'v>),
+    Match(MatchEvent<'v>),
 }
 
 impl<'v> Event<'v> {
@@ -27,7 +27,7 @@ impl<'v> Event<'v> {
         match self {
             Self::OpenProject(_) => EventKind::OpenProject,
             Self::OpenFile(_) => EventKind::OpenFile,
-            Self::QueryMatch(_) => EventKind::QueryMatch,
+            Self::Match(_) => EventKind::Match,
         }
     }
 
@@ -35,7 +35,7 @@ impl<'v> Event<'v> {
         match self {
             Self::OpenProject(e) => heap.alloc(e),
             Self::OpenFile(e) => heap.alloc(e),
-            Self::QueryMatch(e) => heap.alloc(e),
+            Self::Match(e) => heap.alloc(e),
         }
     }
 }
@@ -44,14 +44,14 @@ impl<'v> Event<'v> {
 pub enum EventKind {
     OpenProject,
     OpenFile,
-    QueryMatch,
+    Match,
 }
 
 impl EventKind {
     pub fn parseable(&self) -> bool {
         match self {
             Self::OpenProject | Self::OpenFile => true,
-            Self::QueryMatch => false,
+            Self::Match => false,
         }
     }
 
@@ -59,7 +59,7 @@ impl EventKind {
         match self {
             Self::OpenProject => "open_project",
             Self::OpenFile => "open_file",
-            Self::QueryMatch => "query_match",
+            Self::Match => "match",
         }
     }
 
@@ -67,7 +67,7 @@ impl EventKind {
         match self {
             Self::OpenProject => "opening project",
             Self::OpenFile => "opening file",
-            Self::QueryMatch => "handling match",
+            Self::Match => "handling match",
         }
     }
 }
@@ -181,7 +181,7 @@ impl Display for OpenFileEvent {
 }
 
 #[derive(new, Clone, Dupe, Debug, ProvidesStaticType, NoSerialize, Allocative, Trace)]
-pub struct QueryMatchEvent<'v> {
+pub struct MatchEvent<'v> {
     #[allocative(skip)]
     path: PrettyPath,
 
@@ -189,16 +189,16 @@ pub struct QueryMatchEvent<'v> {
     query_captures: QueryCaptures<'v>,
 }
 
-impl QueryMatchEvent<'_> {
+impl MatchEvent<'_> {
     const QUERY_CAPTURES_ATTR_NAME: &'static str = "captures";
 
     fn event_kind() -> EventKind {
-        EventKind::QueryMatch
+        EventKind::Match
     }
 }
 
-#[starlark_value(type = "QueryMatchEvent")]
-impl<'v> StarlarkValue<'v> for QueryMatchEvent<'v> {
+#[starlark_value(type = "MatchEvent")]
+impl<'v> StarlarkValue<'v> for MatchEvent<'v> {
     fn dir_attr(&self) -> Vec<String> {
         [
             NAME_ATTR_NAME,
@@ -229,13 +229,13 @@ impl<'v> StarlarkValue<'v> for QueryMatchEvent<'v> {
     }
 }
 
-impl<'v> AllocValue<'v> for QueryMatchEvent<'v> {
+impl<'v> AllocValue<'v> for MatchEvent<'v> {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
         heap.alloc_complex_no_freeze(self)
     }
 }
 
-impl Display for QueryMatchEvent<'_> {
+impl Display for MatchEvent<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         <Self as StarlarkValue>::TYPE.fmt(f)
     }
@@ -259,7 +259,7 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            if '{event_name}' == 'query_match':
+                            if '{event_name}' == 'match':
                                 vex.observe('open_project', on_open_project)
                             else:
                                 vex.observe('{event_name}', on_{event_name})
@@ -294,7 +294,7 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            if '{event_name}' == 'query_match':
+                            if '{event_name}' == 'match':
                                 vex.observe('open_project', on_open_project)
                             else:
                                 vex.observe('{event_name}', on_{event_name})
@@ -320,7 +320,7 @@ mod test {
                         load('{check_path}', 'check')
 
                         def init():
-                            if '{event_name}' == 'query_match':
+                            if '{event_name}' == 'match':
                                 vex.observe('open_project', on_open_project)
                             else:
                                 vex.observe('{event_name}', on_{event_name})
@@ -389,11 +389,7 @@ mod test {
 
     #[test]
     fn on_match_event() {
-        test_event_common_properties(
-            "query_match",
-            "QueryMatchEvent",
-            &["name", "captures", "path"],
-        );
+        test_event_common_properties("match", "MatchEvent", &["name", "captures", "path"]);
 
         VexTest::new("captures")
             .with_scriptlet(

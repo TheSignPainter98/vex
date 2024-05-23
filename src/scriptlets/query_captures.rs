@@ -11,7 +11,7 @@ use starlark::{
     },
 };
 use starlark_derive::{starlark_module, starlark_value};
-use tree_sitter::{Query, QueryMatch as TSQueryMatch};
+use tree_sitter::{Query, QueryMatch};
 
 use crate::{scriptlets::node::Node, source_file::ParsedSourceFile};
 
@@ -21,7 +21,7 @@ pub struct QueryCaptures<'v> {
     query: &'v Query,
 
     #[allocative(skip)]
-    pub query_match: &'v TSQueryMatch<'v, 'v>,
+    pub query_match: &'v QueryMatch<'v, 'v>,
 
     #[allocative(skip)]
     source_file: &'v ParsedSourceFile,

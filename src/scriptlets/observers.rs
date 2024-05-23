@@ -78,7 +78,7 @@ impl ObserverData {
         match event.kind() {
             EventKind::OpenProject => &self.on_open_project,
             EventKind::OpenFile => &self.on_open_file,
-            EventKind::QueryMatch => panic!("internal error: query_match not observable"),
+            EventKind::Match => panic!("internal error: query_match not observable"),
         }
     }
 }

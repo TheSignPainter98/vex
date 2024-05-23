@@ -30,7 +30,7 @@ use cli::{DumpCmd, MaxProblems};
 use dupe::Dupe;
 use log::{info, log_enabled, trace, warn};
 use scriptlets::{
-    event::{Event, QueryMatchEvent},
+    event::{Event, MatchEvent},
     Intent,
 };
 use source_file::SourceFile;
@@ -228,7 +228,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
                         let event = {
                             let path = &parsed_file.path.pretty_path;
                             let captures = QueryCaptures::new(query, &qmatch, &parsed_file);
-                            Event::QueryMatch(QueryMatchEvent::new(path.dupe(), captures))
+                            Event::Match(MatchEvent::new(path.dupe(), captures))
                         };
                         on_match.handle(event, frozen_heap)?.iter().for_each(
                             |intent| match intent {
