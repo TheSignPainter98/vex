@@ -107,16 +107,21 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
         num_files_scanned,
     } = vex(&ctx, &store, cmd_args.max_problems)?;
     irritations.iter().for_each(|irr| println!("{irr}"));
+    if log_enabled!(log::Level::Info) {
+        info!(
+            "scanned {}",
+            Plural::new(num_files_scanned, "file", "files"),
+        );
+    }
     if !irritations.is_empty() {
         warn!(
-            "found {} across {}",
+            "found {}",
             Plural::new(irritations.len(), "problem", "problems"),
-            Plural::new(num_files_scanned, "file", "files"),
         );
     } else {
         println!(
-            "{}",
-            "all good!".if_supports_color(Stream::Stdout, |text| text.style(*SUCCESS_STYLE))
+            "{}: no problems found",
+            "success".if_supports_color(Stream::Stdout, |text| text.style(*SUCCESS_STYLE))
         );
     }
 
@@ -360,11 +365,11 @@ fn init() -> Result<()> {
         cause,
     })?)?;
     Context::init(&cwd)?;
+    let queries_dir = Context::acquire()?.manifest.queries_dir;
     println!(
-        "{} {}",
-        "vex project inited in"
-            .if_supports_color(Stream::Stdout, |text| text.style(*SUCCESS_STYLE)),
-        cwd.if_supports_color(Stream::Stdout, |text| text.style(*SUCCESS_STYLE)),
+        "{}: vex initialised, now add style rules in ./{}/",
+        "success".if_supports_color(Stream::Stdout, |text| text.style(*SUCCESS_STYLE)),
+        queries_dir.as_str(),
     );
     Ok(())
 }
