@@ -364,7 +364,7 @@ fn init() -> Result<()> {
         action: IOAction::Read,
         cause,
     })?)?;
-    Context::init(&cwd)?;
+    Context::init(cwd)?;
     let queries_dir = Context::acquire()?.manifest.queries_dir;
     println!(
         "{}: vex initialised, now add style rules in ./{}/",
