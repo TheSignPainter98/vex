@@ -6,7 +6,7 @@ use joinery::JoinableIterator;
 use strum::IntoEnumIterator;
 
 use crate::{
-    scriptlets::{action::Action, event::EventType, LoadStatementModule},
+    scriptlets::{action::Action, event::EventKind, LoadStatementModule},
     source_path::PrettyPath,
     supported_language::SupportedLanguage,
 };
@@ -14,7 +14,7 @@ use crate::{
 // TODO(kcza): box this!
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("{what} unavailable while {}", .action.name())]
+    #[error("{what} unavailable while {}", .action.pretty_name())]
     ActionUnavailable { what: &'static str, action: Action },
 
     #[error("already inited in a parent directory {found_root}")]
@@ -25,9 +25,6 @@ pub enum Error {
 
     #[error("query is empty")]
     EmptyQuery,
-
-    #[error("trigger is empty")]
-    EmptyTrigger,
 
     #[error("{0}")]
     FromPathBuf(#[from] camino::FromPathBufError),
@@ -58,24 +55,14 @@ pub enum Error {
     #[error("cannot find manifest, try running `vex init` in the project’s root")]
     ManifestNotFound,
 
-    #[error("{0} declares no callbacks")]
-    // TODO(kcza): rename this to 'observer'
-    NoCallbacks(PrettyPath),
-
     #[error("{0} declares no init function")]
     NoInit(PrettyPath),
 
-    #[error("{0} observes query_match but adds no triggers with queries")]
-    NoQuery(PrettyPath),
-
-    #[error("{0} adds trigger with query but does not observe query_match")]
-    NoQueryMatch(PrettyPath),
+    #[error("{0} observes no events")]
+    NoObservers(PrettyPath),
 
     #[error("cannot find module '{0}'")]
     NoSuchModule(PrettyPath),
-
-    #[error("{0} adds no triggers")]
-    NoTriggers(PrettyPath),
 
     #[error("cannot find vexes directory at {0}")]
     NoVexesDir(Utf8PathBuf),
@@ -93,9 +80,6 @@ pub enum Error {
     #[error("{0}")]
     Query(#[from] tree_sitter::QueryError),
 
-    #[error("cannot add query without specifying a language")]
-    QueryWithoutLanguage,
-
     #[error("{0}")]
     SetLogger(#[from] log::SetLoggerError),
 
@@ -111,7 +95,7 @@ pub enum Error {
     #[error(
         "unknown event '{name}'{}, expected one of: {}",
         suggestion.map(|suggestion| format!(" (did you mean '{suggestion}'?)")).unwrap_or_default(),
-        EventType::iter().join_with(", "),
+        EventKind::iter().filter(|kind| kind.parseable()).map(|kind| kind.name()).join_with(", "),
     )]
     UnknownEvent {
         name: String,

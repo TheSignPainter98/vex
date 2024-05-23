@@ -1,20 +1,20 @@
 use allocative::Allocative;
 
-use crate::scriptlets::event::EventType;
+use crate::scriptlets::event::EventKind;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Allocative)]
 pub enum Action {
     Preiniting,
     Initing,
-    Vexing(EventType),
+    Vexing(EventKind),
 }
 
 impl Action {
-    pub fn name(&self) -> &'static str {
+    pub fn pretty_name(&self) -> &'static str {
         match self {
             Self::Preiniting => "preiniting",
             Self::Initing => "initing",
-            Self::Vexing(_) => "vexing",
+            Self::Vexing(e) => e.pretty_name(),
         }
     }
 }

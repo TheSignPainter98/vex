@@ -1,0 +1,17 @@
+---
+source: src/scriptlets/scriptlet.rs
+expression: "VexTest::new(\"no-query\").with_scriptlet(\"vexes/test.star\",\n            indoc! {\n                    r#\"\n                    def init():\n                        vex.observe('open_project', on_open_project)\n\n                    def on_open_project(event):\n                        vex.search(\n                            'rust',\n                        )\n                \"#\n                }).try_run().unwrap_err()"
+---
+Traceback (most recent call last):
+  File <builtin>, in <module>
+  * test.star:5, in on_open_project
+      vex.search(
+error: Wrong number of positional arguments, expected 3, got 1
+ --> test.star:5:5
+  |
+5 |       vex.search(
+  |  _____^
+6 | |         'rust',
+7 | |     )
+  | |_____^
+  |
