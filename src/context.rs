@@ -55,13 +55,15 @@ impl Context {
         Manifest::init(project_root)?;
 
         let example_vex_path = Utf8PathBuf::from(project_root)
-            .join(QueriesDir::default().0)
+            .join(QueriesDir::default().as_str())
             .join("example.star");
         const EXAMPLE_VEX_CONTENT: &str = indoc! {r#"
             def init():
+                # First add callbacks for vex's top-level events.
                 vex.observe('open_project', on_open_project)
 
             def on_open_project(event):
+                # When the project is opened, declare an intent to find integer literals
                 vex.search(
                     'rust',
                     '(integer_literal) @lit',
@@ -69,17 +71,23 @@ impl Context {
                 )
 
             def on_match(event):
+                # When an integer literal is found, if long base-10, ensure broken up with
+                # underscores.
+
                 lit = event.captures['lit']
                 lit_text = lit.text()
 
                 if lit_text.startswith('0x') or lit_text.startswith('0b'):
                     return
+                if len(lit_text) <= 6:
+                    return
+                if '_' in lit_text:
+                    return
 
-                if len(lit_text) > 6 and '_' not in lit_text:
-                    vex.warn(
-                        'large unbroken integer literal',
-                        at=(lit, 'consider adding underscores')
-                    )
+                vex.warn(
+                    'large unbroken integer literal',
+                    at=(lit, 'consider adding underscores')
+                )
         "#};
         File::create(&example_vex_path)
             .map_err(|cause| Error::IO {
@@ -326,6 +334,7 @@ mod test {
                 indoc! {r#"
                 fn func() -> i32 {
                     1234567890
+                    + 1_234_567_890
                     + 0x1234567890
                     + 0b1111111111
                 }
