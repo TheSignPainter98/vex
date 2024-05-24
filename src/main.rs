@@ -28,11 +28,9 @@ use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser as _;
 use cli::{DumpCmd, MaxProblems};
 use dupe::Dupe;
+use lazy_static::lazy_static;
 use log::{info, log_enabled, trace, warn};
-use scriptlets::{
-    event::{Event, MatchEvent},
-    Intent,
-};
+use owo_colors::{OwoColorize, Stream, Style};
 use source_file::SourceFile;
 use strum::IntoEnumIterator;
 use tree_sitter::QueryCursor;
@@ -45,8 +43,8 @@ use crate::{
     plural::Plural,
     result::Result,
     scriptlets::{
-        event::{OpenFileEvent, OpenProjectEvent},
-        PreinitingStore, QueryCaptures, VexingStore,
+        event::{Event, MatchEvent, OpenFileEvent, OpenProjectEvent},
+        Intent, PreinitingStore, QueryCaptures, VexingStore,
     },
     source_path::{PrettyPath, SourcePath},
     supported_language::SupportedLanguage,
@@ -77,7 +75,7 @@ fn run() -> Result<ExitCode> {
         Command::Init => init(),
     }?;
 
-    Ok(logger::report())
+    Ok(logger::exit_code())
 }
 
 fn list_languages() -> Result<()> {
@@ -94,6 +92,10 @@ fn list_lints() -> Result<()> {
     Ok(())
 }
 
+lazy_static! {
+    static ref SUCCESS_STYLE: Style = Style::new().green().bold();
+}
+
 fn check(cmd_args: CheckCmd) -> Result<()> {
     let ctx = Context::acquire()?;
     let store = PreinitingStore::new(&ctx)?.preinit()?.init()?;
@@ -103,11 +105,21 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
         num_files_scanned,
     } = vex(&ctx, &store, cmd_args.max_problems)?;
     irritations.iter().for_each(|irr| println!("{irr}"));
+    if log_enabled!(log::Level::Info) {
+        info!(
+            "scanned {}",
+            Plural::new(num_files_scanned, "file", "files"),
+        );
+    }
     if !irritations.is_empty() {
         warn!(
-            "found {} across {}",
+            "found {}",
             Plural::new(irritations.len(), "problem", "problems"),
-            Plural::new(num_files_scanned, "file", "files"),
+        );
+    } else {
+        println!(
+            "{}: no problems found",
+            "success".if_supports_color(Stream::Stdout, |text| text.style(*SUCCESS_STYLE))
         );
     }
 
@@ -340,7 +352,14 @@ fn init() -> Result<()> {
         action: IOAction::Read,
         cause,
     })?)?;
-    Context::init(cwd)
+    Context::init(cwd)?;
+    let queries_dir = Context::acquire()?.manifest.queries_dir;
+    println!(
+        "{}: vex initialised, now add style rules in ./{}/",
+        "success".if_supports_color(Stream::Stdout, |text| text.style(*SUCCESS_STYLE)),
+        queries_dir.as_str(),
+    );
+    Ok(())
 }
 
 #[cfg(test)]

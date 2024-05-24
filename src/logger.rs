@@ -15,7 +15,7 @@ pub fn init(level: Verbosity) -> Result<()> {
     Ok(())
 }
 
-pub fn report() -> ExitCode {
+pub fn exit_code() -> ExitCode {
     if *NUM_ERRS.lock().expect("failed to lock NUM_ERRS") > 0 {
         ExitCode::from(u8::MAX)
     } else if *NUM_WARNINGS.lock().expect("failed to lock NUM_WARNINGS") > 0 {
