@@ -259,6 +259,7 @@ impl Deref for IgnoreData {
 
 #[cfg(test)]
 mod test {
+    use insta::assert_yaml_snapshot;
     use regex::Regex;
     use toml_edit::Document;
 
@@ -346,7 +347,10 @@ mod test {
         let ctx = Context::acquire_in(&tempdir_path)?;
         let store = PreinitingStore::new(&ctx)?.preinit()?.init()?;
         let RunData { irritations, .. } = crate::vex(&ctx, &store, MaxProblems::Unlimited)?;
-        assert_eq!(1, irritations.len());
+        assert_yaml_snapshot!(irritations
+            .into_iter()
+            .map(|irr| irr.to_string())
+            .collect::<Vec<_>>());
 
         Ok(())
     }

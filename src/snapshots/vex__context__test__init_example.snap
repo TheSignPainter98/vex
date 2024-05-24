@@ -1,0 +1,5 @@
+---
+source: src/context.rs
+expression: "irritations.into_iter().map(|irr| irr.to_string()).collect::<Vec<_>>()"
+---
+- "warning[example]: large unbroken integer literal\n --> test.rs:2:5\n  |\n2 |     1234567890\n  |     ---------- consider adding underscores\n  |"
