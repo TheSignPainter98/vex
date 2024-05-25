@@ -3,7 +3,7 @@ use std::fmt::Display;
 use camino::Utf8PathBuf;
 use clap::{
     builder::{StringValueParser, TypedValueParser},
-    ArgAction, Parser, Subcommand,
+    ArgAction, Parser, Subcommand, ValueEnum,
 };
 
 use crate::error::Error;
@@ -32,18 +32,13 @@ impl Args {
 
 #[derive(Debug, PartialEq, Eq, Subcommand)]
 pub enum Command {
-    /// List known languages
-    #[command(name = "languages")]
-    ListLanguages,
+    /// Print lists of things vex knows about
+    List(ListCmd),
 
-    /// List defined lints
-    #[command(name = "lints")]
-    ListLints,
-
-    /// Run lints on project in this directory
+    /// Check this project for lint
     Check(CheckCmd),
 
-    /// Output the structure of a given file parsed by tree-sitter
+    /// Print the structure of a given file parsed by tree-sitter
     Dump(DumpCmd),
 
     /// Create new vex project with this directory as the root
@@ -65,6 +60,19 @@ impl Command {
             _ => None,
         }
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Parser)]
+pub struct ListCmd {
+    /// What to list
+    #[arg(value_name = "what")]
+    pub what: ToList,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, ValueEnum)]
+pub enum ToList {
+    Languages,
+    Checks,
 }
 
 #[derive(Debug, Default, PartialEq, Eq, Parser)]
@@ -185,24 +193,32 @@ mod test {
         );
     }
 
-    #[test]
-    fn list_languages() {
-        assert_eq!(
-            Args::try_parse_from(["vex", "languages"])
-                .unwrap()
-                .into_command(),
-            Command::ListLanguages,
-        );
-    }
+    mod list {
+        use super::*;
 
-    #[test]
-    fn list_lints() {
-        assert_eq!(
-            Args::try_parse_from(["vex", "lints"])
-                .unwrap()
-                .into_command(),
-            Command::ListLints,
-        );
+        #[test]
+        fn languages() {
+            assert_eq!(
+                Args::try_parse_from(["vex", "list", "languages"])
+                    .unwrap()
+                    .into_command(),
+                Command::List(ListCmd {
+                    what: ToList::Languages
+                }),
+            );
+        }
+
+        #[test]
+        fn vexes() {
+            assert_eq!(
+                Args::try_parse_from(["vex", "list", "checks"])
+                    .unwrap()
+                    .into_command(),
+                Command::List(ListCmd {
+                    what: ToList::Checks
+                }),
+            );
+        }
     }
 
     mod check {

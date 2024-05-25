@@ -26,7 +26,7 @@ use std::{env, fs, process::ExitCode};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser as _;
-use cli::{DumpCmd, MaxProblems};
+use cli::{DumpCmd, ListCmd, MaxProblems, ToList};
 use dupe::Dupe;
 use lazy_static::lazy_static;
 use log::{info, log_enabled, trace, warn};
@@ -68,8 +68,7 @@ fn run() -> Result<ExitCode> {
     logger::init(Verbosity::try_from(args.verbosity_level)?)?;
 
     match args.command {
-        Command::ListLanguages => list_languages(),
-        Command::ListLints => list_lints(),
+        Command::List(list_args) => list(list_args),
         Command::Check(cmd_args) => check(cmd_args),
         Command::Dump(dump_args) => dump(dump_args),
         Command::Init => init(),
@@ -78,17 +77,18 @@ fn run() -> Result<ExitCode> {
     Ok(logger::exit_code())
 }
 
-fn list_languages() -> Result<()> {
-    SupportedLanguage::iter().for_each(|lang| println!("{}", lang));
-    Ok(())
-}
-
-fn list_lints() -> Result<()> {
-    let ctx = Context::acquire()?;
-    let store = PreinitingStore::new(&ctx)?.preinit()?;
-    store
-        .vexes()
-        .for_each(|vex| println!("{}", vex.path.pretty_path));
+fn list(list_args: ListCmd) -> Result<()> {
+    match list_args.what {
+        ToList::Languages => SupportedLanguage::iter().for_each(|lang| println!("{}", lang)),
+        ToList::Checks => {
+            let ctx = Context::acquire()?;
+            let store = PreinitingStore::new(&ctx)?.preinit()?;
+            store
+                .vexes()
+                .flat_map(|vex| vex.path.pretty_path.file_stem())
+                .for_each(|id| println!("{}", id));
+        }
+    }
     Ok(())
 }
 
