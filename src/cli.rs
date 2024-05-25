@@ -64,15 +64,15 @@ impl Command {
 
 #[derive(Clone, Debug, PartialEq, Eq, Parser)]
 pub struct ListCmd {
-    /// What to list
+    /// What to print
     #[arg(value_name = "what")]
     pub what: ToList,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, ValueEnum)]
 pub enum ToList {
-    Languages,
     Checks,
+    Languages,
 }
 
 #[derive(Debug, Default, PartialEq, Eq, Parser)]

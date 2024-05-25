@@ -79,7 +79,6 @@ fn run() -> Result<ExitCode> {
 
 fn list(list_args: ListCmd) -> Result<()> {
     match list_args.what {
-        ToList::Languages => SupportedLanguage::iter().for_each(|lang| println!("{}", lang)),
         ToList::Checks => {
             let ctx = Context::acquire()?;
             let store = PreinitingStore::new(&ctx)?.preinit()?;
@@ -88,6 +87,7 @@ fn list(list_args: ListCmd) -> Result<()> {
                 .flat_map(|vex| vex.path.pretty_path.file_stem())
                 .for_each(|id| println!("{}", id));
         }
+        ToList::Languages => SupportedLanguage::iter().for_each(|lang| println!("{}", lang)),
     }
     Ok(())
 }
