@@ -67,6 +67,9 @@ pub enum Error {
     #[error("cannot find vexes directory at {0}")]
     NoVexesDir(Utf8PathBuf),
 
+    #[error("{0} is not a check path")]
+    NotACheckPath(PrettyPath),
+
     #[error("{0}")]
     ParseInt(#[from] num::ParseIntError),
 

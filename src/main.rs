@@ -4,6 +4,7 @@
 #[macro_use]
 extern crate pretty_assertions;
 
+mod check_id;
 mod cli;
 mod context;
 mod error;
@@ -36,6 +37,7 @@ use strum::IntoEnumIterator;
 use tree_sitter::QueryCursor;
 
 use crate::{
+    check_id::CheckId,
     cli::{Args, CheckCmd, Command},
     context::Context,
     error::{Error, IOAction},
@@ -84,7 +86,7 @@ fn list(list_args: ListCmd) -> Result<()> {
             let store = PreinitingStore::new(&ctx)?.preinit()?;
             store
                 .vexes()
-                .flat_map(|vex| vex.path.pretty_path.file_stem())
+                .flat_map(|vex| CheckId::try_from(&vex.path.pretty_path))
                 .for_each(|id| println!("{}", id));
         }
         ToList::Languages => SupportedLanguage::iter().for_each(|lang| println!("{}", lang)),
