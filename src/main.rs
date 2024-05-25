@@ -26,7 +26,7 @@ use std::{env, fs, process::ExitCode};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser as _;
-use cli::{ParseCmd, ListCmd, MaxProblems, ToList};
+use cli::{ListCmd, MaxProblems, ParseCmd, ToList};
 use dupe::Dupe;
 use lazy_static::lazy_static;
 use log::{info, log_enabled, trace, warn};
