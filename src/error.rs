@@ -17,7 +17,7 @@ pub enum Error {
     #[error("{what} unavailable while {}", .action.pretty_name())]
     ActionUnavailable { what: &'static str, action: Action },
 
-    #[error("already inited in a parent directory {found_root}")]
+    #[error("already inited in a parent directory {found_root}; to ignore it use --force")]
     AlreadyInited { found_root: Utf8PathBuf },
 
     #[error("{0}")]

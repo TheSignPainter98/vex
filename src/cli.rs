@@ -42,7 +42,7 @@ pub enum Command {
     Dump(DumpCmd),
 
     /// Create new vex project with this directory as the root
-    Init,
+    Init(InitCmd),
 }
 
 #[cfg(test)]
@@ -57,6 +57,13 @@ impl Command {
     pub fn into_dump_cmd(self) -> Option<DumpCmd> {
         match self {
             Self::Dump(d) => Some(d),
+            _ => None,
+        }
+    }
+
+    pub fn into_init_cmd(self) -> Option<InitCmd> {
+        match self {
+            Self::Init(i) => Some(i),
             _ => None,
         }
     }
@@ -155,6 +162,13 @@ pub struct DumpCmd {
     /// File whose structure will be output
     #[arg(value_name = "path")]
     pub path: Utf8PathBuf,
+}
+
+#[derive(Debug, Default, PartialEq, Eq, Parser)]
+pub struct InitCmd {
+    /// Force init
+    #[arg(long)]
+    pub force: bool,
 }
 
 #[cfg(test)]
@@ -286,8 +300,18 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["vex", "init"])
                 .unwrap()
-                .into_command(),
-            Command::Init,
+                .into_command()
+                .into_init_cmd()
+                .unwrap(),
+            InitCmd { force: false },
+        );
+        assert_eq!(
+            Args::try_parse_from(["vex", "init", "--force"])
+                .unwrap()
+                .into_command()
+                .into_init_cmd()
+                .unwrap(),
+            InitCmd { force: true },
         );
     }
 }

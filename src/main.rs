@@ -26,7 +26,7 @@ use std::{env, fs, process::ExitCode};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser as _;
-use cli::{DumpCmd, ListCmd, MaxProblems, ToList};
+use cli::{DumpCmd, InitCmd, ListCmd, MaxProblems, ToList};
 use dupe::Dupe;
 use lazy_static::lazy_static;
 use log::{info, log_enabled, trace, warn};
@@ -71,7 +71,7 @@ fn run() -> Result<ExitCode> {
         Command::List(list_args) => list(list_args),
         Command::Check(cmd_args) => check(cmd_args),
         Command::Dump(dump_args) => dump(dump_args),
-        Command::Init => init(),
+        Command::Init(init_args) => init(init_args),
     }?;
 
     Ok(logger::exit_code())
@@ -346,13 +346,13 @@ fn dump(dump_args: DumpCmd) -> Result<()> {
     Ok(())
 }
 
-fn init() -> Result<()> {
+fn init(init_args: InitCmd) -> Result<()> {
     let cwd = Utf8PathBuf::try_from(env::current_dir().map_err(|cause| Error::IO {
         path: PrettyPath::new(Utf8Path::new(".")),
         action: IOAction::Read,
         cause,
     })?)?;
-    Context::init(cwd)?;
+    Context::init(cwd, init_args.force)?;
     let queries_dir = Context::acquire()?.manifest.queries_dir;
     println!(
         "{}: vex initialised, now add style rules in ./{}/",
