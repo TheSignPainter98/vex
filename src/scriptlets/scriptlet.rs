@@ -25,7 +25,7 @@ use crate::{
         print_handler::PrintHandler,
         store::PreinitedModuleCache,
         query_cache::QueryCache,
-        Intent, ObserverData,
+        Intent, ObserverData, PreinitOptions,
     },
     source_path::{PrettyPath, SourcePath},
 };
@@ -84,6 +84,7 @@ impl PreinitingScriptlet {
 
     pub fn preinit(
         self,
+        opts: &PreinitOptions,
         cache: &PreinitedModuleCache,
         frozen_heap: &FrozenHeap,
     ) -> Result<InitingScriptlet> {
@@ -93,6 +94,7 @@ impl PreinitingScriptlet {
             toplevel,
             loads_files: _,
         } = self;
+        let PreinitOptions { lenient } = opts;
 
         let preinited_module = {
             let preinited_module = Module::new();
@@ -102,7 +104,7 @@ impl PreinitingScriptlet {
                 let mut eval = Evaluator::new(&preinited_module);
                 eval.set_loader(&cache);
                 eval.set_print_handler(&PrintHandler);
-                eval.eval_module(ast, &Self::globals())?;
+                eval.eval_module(ast, &Self::globals(*lenient))?;
             };
             preinited_module.freeze()?
         };
@@ -115,9 +117,10 @@ impl PreinitingScriptlet {
         })
     }
 
-    fn globals() -> Globals {
+    fn globals(lenient: bool) -> Globals {
         let mut builder = GlobalsBuilder::extended_by(&[LibraryExtension::Print]);
-        builder.set(AppObject::NAME, builder.alloc(AppObject));
+        let app = AppObject::new(lenient);
+        builder.set(AppObject::NAME, builder.alloc(app));
         builder.build()
     }
 

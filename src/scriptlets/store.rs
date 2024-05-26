@@ -101,7 +101,7 @@ impl PreinitingStore {
         Ok(())
     }
 
-    pub fn preinit(mut self) -> Result<InitingStore> {
+    pub fn preinit(mut self, opts: PreinitOptions) -> Result<InitingStore> {
         self.check_loads()?;
         self.sort();
         self.linearise_store()?;
@@ -112,7 +112,7 @@ impl PreinitingStore {
         let mut initing_store = Vec::with_capacity(store.len());
         let mut cache = PreinitedModuleCache::new();
         for scriptlet in store.into_iter() {
-            let preinited_scriptlet = scriptlet.preinit(&cache, &frozen_heap)?;
+            let preinited_scriptlet = scriptlet.preinit(&opts, &cache, &frozen_heap)?;
             cache.cache(&preinited_scriptlet);
             initing_store.push(preinited_scriptlet);
         }
@@ -286,6 +286,11 @@ impl PreinitingStore {
             .for_each(|(n, a)| a.iter().for_each(|m| ret[*m].push(n)));
         ret
     }
+}
+
+#[derive(Debug, Default)]
+pub struct PreinitOptions {
+    pub lenient: bool,
 }
 
 #[derive(Debug)]

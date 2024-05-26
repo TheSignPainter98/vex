@@ -16,7 +16,7 @@ pub use node::Node;
 pub use observers::{Observer, ObserverData};
 pub use query_captures::QueryCaptures;
 pub use scriptlet::LoadStatementModule;
-pub use store::{PreinitingStore, VexingStore};
+pub use store::{PreinitOptions, PreinitingStore, VexingStore};
 
 #[cfg(test)]
 pub use print_handler::PrintHandler;
