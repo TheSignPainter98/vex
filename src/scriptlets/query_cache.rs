@@ -26,7 +26,7 @@ impl QueryCache {
     }
 
     pub fn get(&self, language: SupportedLanguage, raw_query: StringValue<'_>) -> Result<Arc<Query>> {
-        let query_hash = raw_query.get_hashed().hash();
+        let query_hash = raw_query.get_hashed().hash(); // This hash value is only 32 bits long.
 
         if let Some(cached_query) = self.cache.borrow().get(&(language, query_hash)) {
             return Ok(cached_query.0.dupe())
