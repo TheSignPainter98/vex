@@ -1,4 +1,4 @@
-use std::{fmt::Display, sync::Arc};
+use std::fmt::Display;
 
 use allocative::Allocative;
 use derive_new::new;
@@ -9,11 +9,10 @@ use starlark::{
     starlark_module,
     values::{
         list::UnpackList, none::NoneType, Heap, NoSerialize, ProvidesStaticType, StarlarkValue,
-        Value,
+        StringValue, Value,
     },
 };
 use starlark_derive::starlark_value;
-use tree_sitter::Query;
 
 use crate::{
     error::Error,
@@ -43,7 +42,7 @@ impl AppObject {
         fn search<'v>(
             #[starlark(this)] _this: Value<'v>,
             #[starlark(require=pos)] language: &'v str,
-            #[starlark(require=pos)] query: &'v str,
+            #[starlark(require=pos)] query: StringValue<'v>,
             #[starlark(require=pos)] on_match: Value<'v>,
             eval: &mut Evaluator<'v, '_>,
         ) -> anyhow::Result<NoneType> {
@@ -62,7 +61,7 @@ impl AppObject {
                 if query.is_empty() {
                     return Err(Error::EmptyQuery.into());
                 }
-                Arc::new(Query::new(language.ts_language(), query)?)
+                inv_data.query_cache().get(language, query)?
             };
             let on_match = {
                 let vex_path = inv_data.vex_path().dupe();

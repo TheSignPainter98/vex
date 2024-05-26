@@ -6,6 +6,7 @@ mod intents;
 mod node;
 mod observers;
 mod print_handler;
+pub mod query_cache;
 mod query_captures;
 mod scriptlet;
 mod store;
