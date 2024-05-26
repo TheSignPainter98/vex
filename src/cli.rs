@@ -32,17 +32,17 @@ impl Args {
 
 #[derive(Debug, PartialEq, Eq, Subcommand)]
 pub enum Command {
-    /// Print lists of things vex knows about
-    List(ListCmd),
-
     /// Check this project for lint
     Check(CheckCmd),
 
-    /// Print the structure of a given file parsed by tree-sitter
-    Dump(DumpCmd),
+    /// Print lists of things vex knows about
+    List(ListCmd),
 
     /// Create new vex project with this directory as the root
     Init,
+
+    /// Print the syntax tree of the given file
+    Parse(ParseCmd),
 }
 
 #[cfg(test)]
@@ -54,9 +54,9 @@ impl Command {
         }
     }
 
-    pub fn into_dump_cmd(self) -> Option<DumpCmd> {
+    pub fn into_parse_cmd(self) -> Option<ParseCmd> {
         match self {
-            Self::Dump(d) => Some(d),
+            Self::Parse(p) => Some(p),
             _ => None,
         }
     }
@@ -153,9 +153,9 @@ impl Display for MaxProblems {
 }
 
 #[derive(Debug, Default, PartialEq, Eq, Parser)]
-pub struct DumpCmd {
-    /// File whose structure will be output
-    #[arg(value_name = "path")]
+pub struct ParseCmd {
+    /// File to parse
+    #[arg(value_name = "file")]
     pub path: Utf8PathBuf,
 }
 
@@ -258,28 +258,28 @@ mod test {
         }
     }
 
-    mod dump {
+    mod parse {
         use super::*;
 
         #[test]
         fn requires_path() {
-            Args::try_parse_from(["vex", "dump"]).unwrap_err();
+            Args::try_parse_from(["vex", "parse"]).unwrap_err();
         }
 
         #[test]
         fn relative_path() {
             const PATH: &str = "./src/main.rs";
-            let args = Args::try_parse_from(["vex", "dump", PATH]).unwrap();
-            let dump_cmd = args.into_command().into_dump_cmd().unwrap();
-            assert_eq!(dump_cmd.path, PATH);
+            let args = Args::try_parse_from(["vex", "parse", PATH]).unwrap();
+            let parse_cmd = args.into_command().into_parse_cmd().unwrap();
+            assert_eq!(parse_cmd.path, PATH);
         }
 
         #[test]
         fn absolute_path() {
             const PATH: &str = "/src/main.rs";
-            let args = Args::try_parse_from(["vex", "dump", PATH]).unwrap();
-            let dump_cmd = args.into_command().into_dump_cmd().unwrap();
-            assert_eq!(dump_cmd.path, PATH);
+            let args = Args::try_parse_from(["vex", "parse", PATH]).unwrap();
+            let parse_cmd = args.into_command().into_parse_cmd().unwrap();
+            assert_eq!(parse_cmd.path, PATH);
         }
     }
 
