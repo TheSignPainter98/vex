@@ -24,6 +24,7 @@ use crate::{
         extra_data::{InvocationData, UnfrozenInvocationData},
         print_handler::PrintHandler,
         store::PreinitedModuleCache,
+        query_cache::QueryCache,
         Intent, ObserverData,
     },
     source_path::{PrettyPath, SourcePath},
@@ -95,7 +96,7 @@ impl PreinitingScriptlet {
 
         let preinited_module = {
             let preinited_module = Module::new();
-            UnfrozenInvocationData::new(Action::Preiniting, path.pretty_path.dupe())
+            UnfrozenInvocationData::new(Action::Preiniting, path.pretty_path.dupe(), &QueryCache::new())
                 .insert_into(&preinited_module);
             {
                 let mut eval = Evaluator::new(&preinited_module);
@@ -308,7 +309,7 @@ impl InitingScriptlet {
         let module = {
             let module = Module::new();
             {
-                UnfrozenInvocationData::new(Action::Initing, path.pretty_path.dupe())
+                UnfrozenInvocationData::new(Action::Initing, path.pretty_path.dupe(), &QueryCache::new())
                     .insert_into(&module);
                 let mut eval = Evaluator::new(&module);
                 eval.set_print_handler(&PrintHandler);

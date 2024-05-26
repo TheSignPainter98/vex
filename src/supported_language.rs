@@ -9,7 +9,7 @@ use tree_sitter::Language;
 
 use crate::{error::Error, result::Result};
 
-#[derive(Copy, Clone, Debug, Dupe, EnumIter, Subcommand, Enum, Allocative, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, Dupe, EnumIter, Subcommand, Enum, Allocative, PartialEq, Eq, Hash)]
 pub enum SupportedLanguage {
     C,
     Go,

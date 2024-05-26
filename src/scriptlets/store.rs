@@ -366,10 +366,14 @@ impl VexingStore {
     }
 
     pub fn project_queries_hint(&self) -> usize {
+        // Heuristic: expect scriptlets to declare on average at most this many queries during the
+        // `open_project` event.
         2 * self.num_scripts
     }
 
     pub fn file_queries_hint(&self) -> usize {
-        0
+        // Heuristic: expect scriptlets to declare on average at most this many queries during the
+        // `open_file` event.
+        2 * self.num_scripts
     }
 }

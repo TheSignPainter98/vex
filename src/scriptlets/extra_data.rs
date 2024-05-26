@@ -8,6 +8,7 @@ use starlark_derive::{starlark_value, NoSerialize, Trace};
 
 use crate::{
     scriptlets::{
+        query_cache::QueryCache,
         action::Action,
         intents::{UnfrozenIntent, UnfrozenIntents},
         Intents,
@@ -20,15 +21,18 @@ use crate::{
 pub struct UnfrozenInvocationData<'v> {
     action: Action,
     vex_path: PrettyPath,
+    #[allocative(visit = QueryCache::visit)]
+    query_cache: &'v QueryCache,
     intents: UnfrozenIntents<'v>,
 }
 
 impl<'v> UnfrozenInvocationData<'v> {
-    pub fn new(action: Action, vex_path: PrettyPath) -> Self {
+    pub fn new(action: Action, vex_path: PrettyPath, query_cache: &'v QueryCache) -> Self {
         let intents = UnfrozenIntents::new();
         Self {
             action,
             vex_path,
+            query_cache,
             intents,
         }
     }
@@ -53,6 +57,10 @@ impl<'v> UnfrozenInvocationData<'v> {
         &self.vex_path
     }
 
+    pub fn query_cache(&self) -> &QueryCache {
+        &self.query_cache
+    }
+
     pub fn declare_intent(&self, intent: UnfrozenIntent<'v>) {
         self.intents.declare(intent)
     }
@@ -74,6 +82,7 @@ impl Freeze for UnfrozenInvocationData<'_> {
         let Self {
             action,
             vex_path,
+            query_cache: _,
             intents,
         } = self;
         let intents = intents.freeze(freezer)?;

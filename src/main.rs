@@ -45,6 +45,7 @@ use crate::{
     scriptlets::{
         event::{Event, MatchEvent, OpenFileEvent, OpenProjectEvent},
         Intent, PreinitingStore, QueryCaptures, VexingStore,
+        query_cache::QueryCache,
     },
     source_path::{PrettyPath, SourcePath},
     supported_language::SupportedLanguage,
@@ -169,14 +170,19 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
             .collect::<Result<Vec<_>>>()?
     };
 
+    let project_queries_hint = store.project_queries_hint();
+    let file_queries_hint = store.file_queries_hint();
+
+    let query_cache = QueryCache::with_capacity(project_queries_hint + file_queries_hint);
+
     let mut irritations = vec![];
     let frozen_heap = store.frozen_heap();
     let project_queries = {
-        let mut project_queries = Vec::with_capacity(store.project_queries_hint());
+        let mut project_queries = Vec::with_capacity(project_queries_hint);
         let path = ctx.project_root.dupe();
         store
             .observer_data()
-            .handle(Event::OpenProject(OpenProjectEvent::new(path)), frozen_heap)?
+            .handle(Event::OpenProject(OpenProjectEvent::new(path)), &query_cache, frozen_heap)?
             .iter()
             .for_each(|intent| match intent {
                 Intent::Find {
@@ -203,7 +209,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
             let path = file.path().pretty_path.dupe();
             store
                 .observer_data()
-                .handle(Event::OpenFile(OpenFileEvent::new(path)), frozen_heap)?
+                .handle(Event::OpenFile(OpenFileEvent::new(path)), &query_cache, frozen_heap)?
                 .iter()
                 .for_each(|intent| match intent {
                     Intent::Find {
@@ -242,7 +248,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
                             let captures = QueryCaptures::new(query, &qmatch, &parsed_file);
                             Event::Match(MatchEvent::new(path.dupe(), captures))
                         };
-                        on_match.handle(event, frozen_heap)?.iter().for_each(
+                        on_match.handle(event, &query_cache, frozen_heap)?.iter().for_each(
                             |intent| match intent {
                                 Intent::Find { .. } => {
                                     panic!("internal error: find intended during find")
