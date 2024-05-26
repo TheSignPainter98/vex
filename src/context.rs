@@ -265,7 +265,11 @@ mod test {
     use regex::Regex;
     use toml_edit::Document;
 
-    use crate::{cli::MaxProblems, scriptlets::PreinitingStore, RunData};
+    use crate::{
+        cli::MaxProblems,
+        scriptlets::{PreinitOptions, PreinitingStore},
+        RunData,
+    };
 
     use super::*;
 
@@ -308,7 +312,7 @@ mod test {
         let ctx = Context::acquire_in(&tempdir_path).unwrap();
         PreinitingStore::new(&ctx)
             .unwrap()
-            .preinit()
+            .preinit(PreinitOptions::default())
             .unwrap()
             .init()
             .unwrap();
@@ -327,7 +331,7 @@ mod test {
         let ctx = Context::acquire_in(&tempdir_path).unwrap();
         PreinitingStore::new(&ctx)
             .unwrap()
-            .preinit()
+            .preinit(PreinitOptions::default())
             .unwrap()
             .init()
             .unwrap();
@@ -357,7 +361,9 @@ mod test {
 
         Context::init(&tempdir_path, false)?;
         let ctx = Context::acquire_in(&tempdir_path)?;
-        let store = PreinitingStore::new(&ctx)?.preinit()?.init()?;
+        let store = PreinitingStore::new(&ctx)?
+            .preinit(PreinitOptions::default())?
+            .init()?;
         let RunData { irritations, .. } = crate::vex(&ctx, &store, MaxProblems::Unlimited)?;
         assert_yaml_snapshot!(irritations
             .into_iter()

@@ -5,7 +5,7 @@ use annotate_snippets::{Annotation, AnnotationType, Slice, Snippet, SourceAnnota
 use dupe::Dupe;
 use serde::Serialize;
 
-use crate::{logger, scriptlets::Node, source_path::PrettyPath};
+use crate::{check_id::CheckId, logger, scriptlets::Node, source_path::PrettyPath};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Allocative, Serialize)]
 #[non_exhaustive]
@@ -102,7 +102,11 @@ impl<'v> IrritationRenderer<'v> {
             .map(|source| source.0.source_file.path.pretty_path.as_str());
         let snippet = Snippet {
             title: Some(Annotation {
-                id: Some(vex_path.file_stem().expect("vex has no file stem")),
+                id: Some(
+                    CheckId::try_from(&vex_path)
+                        .expect("internal error: failed to make CheckId")
+                        .as_str(),
+                ),
                 label: Some(message),
                 annotation_type: AnnotationType::Warning,
             }),

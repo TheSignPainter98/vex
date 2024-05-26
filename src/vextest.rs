@@ -10,7 +10,11 @@ use indoc::indoc;
 use regex::Regex;
 
 use crate::{
-    cli::MaxProblems, context::Context, result::Result, scriptlets::PreinitingStore, RunData,
+    cli::MaxProblems,
+    context::Context,
+    result::Result,
+    scriptlets::{PreinitOptions, PreinitingStore},
+    RunData,
 };
 
 #[must_use]
@@ -19,6 +23,7 @@ pub struct VexTest<'s> {
     bare: bool,
     manifest_content: Option<Cow<'s, str>>,
     max_problems: MaxProblems,
+    lenient: bool,
     scriptlets: BTreeMap<Utf8PathBuf, Cow<'s, str>>,
     source_files: BTreeMap<Utf8PathBuf, Cow<'s, str>>,
 }
@@ -30,6 +35,7 @@ impl<'s> VexTest<'s> {
             bare: false,
             manifest_content: None,
             max_problems: MaxProblems::Unlimited,
+            lenient: false,
             scriptlets: BTreeMap::new(),
             source_files: BTreeMap::new(),
         }
@@ -49,6 +55,11 @@ impl<'s> VexTest<'s> {
 
     pub fn with_max_problems(mut self, max_problems: MaxProblems) -> Self {
         self.max_problems = max_problems;
+        self
+    }
+
+    pub fn with_lenient(mut self, lenient: bool) -> Self {
+        self.lenient = lenient;
         self
     }
 
@@ -144,7 +155,10 @@ impl<'s> VexTest<'s> {
         if !self.bare {
             fs::create_dir(ctx.vex_dir()).ok();
         }
-        let store = PreinitingStore::new(&ctx)?.preinit()?.init()?;
+        let preinit_opts = PreinitOptions {
+            lenient: self.lenient,
+        };
+        let store = PreinitingStore::new(&ctx)?.preinit(preinit_opts)?.init()?;
         super::vex(&ctx, &store, self.max_problems)
     }
 
