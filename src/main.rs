@@ -46,7 +46,7 @@ use crate::{
     result::Result,
     scriptlets::{
         event::{Event, MatchEvent, OpenFileEvent, OpenProjectEvent},
-        Intent, PreinitingStore, QueryCaptures, VexingStore,
+        Intent, PreinitOptions, PreinitingStore, QueryCaptures, VexingStore,
     },
     source_path::{PrettyPath, SourcePath},
     supported_language::SupportedLanguage,
@@ -83,7 +83,7 @@ fn list(list_args: ListCmd) -> Result<()> {
     match list_args.what {
         ToList::Checks => {
             let ctx = Context::acquire()?;
-            let store = PreinitingStore::new(&ctx)?.preinit()?;
+            let store = PreinitingStore::new(&ctx)?.preinit(PreinitOptions::default())?;
             store
                 .vexes()
                 .flat_map(|vex| CheckId::try_from(&vex.path.pretty_path))
@@ -100,7 +100,12 @@ lazy_static! {
 
 fn check(cmd_args: CheckCmd) -> Result<()> {
     let ctx = Context::acquire()?;
-    let store = PreinitingStore::new(&ctx)?.preinit()?.init()?;
+    let store = {
+        let preinit_opts = PreinitOptions {
+            lenient: cmd_args.lenient,
+        };
+        PreinitingStore::new(&ctx)?.preinit(preinit_opts)?.init()?
+    };
 
     let RunData {
         irritations,
