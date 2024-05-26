@@ -52,7 +52,7 @@ def on_open_project(event):
         ''',
 ```
 Note that in this [Scheme][scheme] query, we have labelled certain nodes for later use: `@left_operand`, `@right-operand` and `@bin_expr`.
-(The file structure this query will be checked against can be found by running `vex parse path/to/file`.)
+(For a given file, to see the syntax tree these queries are performed against, run `vex parse path/to/file`.)
 
 To react to a syntax-tree node being found which matches the above query, add a callback function (we’ll call this `on_match`)—
 ```python
