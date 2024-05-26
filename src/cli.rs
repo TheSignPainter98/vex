@@ -38,7 +38,7 @@ pub enum Command {
     /// Check this project for lint
     Check(CheckCmd),
 
-    /// Print the structure of a given file parsed by tree-sitter
+    /// Print the syntax tree of the given file
     Parse(ParseCmd),
 
     /// Create new vex project with this directory as the root
