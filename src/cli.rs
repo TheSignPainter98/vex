@@ -32,17 +32,17 @@ impl Args {
 
 #[derive(Debug, PartialEq, Eq, Subcommand)]
 pub enum Command {
-    /// Print lists of things vex knows about
-    List(ListCmd),
-
     /// Check this project for lint
     Check(CheckCmd),
 
-    /// Print the syntax tree of the given file
-    Parse(ParseCmd),
+    /// Print lists of things vex knows about
+    List(ListCmd),
 
     /// Create new vex project with this directory as the root
     Init,
+
+    /// Print the syntax tree of the given file
+    Parse(ParseCmd),
 }
 
 #[cfg(test)]
@@ -56,7 +56,7 @@ impl Command {
 
     pub fn into_parse_cmd(self) -> Option<ParseCmd> {
         match self {
-            Self::Parse(d) => Some(d),
+            Self::Parse(p) => Some(p),
             _ => None,
         }
     }
@@ -152,8 +152,8 @@ impl Display for MaxProblems {
 
 #[derive(Debug, Default, PartialEq, Eq, Parser)]
 pub struct ParseCmd {
-    /// File whose structure will be printed
-    #[arg(value_name = "path")]
+    /// File to parse
+    #[arg(value_name = "file")]
     pub path: Utf8PathBuf,
 }
 
