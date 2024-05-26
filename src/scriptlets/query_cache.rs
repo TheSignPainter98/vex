@@ -1,8 +1,11 @@
-use std::{collections::HashMap, sync::Arc, cell::RefCell};
+use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 use allocative::Allocative;
 use dupe::Dupe;
-use starlark::{collections::StarlarkHashValue, values::{Trace, StringValue}};
+use starlark::{
+    collections::StarlarkHashValue,
+    values::{StringValue, Trace},
+};
 use tree_sitter::Query;
 
 use crate::{result::Result, supported_language::SupportedLanguage};
@@ -25,21 +28,33 @@ impl QueryCache {
         }
     }
 
-    pub fn get(&self, language: SupportedLanguage, raw_query: StringValue<'_>) -> Result<Arc<Query>> {
+    pub fn get(
+        &self,
+        language: SupportedLanguage,
+        raw_query: StringValue<'_>,
+    ) -> Result<Arc<Query>> {
         let query_hash = raw_query.get_hashed().hash(); // This hash value is only 32 bits long.
 
         if let Some(cached_query) = self.cache.borrow().get(&(language, query_hash)) {
-            return Ok(cached_query.0.dupe())
+            return Ok(cached_query.0.dupe());
         }
 
         let query = Arc::new(Query::new(language.ts_language(), &raw_query)?);
-        self.cache.borrow_mut().insert((language, query_hash), CachedQuery(query.dupe()));
+        self.cache
+            .borrow_mut()
+            .insert((language, query_hash), CachedQuery(query.dupe()));
         Ok(query)
     }
 }
 
 unsafe impl<'v> Trace<'v> for &'v QueryCache {
     fn trace(&mut self, _tracer: &starlark::values::Tracer<'v>) {}
+}
+
+impl Default for QueryCache {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[derive(Clone, Debug, Allocative)]
@@ -56,16 +71,31 @@ mod test {
     #[test]
     fn reparse_avoided() {
         let heap = Heap::new();
-        let query_pair_1 = (SupportedLanguage::Rust, heap.alloc_str("(source_file) @file"));
-        let query_pair_2 = (SupportedLanguage::Rust, heap.alloc_str("(binary_expression) @bin"));
+        let query_pair_1 = (
+            SupportedLanguage::Rust,
+            heap.alloc_str("(source_file) @file"),
+        );
+        let query_pair_2 = (
+            SupportedLanguage::Rust,
+            heap.alloc_str("(binary_expression) @bin"),
+        );
         let cache = QueryCache::with_capacity(2);
 
-        let parsed_query_pair_1_ptr = Arc::as_ptr(&cache.get(query_pair_1.0, query_pair_1.1).unwrap());
-        let parsed_query_pair_1_again_ptr = Arc::as_ptr(&cache.get(query_pair_1.0, query_pair_1.1).unwrap());
-        assert!(ptr::eq(parsed_query_pair_1_ptr, parsed_query_pair_1_again_ptr), "duplication not avoided");
+        let parsed_query_pair_1_ptr =
+            Arc::as_ptr(&cache.get(query_pair_1.0, query_pair_1.1).unwrap());
+        let parsed_query_pair_1_again_ptr =
+            Arc::as_ptr(&cache.get(query_pair_1.0, query_pair_1.1).unwrap());
+        assert!(
+            ptr::eq(parsed_query_pair_1_ptr, parsed_query_pair_1_again_ptr),
+            "duplication not avoided"
+        );
 
-        let parsed_query_pair_2_ptr = Arc::as_ptr(&cache.get(query_pair_2.0, query_pair_2.1).unwrap());
-        assert!(!ptr::eq(parsed_query_pair_1_ptr, parsed_query_pair_2_ptr), "returned same query");
+        let parsed_query_pair_2_ptr =
+            Arc::as_ptr(&cache.get(query_pair_2.0, query_pair_2.1).unwrap());
+        assert!(
+            !ptr::eq(parsed_query_pair_1_ptr, parsed_query_pair_2_ptr),
+            "returned same query"
+        );
     }
 
     #[test]
@@ -76,8 +106,10 @@ mod test {
         let query_pair_2 = (SupportedLanguage::Go, query);
         let cache = QueryCache::with_capacity(2);
 
-        let parsed_query_pair_1_ptr = Arc::as_ptr(&cache.get(query_pair_1.0, query_pair_1.1).unwrap());
-        let parsed_query_pair_2_ptr = Arc::as_ptr(&cache.get(query_pair_2.0, query_pair_2.1).unwrap());
+        let parsed_query_pair_1_ptr =
+            Arc::as_ptr(&cache.get(query_pair_1.0, query_pair_1.1).unwrap());
+        let parsed_query_pair_2_ptr =
+            Arc::as_ptr(&cache.get(query_pair_2.0, query_pair_2.1).unwrap());
         assert!(!ptr::eq(parsed_query_pair_1_ptr, parsed_query_pair_2_ptr));
     }
 }

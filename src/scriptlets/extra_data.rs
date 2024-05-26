@@ -8,9 +8,9 @@ use starlark_derive::{starlark_value, NoSerialize, Trace};
 
 use crate::{
     scriptlets::{
-        query_cache::QueryCache,
         action::Action,
         intents::{UnfrozenIntent, UnfrozenIntents},
+        query_cache::QueryCache,
         Intents,
     },
     source_path::PrettyPath,
@@ -58,7 +58,7 @@ impl<'v> UnfrozenInvocationData<'v> {
     }
 
     pub fn query_cache(&self) -> &QueryCache {
-        &self.query_cache
+        self.query_cache
     }
 
     pub fn declare_intent(&self, intent: UnfrozenIntent<'v>) {

@@ -68,7 +68,12 @@ impl ObserverData {
         on_open_file.extend(other.on_open_file);
     }
 
-    pub fn handle(&self, event: Event<'_>, query_cache: &QueryCache, frozen_heap: &FrozenHeap) -> Result<Intents> {
+    pub fn handle(
+        &self,
+        event: Event<'_>,
+        query_cache: &QueryCache,
+        frozen_heap: &FrozenHeap,
+    ) -> Result<Intents> {
         self.observers_for(&event)
             .iter()
             .map(|observer| observer.handle(event.dupe(), query_cache, frozen_heap))
@@ -110,10 +115,19 @@ pub struct Observer {
 }
 
 impl Observer {
-    pub fn handle(&self, event: Event<'_>, query_cache: &QueryCache, frozen_heap: &FrozenHeap) -> Result<Intents> {
+    pub fn handle(
+        &self,
+        event: Event<'_>,
+        query_cache: &QueryCache,
+        frozen_heap: &FrozenHeap,
+    ) -> Result<Intents> {
         let handler_module = Module::new();
-        UnfrozenInvocationData::new(Action::Vexing(event.kind()), self.vex_path.dupe(), query_cache)
-            .insert_into(&handler_module);
+        UnfrozenInvocationData::new(
+            Action::Vexing(event.kind()),
+            self.vex_path.dupe(),
+            query_cache,
+        )
+        .insert_into(&handler_module);
         {
             let mut eval = Evaluator::new(&handler_module);
             eval.set_print_handler(&PrintHandler);
