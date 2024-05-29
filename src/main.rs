@@ -39,7 +39,7 @@ use tree_sitter::QueryCursor;
 use crate::{
     check_id::CheckId,
     cli::{Args, CheckCmd, Command},
-    context::Context,
+    context::{Context, EXAMPLE_VEX_FILE},
     error::{Error, IOAction},
     irritation::Irritation,
     plural::Plural,
@@ -377,8 +377,9 @@ fn init() -> Result<()> {
     Context::init(cwd)?;
     let queries_dir = Context::acquire()?.manifest.queries_dir;
     println!(
-        "{}: vex initialised, now add style rules in ./{}/",
+        "{}: vex initialised\nnow add style rules in ./{}/\nsee ./{}/{EXAMPLE_VEX_FILE} for how",
         "success".if_supports_color(Stream::Stdout, |text| text.style(*SUCCESS_STYLE)),
+        queries_dir.as_str(),
         queries_dir.as_str(),
     );
     Ok(())
