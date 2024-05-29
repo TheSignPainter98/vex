@@ -20,6 +20,13 @@ pub enum Error {
     #[error("already inited in a parent directory {found_root}")]
     AlreadyInited { found_root: Utf8PathBuf },
 
+    #[error("cannot discern language of {path} as multiple patterns match (could be {language} or {other_language})")]
+    AmbiguousLanguage {
+        path: PrettyPath,
+        language: SupportedLanguage,
+        other_language: SupportedLanguage,
+    },
+
     #[error("{0}")]
     Clap(#[from] clap::Error),
 
@@ -57,6 +64,9 @@ pub enum Error {
 
     #[error("{0} declares no init function")]
     NoInit(PrettyPath),
+
+    #[error("cannot discern language of {0}")]
+    NoKnownLanguage(PrettyPath),
 
     #[error("{0} observes no events")]
     NoObservers(PrettyPath),
@@ -105,14 +115,8 @@ pub enum Error {
         suggestion: Option<&'static str>,
     },
 
-    #[error("unknown extension '{0}'")]
-    UnknownExtension(String),
-
     #[error("unsupported language '{0}'")]
-    UnknownLanguage(String),
-
-    #[error("cannot parse {0}")]
-    Unparseable(PrettyPath),
+    UnsupportedLanguage(String),
 
     #[error("cannot parse {path} as {language}")]
     UnparseableAsLanguage {

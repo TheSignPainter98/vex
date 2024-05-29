@@ -4,6 +4,7 @@
 #[macro_use]
 extern crate pretty_assertions;
 
+mod associations;
 mod check_id;
 mod cli;
 mod context;
@@ -155,13 +156,13 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
             .clone()
             .into_inner()
             .into_iter()
-            .map(|ignore| ignore.compile(&ctx.project_root))
+            .map(|ignore| ignore.compile())
             .collect::<Result<Vec<_>>>()?;
         let allows = ctx
             .allows
             .clone()
             .into_iter()
-            .map(|allow| allow.compile(&ctx.project_root))
+            .map(|allow| allow.compile())
             .collect::<Result<Vec<_>>>()?;
         walkdir(
             ctx,
@@ -170,10 +171,15 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
             &allows,
             &mut paths,
         )?;
+
+        let associations = ctx.associations()?;
         paths
             .into_iter()
             .map(|p| SourcePath::new(&p, &ctx.project_root))
-            .map(SourceFile::new)
+            .map(|p| {
+                let language = associations.get_language(&p)?;
+                SourceFile::new(p, language)
+            })
             .collect::<Result<Vec<_>>>()?
     };
 
@@ -362,7 +368,13 @@ fn parse(parse_args: ParseCmd) -> Result<()> {
         cause: e,
     })?)?;
     let src_path = SourcePath::new_in(&parse_args.path, &cwd);
-    let src_file = SourceFile::new(src_path)?.parse()?;
+    let language = match parse_args.language {
+        Some(l) => Some(l),
+        None => Context::acquire()?
+            .associations()?
+            .get_language(&src_path)?,
+    };
+    let src_file = SourceFile::new(src_path, language)?.parse()?;
     println!("{}", src_file.tree.root_node().to_sexp());
 
     Ok(())
@@ -485,7 +497,10 @@ mod test {
         let err = parse(cmd).unwrap_err();
 
         // Assertion relaxed due to strange Github Actions Windows and Macos runner path handling.
-        let expected = format!("cannot parse {}", PrettyPath::new(&test_file.path));
+        let expected = format!(
+            "cannot discern language of {}",
+            PrettyPath::new(&test_file.path)
+        );
         assert!(
             err.to_string().ends_with(&expected),
             "unexpected error: expected {expected} but got {err}"
@@ -500,7 +515,10 @@ mod test {
         let err = parse(cmd).unwrap_err();
         assert_eq!(
             err.to_string(),
-            format!("cannot parse {}", PrettyPath::new(&test_file.path))
+            format!(
+                "cannot discern language of {}",
+                PrettyPath::new(&test_file.path)
+            )
         );
     }
 

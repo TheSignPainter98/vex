@@ -6,7 +6,7 @@ use clap::{
     ArgAction, Parser, Subcommand, ValueEnum,
 };
 
-use crate::error::Error;
+use crate::{error::Error, supported_language::SupportedLanguage};
 
 #[derive(Debug, Parser)]
 #[command(author, version, about, disable_help_flag = true)]
@@ -157,6 +157,9 @@ pub struct ParseCmd {
     /// File to parse
     #[arg(value_name = "file")]
     pub path: Utf8PathBuf,
+
+    #[arg(long = "as", value_name = "language")]
+    pub language: Option<SupportedLanguage>,
 }
 
 #[cfg(test)]
@@ -280,6 +283,13 @@ mod test {
             let args = Args::try_parse_from(["vex", "parse", PATH]).unwrap();
             let parse_cmd = args.into_command().into_parse_cmd().unwrap();
             assert_eq!(parse_cmd.path, PATH);
+        }
+
+        #[test]
+        fn language() {
+            let args = Args::try_parse_from(["vex", "parse", "asdf.foo", "--as", "rust"]).unwrap();
+            let parse_cmd = args.into_command().into_parse_cmd().unwrap();
+            assert_eq!(SupportedLanguage::Rust, parse_cmd.language.unwrap());
         }
     }
 

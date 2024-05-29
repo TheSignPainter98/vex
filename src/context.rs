@@ -10,9 +10,11 @@ use std::{
     fs::{self, File},
 };
 
+use crate::associations::Associations;
 use crate::error::{Error, IOAction};
 use crate::result::Result;
 use crate::source_path::PrettyPath;
+use crate::supported_language::SupportedLanguage;
 use crate::trigger::RawFilePattern;
 
 #[derive(Debug)]
@@ -104,6 +106,30 @@ impl Context {
         Ok(())
     }
 
+    pub fn associations(&self) -> Result<Associations> {
+        let mut ret = Associations::new();
+        self.manifest
+            .language_options
+            .0
+            .iter()
+            .map(|(language, options)| {
+                (
+                    options
+                        .file_associations
+                        .iter()
+                        .cloned()
+                        .map(|pattern| pattern.compile())
+                        .collect::<Result<Vec<_>>>(),
+                    *language,
+                )
+            })
+            .try_for_each(|(patterns, language)| {
+                ret.insert(patterns?, language);
+                Ok::<_, Error>(())
+            })?;
+        Ok(ret)
+    }
+
     pub fn vex_dir(&self) -> Utf8PathBuf {
         self.project_root.join(self.manifest.queries_dir.as_str())
     }
@@ -118,8 +144,10 @@ impl Deref for Context {
 }
 
 #[derive(Debug, Default, Deserialise, Serialise, PartialEq)]
+#[serde(rename_all = "kebab-case")]
 pub struct Manifest {
-    pub associations: Option<HashMap<String, String>>,
+    #[serde(flatten)]
+    pub language_options: LanguageData,
 
     #[serde(default)]
     pub queries_dir: QueriesDir,
@@ -135,6 +163,9 @@ impl Manifest {
     const FILE_NAME: &'static str = "vex.toml";
     const DEFAULT_CONTENT: &'static str = indoc! {r#"
         ignore = [ "vex.toml", "vexes/", ".git/", ".gitignore", "/target/" ]
+
+        [python]
+        use-for = [ "*.star" ]
     "#};
 
     fn init(project_root: impl AsRef<Utf8Path>) -> Result<()> {
@@ -211,6 +242,30 @@ impl Manifest {
 
         Ok((project_root, raw_data))
     }
+}
+
+#[derive(Debug, Deserialise, Serialise, PartialEq)]
+pub struct LanguageData(HashMap<SupportedLanguage, LanguageOptions>);
+
+impl Default for LanguageData {
+    fn default() -> Self {
+        Self(
+            [(
+                SupportedLanguage::Python,
+                LanguageOptions {
+                    file_associations: vec![RawFilePattern::new("*.star".into())],
+                },
+            )]
+            .into_iter()
+            .collect(),
+        )
+    }
+}
+
+#[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
+struct LanguageOptions {
+    #[serde(rename = "use-for")]
+    file_associations: Vec<RawFilePattern<String>>,
 }
 
 #[derive(Debug, Deserialise, Serialise, PartialEq)]
