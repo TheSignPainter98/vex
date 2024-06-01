@@ -73,12 +73,13 @@ mod test {
 
     #[test]
     fn default() {
-        Test::file("foo/bar.c").has_language(SupportedLanguage::C);
-        Test::file("foo/bar.h").has_language(SupportedLanguage::C);
-        Test::file("foo/bar.go").has_language(SupportedLanguage::Go);
-        Test::file("foo/bar.py").has_language(SupportedLanguage::Python);
-        Test::file("foo/bar.rs").has_language(SupportedLanguage::Rust);
-        Test::file("foo/bar.star").has_unknown_language();
+        Test::file("foo/bar.c").has_association(SupportedLanguage::C);
+        Test::file("foo/bar.h").has_association(SupportedLanguage::C);
+        Test::file("foo/bar.go").has_association(SupportedLanguage::Go);
+        Test::file("foo/bar.py").has_association(SupportedLanguage::Python);
+        Test::file("foo/bar.rs").has_association(SupportedLanguage::Rust);
+        // *.star=python is an extra association, not a base one.
+        Test::file("foo/bar.star").has_no_association();
 
         // Test structs
         struct Test {
@@ -90,7 +91,7 @@ mod test {
                 Self { file }
             }
 
-            fn has_language(self, expected_language: SupportedLanguage) {
+            fn has_association(self, expected_language: SupportedLanguage) {
                 self.setup();
                 assert_eq!(
                     expected_language,
@@ -101,7 +102,7 @@ mod test {
                 );
             }
 
-            fn has_unknown_language(self) {
+            fn has_no_association(self) {
                 self.setup();
                 assert_eq!(
                     None,
