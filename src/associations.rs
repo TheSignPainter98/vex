@@ -63,6 +63,10 @@ impl Associations {
 
 #[cfg(test)]
 mod test {
+    use camino::Utf8PathBuf;
+
+    use crate::context::Context;
+
     use super::*;
 
     #[test]
@@ -124,5 +128,23 @@ mod test {
         associations
             .get_language(&SourcePath::new_in("foo.ambiguous".into(), "".into()))
             .unwrap_err();
+    }
+
+    #[test]
+    fn from_manifest() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let tempdir_path = Utf8PathBuf::try_from(tempdir.path().to_owned()).unwrap();
+
+        Context::init(&tempdir_path).unwrap();
+        let associations = Context::acquire_in(&tempdir_path)
+            .unwrap()
+            .associations()
+            .unwrap();
+        let language = associations
+            .get_language(&SourcePath::new_in("asdf.star".into(), "".into()))
+            .unwrap()
+            .unwrap();
+        // Default manifest must add a *.star=python association.
+        assert_eq!(SupportedLanguage::Python, language);
     }
 }
