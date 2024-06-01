@@ -113,15 +113,13 @@ impl Context {
             .0
             .iter()
             .map(|(language, options)| {
-                (
-                    options
-                        .file_associations
-                        .iter()
-                        .cloned()
-                        .map(|pattern| pattern.compile())
-                        .collect::<Result<Vec<_>>>(),
-                    *language,
-                )
+                let patterns = options
+                    .file_associations
+                    .iter()
+                    .cloned()
+                    .map(|pattern| pattern.compile())
+                    .collect::<Result<Vec<_>>>();
+                (patterns, *language)
             })
             .try_for_each(|(patterns, language)| {
                 ret.insert(patterns?, language);
