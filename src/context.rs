@@ -107,7 +107,7 @@ impl Context {
     }
 
     pub fn associations(&self) -> Result<Associations> {
-        let mut ret = Associations::new();
+        let mut ret = Associations::base();
         self.manifest
             .language_options
             .0

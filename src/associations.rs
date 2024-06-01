@@ -12,8 +12,23 @@ use crate::{
 pub struct Associations(Vec<(Vec<FilePattern>, SupportedLanguage)>);
 
 impl Associations {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn base() -> Self {
+        Self(
+            [
+                ("*.[ch]", SupportedLanguage::C),
+                ("*.go", SupportedLanguage::Go),
+                ("*.py", SupportedLanguage::Python),
+                ("*.rs", SupportedLanguage::Rust),
+            ]
+            .into_iter()
+            .map(|(pattern, language)| {
+                (
+                    vec![RawFilePattern::new(pattern).compile().unwrap()],
+                    language,
+                )
+            })
+            .collect(),
+        )
     }
 
     pub fn insert(&mut self, file_patterns: Vec<FilePattern>, language: SupportedLanguage) {
@@ -46,33 +61,12 @@ impl Associations {
     }
 }
 
-impl Default for Associations {
-    fn default() -> Self {
-        Self(
-            [
-                ("*.[ch]", SupportedLanguage::C),
-                ("*.go", SupportedLanguage::Go),
-                ("*.py", SupportedLanguage::Python),
-                ("*.rs", SupportedLanguage::Rust),
-            ]
-            .into_iter()
-            .map(|(pattern, language)| {
-                (
-                    vec![RawFilePattern::new(pattern).compile().unwrap()],
-                    language,
-                )
-            })
-            .collect(),
-        )
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
 
     #[test]
-    fn default() {
+    fn base() {
         Test::file("foo/bar.c").has_association(SupportedLanguage::C);
         Test::file("foo/bar.h").has_association(SupportedLanguage::C);
         Test::file("foo/bar.go").has_association(SupportedLanguage::Go);
@@ -95,8 +89,8 @@ mod test {
                 self.setup();
                 assert_eq!(
                     expected_language,
-                    Associations::default()
-                        .get_language(&SourcePath::new_in(self.file.into(), "".into(),))
+                    Associations::base()
+                        .get_language(&SourcePath::new_in(self.file.into(), "".into()))
                         .unwrap()
                         .unwrap()
                 );
@@ -106,8 +100,8 @@ mod test {
                 self.setup();
                 assert_eq!(
                     None,
-                    Associations::default()
-                        .get_language(&SourcePath::new_in(self.file.into(), "".into(),))
+                    Associations::base()
+                        .get_language(&SourcePath::new_in(self.file.into(), "".into()))
                         .unwrap()
                 )
             }
@@ -121,7 +115,7 @@ mod test {
     #[test]
     fn ambiguous() {
         let associations = {
-            let mut associations = Associations::default();
+            let mut associations = Associations::base();
             let pattern = RawFilePattern::new("*.ambiguous").compile().unwrap();
             associations.insert(vec![pattern.clone()], SupportedLanguage::Rust);
             associations.insert(vec![pattern], SupportedLanguage::C);
