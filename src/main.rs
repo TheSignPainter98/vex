@@ -38,6 +38,7 @@ use strum::IntoEnumIterator;
 use tree_sitter::QueryCursor;
 
 use crate::{
+    associations::Associations,
     check_id::CheckId,
     cli::{Args, CheckCmd, Command},
     context::Context,
@@ -370,8 +371,11 @@ fn parse(parse_args: ParseCmd) -> Result<()> {
     let src_path = SourcePath::new_in(&parse_args.path, &cwd);
     let language = match parse_args.language {
         Some(l) => Some(l),
-        None => Context::acquire()?
-            .associations()?
+        None => Context::acquire()
+            .ok()
+            .map(|ctx| ctx.associations())
+            .transpose()?
+            .unwrap_or_else(Associations::base)
             .get_language(&src_path)?,
     };
     let src_file = SourceFile::new(src_path, language)?.parse()?;
