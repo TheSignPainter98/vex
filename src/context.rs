@@ -45,7 +45,7 @@ impl Context {
         })
     }
 
-    pub fn init(project_root: impl AsRef<Utf8Path>) -> Result<()> {
+    pub fn init(project_root: impl AsRef<Utf8Path>, force: bool) -> Result<()> {
         let project_root = project_root.as_ref();
         fs::create_dir_all(project_root.join(QueriesDir::default().as_str())).map_err(|cause| {
             Error::IO {
@@ -54,7 +54,7 @@ impl Context {
                 cause,
             }
         })?;
-        Manifest::init(project_root)?;
+        Manifest::init(project_root, force)?;
 
         let example_vex_path = Utf8PathBuf::from(project_root)
             .join(QueriesDir::default().as_str())
@@ -139,18 +139,20 @@ impl Manifest {
         ignore = [ "vex.toml", "vexes/", ".git/", ".gitignore", "/target/" ]
     "#};
 
-    fn init(project_root: impl AsRef<Utf8Path>) -> Result<()> {
+    fn init(project_root: impl AsRef<Utf8Path>, force: bool) -> Result<()> {
         let project_root = project_root.as_ref();
-        match Manifest::acquire_content_in(project_root) {
-            Ok((found_root, _)) => return Err(Error::AlreadyInited { found_root }),
-            Err(Error::ManifestNotFound) => {}
-            Err(e) => return Err(e),
+        if !force {
+            match Manifest::acquire_content_in(project_root) {
+                Ok((found_root, _)) => return Err(Error::AlreadyInited { found_root }),
+                Err(Error::ManifestNotFound) => {}
+                Err(e) => return Err(e),
+            }
         }
 
         let file_path = project_root.join(Self::FILE_NAME);
         let file = File::options()
             .write(true)
-            .create_new(true)
+            .create_new(!force)
             .open(&file_path)
             .map_err(|cause| Error::IO {
                 path: PrettyPath::new(&file_path),
@@ -308,7 +310,7 @@ mod test {
             "cannot find manifest, try running `vex init` in the project’s root"
         );
 
-        Context::init(tempdir_path.clone()).unwrap();
+        Context::init(tempdir_path.clone(), false).unwrap();
         let ctx = Context::acquire_in(&tempdir_path).unwrap();
         PreinitingStore::new(&ctx)
             .unwrap()
@@ -317,14 +319,24 @@ mod test {
             .init()
             .unwrap();
 
-        // Already inited
+        // Already inited, no-force
         let re = Regex::new("^already inited in a parent directory .*").unwrap();
-        let err = Manifest::init(tempdir_path.clone()).unwrap_err();
+        let err = Manifest::init(tempdir_path.clone(), false).unwrap_err();
         assert!(
             re.is_match(&err.to_string()),
             "incorrect error, expected {} but got {err}",
             re.as_str()
         );
+
+        // Already inited, force
+        Context::init(&tempdir_path, true).unwrap();
+        let ctx = Context::acquire_in(&tempdir_path).unwrap();
+        PreinitingStore::new(&ctx)
+            .unwrap()
+            .preinit(PreinitOptions::default())
+            .unwrap()
+            .init()
+            .unwrap();
 
         Ok(())
     }
@@ -349,7 +361,7 @@ mod test {
             )
             .unwrap();
 
-        Context::init(&tempdir_path)?;
+        Context::init(&tempdir_path, false)?;
         let ctx = Context::acquire_in(&tempdir_path)?;
         let store = PreinitingStore::new(&ctx)?
             .preinit(PreinitOptions::default())?
@@ -387,7 +399,7 @@ mod test {
         let root_dir = tempfile::tempdir().unwrap();
         let root_path = Utf8PathBuf::try_from(root_dir.path().to_path_buf()).unwrap();
 
-        Context::init(&root_path).unwrap();
+        Context::init(&root_path, false).unwrap();
         let manifest = Context::acquire_in(&root_path).unwrap().manifest;
 
         assert_eq!(manifest, Manifest::default());
