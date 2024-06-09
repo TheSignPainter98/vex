@@ -18,12 +18,8 @@ pub struct SourceFile {
 }
 
 impl SourceFile {
-    pub fn new(path: SourcePath) -> Result<Self> {
+    pub fn new(path: SourcePath, language: Option<SupportedLanguage>) -> Result<Self> {
         let path = path.dupe();
-        let language = path
-            .abs_path
-            .extension()
-            .and_then(|extension| SupportedLanguage::try_from_extension(extension).ok());
         Ok(Self { path, language })
     }
 
@@ -46,7 +42,7 @@ impl SourceFile {
                 cause,
             })?;
         let Some(language) = self.language else {
-            return Err(Error::Unparseable(self.path.pretty_path.dupe()));
+            return Err(Error::NoKnownLanguage(self.path.pretty_path.dupe()));
         };
         let tree = {
             let mut parser = Parser::new();

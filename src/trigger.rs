@@ -2,24 +2,17 @@ use std::{fmt::Display, ops::Deref};
 
 use allocative::Allocative;
 use camino::{Utf8Path, Utf8PathBuf};
-use glob::{MatchOptions, Pattern};
+use glob::Pattern;
 use serde::{Deserialize, Serialize};
 
 use crate::{error::Error, result::Result};
 
-#[derive(Debug, Allocative)]
-pub struct FilePattern(#[allocative(skip)] Pattern);
+#[derive(Clone, Debug, Allocative)]
+pub struct FilePattern(#[allocative(skip)] pub Pattern);
 
 impl FilePattern {
     pub fn matches(&self, path: &Utf8Path) -> bool {
-        self.0.matches_path_with(
-            path.as_std_path(),
-            MatchOptions {
-                case_sensitive: true,
-                require_literal_separator: false,
-                require_literal_leading_dot: true,
-            },
-        )
+        self.0.matches(path.as_str())
     }
 }
 
@@ -31,12 +24,9 @@ impl<S: AsRef<str>> RawFilePattern<S> {
         Self(raw)
     }
 
-    pub fn compile(self, project_root: impl AsRef<Utf8Path>) -> Result<FilePattern> {
-        let project_root = project_root.as_ref();
+    pub fn compile(self) -> Result<FilePattern> {
         let pattern = {
-            let mut pattern_buf = Utf8PathBuf::with_capacity(
-                project_root.as_str().len() + "**/".len() + self.len() + "*".len(),
-            );
+            let mut pattern_buf = Utf8PathBuf::with_capacity("**/".len() + self.len() + "*".len());
             let original_start_index = if !self.starts_with('/') {
                 pattern_buf.push("**");
                 "**".len()
@@ -317,9 +307,7 @@ mod test {
                 eprintln!("running test {}...", self.name);
 
                 let path_pattern = self.path_pattern.unwrap();
-                let pattern = RawFilePattern::new(path_pattern)
-                    .compile(self.root_dir)
-                    .unwrap();
+                let pattern = RawFilePattern::new(path_pattern).compile().unwrap();
                 let matches = self
                     .test_paths
                     .iter()
@@ -424,7 +412,7 @@ mod test {
     #[test]
     fn malformed_glob() {
         let pattern = "[".to_string();
-        let err = RawFilePattern::new(&pattern).compile("").unwrap_err();
+        let err = RawFilePattern::new(&pattern).compile().unwrap_err();
         assert_eq!(
             r#"cannot compile "[": invalid range pattern at position 1"#,
             err.to_string()

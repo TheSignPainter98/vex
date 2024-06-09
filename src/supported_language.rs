@@ -4,12 +4,28 @@ use allocative::Allocative;
 use clap::Subcommand;
 use dupe::Dupe;
 use enum_map::Enum;
+use serde::{Deserialize as Deserialise, Serialize as Serialise};
 use strum::EnumIter;
 use tree_sitter::Language;
 
 use crate::{error::Error, result::Result};
 
-#[derive(Copy, Clone, Debug, Dupe, EnumIter, Subcommand, Enum, Allocative, PartialEq, Eq, Hash)]
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Dupe,
+    EnumIter,
+    Subcommand,
+    Enum,
+    Allocative,
+    PartialEq,
+    Eq,
+    Hash,
+    Deserialise,
+    Serialise,
+)]
+#[serde(rename_all = "kebab-case")]
 pub enum SupportedLanguage {
     C,
     Go,
@@ -24,16 +40,6 @@ impl SupportedLanguage {
             Self::Go => "go",
             Self::Python => "python",
             Self::Rust => "rust",
-        }
-    }
-
-    pub fn try_from_extension(extension: &str) -> Result<Self> {
-        match extension {
-            "c" | "h" => Ok(Self::C),
-            "go" => Ok(Self::Go),
-            "py" => Ok(Self::Python),
-            "rs" => Ok(Self::Rust),
-            _ => Err(Error::UnknownExtension(extension.into())),
         }
     }
 
@@ -56,7 +62,7 @@ impl FromStr for SupportedLanguage {
             "go" => Ok(Self::Go),
             "python" => Ok(Self::Python),
             "rust" => Ok(Self::Rust),
-            _ => Err(Error::UnknownLanguage(s.to_string())),
+            _ => Err(Error::UnsupportedLanguage(s.to_string())),
         }
     }
 }
