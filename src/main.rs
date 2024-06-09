@@ -29,6 +29,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser as _;
 use cli::{ListCmd, MaxProblems, ParseCmd, ToList};
 use dupe::Dupe;
+use indoc::printdoc;
 use lazy_static::lazy_static;
 use log::{info, log_enabled, trace, warn};
 use owo_colors::{OwoColorize, Stream, Style};
@@ -376,8 +377,12 @@ fn init() -> Result<()> {
     })?)?;
     Context::init(cwd)?;
     let queries_dir = Context::acquire()?.manifest.queries_dir;
-    println!(
-        "{}: vex initialised\nnow add style rules in ./{}/\nsee ./{}/{EXAMPLE_VEX_FILE} for how",
+    printdoc!(
+        "
+            {}: vex initialised
+            now add style rules in ./{}/
+            for an example, open ./{}/{EXAMPLE_VEX_FILE}
+        ",
         "success".if_supports_color(Stream::Stdout, |text| text.style(*SUCCESS_STYLE)),
         queries_dir.as_str(),
         queries_dir.as_str(),
