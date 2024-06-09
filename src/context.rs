@@ -110,7 +110,6 @@ impl Context {
         let mut ret = Associations::base();
         self.manifest
             .language_options
-            .0
             .iter()
             .map(|(language, options)| {
                 let patterns = options
@@ -260,8 +259,16 @@ impl Default for LanguageData {
     }
 }
 
+impl Deref for LanguageData {
+    type Target = HashMap<SupportedLanguage, LanguageOptions>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 #[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
-struct LanguageOptions {
+pub struct LanguageOptions {
     #[serde(rename = "use-for")]
     file_associations: Vec<RawFilePattern<String>>,
 }
