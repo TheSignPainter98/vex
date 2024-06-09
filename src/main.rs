@@ -29,6 +29,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser as _;
 use cli::{ListCmd, MaxProblems, ParseCmd, ToList};
 use dupe::Dupe;
+use indoc::printdoc;
 use lazy_static::lazy_static;
 use log::{info, log_enabled, trace, warn};
 use owo_colors::{OwoColorize, Stream, Style};
@@ -39,7 +40,7 @@ use tree_sitter::QueryCursor;
 use crate::{
     check_id::CheckId,
     cli::{Args, CheckCmd, Command},
-    context::Context,
+    context::{Context, EXAMPLE_VEX_FILE},
     error::{Error, IOAction},
     irritation::Irritation,
     plural::Plural,
@@ -376,9 +377,14 @@ fn init() -> Result<()> {
     })?)?;
     Context::init(cwd)?;
     let queries_dir = Context::acquire()?.manifest.queries_dir;
-    println!(
-        "{}: vex initialised, now add style rules in ./{}/",
+    printdoc!(
+        "
+            {}: vex initialised
+            now add style rules in ./{}/
+            for an example, open ./{}/{EXAMPLE_VEX_FILE}
+        ",
         "success".if_supports_color(Stream::Stdout, |text| text.style(*SUCCESS_STYLE)),
+        queries_dir.as_str(),
         queries_dir.as_str(),
     );
     Ok(())

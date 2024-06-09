@@ -21,6 +21,8 @@ pub struct Context {
     pub manifest: Manifest,
 }
 
+pub const EXAMPLE_VEX_FILE: &str = "example.star";
+
 impl Context {
     pub fn acquire() -> Result<Self> {
         let (project_root, raw_data) = Manifest::acquire_content()?;
@@ -56,7 +58,7 @@ impl Context {
 
         let example_vex_path = Utf8PathBuf::from(project_root)
             .join(QueriesDir::default().as_str())
-            .join("example.star");
+            .join(EXAMPLE_VEX_FILE);
         const EXAMPLE_VEX_CONTENT: &str = indoc! {r#"
             def init():
                 # First add callbacks for vex's top-level events.
