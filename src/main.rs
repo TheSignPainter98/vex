@@ -28,8 +28,9 @@ use std::{env, fs, process::ExitCode};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser as _;
-use cli::{ListCmd, MaxProblems, ParseCmd, ToList};
+use cli::{InitCmd, ListCmd, MaxProblems, ParseCmd, ToList};
 use dupe::Dupe;
+use indoc::printdoc;
 use lazy_static::lazy_static;
 use log::{info, log_enabled, trace, warn};
 use owo_colors::{OwoColorize, Stream, Style};
@@ -41,7 +42,7 @@ use crate::{
     associations::Associations,
     check_id::CheckId,
     cli::{Args, CheckCmd, Command},
-    context::Context,
+    context::{Context, EXAMPLE_VEX_FILE},
     error::{Error, IOAction},
     irritation::Irritation,
     plural::Plural,
@@ -73,10 +74,10 @@ fn run() -> Result<ExitCode> {
     logger::init(Verbosity::try_from(args.verbosity_level)?)?;
 
     match args.command {
-        Command::List(list_args) => list(list_args),
         Command::Check(cmd_args) => check(cmd_args),
+        Command::List(list_args) => list(list_args),
+        Command::Init(init_args) => init(init_args),
         Command::Parse(parse_args) => parse(parse_args),
-        Command::Init => init(),
     }?;
 
     Ok(logger::exit_code())
@@ -384,17 +385,22 @@ fn parse(parse_args: ParseCmd) -> Result<()> {
     Ok(())
 }
 
-fn init() -> Result<()> {
+fn init(init_args: InitCmd) -> Result<()> {
     let cwd = Utf8PathBuf::try_from(env::current_dir().map_err(|cause| Error::IO {
         path: PrettyPath::new(Utf8Path::new(".")),
         action: IOAction::Read,
         cause,
     })?)?;
-    Context::init(cwd)?;
+    Context::init(cwd, init_args.force)?;
     let queries_dir = Context::acquire()?.manifest.queries_dir;
-    println!(
-        "{}: vex initialised, now add style rules in ./{}/",
+    printdoc!(
+        "
+            {}: vex initialised
+            now add style rules in ./{}/
+            for an example, open ./{}/{EXAMPLE_VEX_FILE}
+        ",
         "success".if_supports_color(Stream::Stdout, |text| text.style(*SUCCESS_STYLE)),
+        queries_dir.as_str(),
         queries_dir.as_str(),
     );
     Ok(())

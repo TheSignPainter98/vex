@@ -39,7 +39,7 @@ pub enum Command {
     List(ListCmd),
 
     /// Create new vex project with this directory as the root
-    Init,
+    Init(InitCmd),
 
     /// Print the syntax tree of the given file
     Parse(ParseCmd),
@@ -57,6 +57,13 @@ impl Command {
     pub fn into_parse_cmd(self) -> Option<ParseCmd> {
         match self {
             Self::Parse(p) => Some(p),
+            _ => None,
+        }
+    }
+
+    pub fn into_init_cmd(self) -> Option<InitCmd> {
+        match self {
+            Self::Init(i) => Some(i),
             _ => None,
         }
     }
@@ -160,6 +167,13 @@ pub struct ParseCmd {
 
     #[arg(long = "as", value_name = "language")]
     pub language: Option<SupportedLanguage>,
+}
+
+#[derive(Debug, Default, PartialEq, Eq, Parser)]
+pub struct InitCmd {
+    /// Force init
+    #[arg(long)]
+    pub force: bool,
 }
 
 #[cfg(test)]
@@ -298,8 +312,18 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["vex", "init"])
                 .unwrap()
-                .into_command(),
-            Command::Init,
+                .into_command()
+                .into_init_cmd()
+                .unwrap(),
+            InitCmd { force: false },
+        );
+        assert_eq!(
+            Args::try_parse_from(["vex", "init", "--force"])
+                .unwrap()
+                .into_command()
+                .into_init_cmd()
+                .unwrap(),
+            InitCmd { force: true },
         );
     }
 }

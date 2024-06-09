@@ -135,7 +135,7 @@ mod test {
         let tempdir = tempfile::tempdir().unwrap();
         let tempdir_path = Utf8PathBuf::try_from(tempdir.path().to_owned()).unwrap();
 
-        Context::init(&tempdir_path).unwrap();
+        Context::init(&tempdir_path, false).unwrap();
         let associations = Context::acquire_in(&tempdir_path)
             .unwrap()
             .associations()
