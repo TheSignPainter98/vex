@@ -557,6 +557,9 @@ mod test {
                                     (binary_expression
                                         left: (integer_literal) @l_int
                                     ) @bin_expr
+                                    (unary_expression) @unary
+                                    (line_comment) @line_comment
+                                    (block_comment) @block_comment
                                 ''',
                                 on_match,
                             )
@@ -568,6 +571,7 @@ mod test {
                             check['eq'](str(captures.keys()), "QueryCaptures.keys()")
                             for key in captures.keys():
                                 check['in'](key, captures)
+                            check['sorted'](list(captures.keys()))
                     "#,
                     check_path = VexTest::CHECK_STARLARK_PATH,
                 },
@@ -602,6 +606,9 @@ mod test {
                                     (binary_expression
                                         left: (integer_literal) @l_int
                                     ) @bin_expr
+                                    (unary_expression) @unary
+                                    (line_comment) @line_comment
+                                    (block_comment) @block_comment
                                 ''',
                                 on_match,
                             )
@@ -654,6 +661,9 @@ mod test {
                                             ) @d
                                         ) @e
                                     ) @all
+                                    (unary_expression) @unary
+                                    (line_comment) @line_comment
+                                    (block_comment) @block_comment
                                 ''',
                                 on_match,
                             )
