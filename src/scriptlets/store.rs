@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, fs, io::ErrorKind, iter};
+use std::{collections::BTreeMap, fs, io::ErrorKind, iter, ops::Deref};
 
 use camino::Utf8PathBuf;
 use dupe::Dupe;
@@ -362,10 +362,6 @@ pub struct VexingStore {
 }
 
 impl VexingStore {
-    pub fn observer_data(&self) -> &ObserverData {
-        &self.observer_data
-    }
-
     pub fn frozen_heap(&self) -> &FrozenHeap {
         &self.frozen_heap
     }
@@ -380,5 +376,13 @@ impl VexingStore {
         // Heuristic: expect scriptlets to declare on average at most this many queries during the
         // `open_file` event.
         2 * self.num_scripts
+    }
+}
+
+impl Deref for VexingStore {
+    type Target = ObserverData;
+
+    fn deref(&self) -> &Self::Target {
+        &self.observer_data
     }
 }

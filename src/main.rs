@@ -193,7 +193,6 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
         let event = OpenProjectEvent::new(ctx.project_root.dupe());
         let handler_module = HandlerModule::new(event.kind(), &query_cache);
         store
-            .observer_data()
             .observers_for(event.kind())
             .observe(&handler_module, handler_module.heap().alloc(event))?;
         handler_module
@@ -226,7 +225,6 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
             let event = OpenFileEvent::new(path);
             let handler_module = HandlerModule::new(event.kind(), &query_cache);
             store
-                .observer_data()
                 .observers_for(event.kind())
                 .observe(&handler_module, handler_module.heap().alloc(event))?;
             handler_module
