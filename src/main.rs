@@ -32,6 +32,7 @@ use dupe::Dupe;
 use lazy_static::lazy_static;
 use log::{info, log_enabled, trace, warn};
 use owo_colors::{OwoColorize, Stream, Style};
+use scriptlets::{event::EventKind, handler_module::HandlerModule, Observable};
 use source_file::SourceFile;
 use strum::IntoEnumIterator;
 use tree_sitter::QueryCursor;
@@ -45,9 +46,11 @@ use crate::{
     plural::Plural,
     result::Result,
     scriptlets::{
-        event::{Event, MatchEvent, OpenFileEvent, OpenProjectEvent},
+        event::{MatchEvent, OpenFileEvent, OpenProjectEvent},
+        intents::Intent,
         query_cache::QueryCache,
-        Intent, PreinitOptions, PreinitingStore, QueryCaptures, VexingStore,
+        query_captures::QueryCaptures,
+        PreinitOptions, PreinitingStore, VexingStore,
     },
     source_path::{PrettyPath, SourcePath},
     supported_language::SupportedLanguage,
@@ -186,15 +189,16 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
     let frozen_heap = store.frozen_heap();
     let project_queries = {
         let mut project_queries = Vec::with_capacity(project_queries_hint);
-        let path = ctx.project_root.dupe();
+
+        let event = OpenProjectEvent::new(ctx.project_root.dupe());
+        let handler_module = HandlerModule::new(event.kind(), &query_cache);
         store
             .observer_data()
-            .handle(
-                Event::OpenProject(OpenProjectEvent::new(path)),
-                &query_cache,
-                frozen_heap,
-            )?
-            .iter()
+            .observers_for(event.kind())
+            .observe(&handler_module, handler_module.heap().alloc(event))?;
+        handler_module
+            .into_intents(&frozen_heap)?
+            .into_iter()
             .for_each(|intent| match intent {
                 Intent::Find {
                     language,
@@ -218,14 +222,16 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
         let file_queries = {
             let mut file_queries = Vec::with_capacity(store.file_queries_hint());
             let path = file.path().pretty_path.dupe();
+
+            let event = OpenFileEvent::new(path);
+            let handler_module = HandlerModule::new(event.kind(), &query_cache);
             store
                 .observer_data()
-                .handle(
-                    Event::OpenFile(OpenFileEvent::new(path)),
-                    &query_cache,
-                    frozen_heap,
-                )?
-                .iter()
+                .observers_for(event.kind())
+                .observe(&handler_module, handler_module.heap().alloc(event))?;
+            handler_module
+                .into_intents(frozen_heap)?
+                .into_iter()
                 .for_each(|intent| match intent {
                     Intent::Find {
                         language,
@@ -258,14 +264,16 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
                         parsed_file.content.as_bytes(),
                     )
                     .try_for_each(|qmatch| {
+                        let handler_module = HandlerModule::new(EventKind::Match, &query_cache);
                         let event = {
-                            let path = &parsed_file.path.pretty_path;
-                            let captures = QueryCaptures::new(query, &qmatch, &parsed_file);
-                            Event::Match(MatchEvent::new(path.dupe(), captures))
+                            let path = parsed_file.path.pretty_path.dupe();
+                            let captures = QueryCaptures::new(query, qmatch, &parsed_file);
+                            handler_module.heap().alloc(MatchEvent::new(path, captures))
                         };
-                        on_match
-                            .handle(event, &query_cache, frozen_heap)?
-                            .iter()
+                        on_match.observe(&handler_module, event)?;
+                        handler_module
+                            .into_intents(&frozen_heap)?
+                            .into_iter()
                             .for_each(|intent| match intent {
                                 Intent::Find { .. } => {
                                     panic!("internal error: find intended during find")

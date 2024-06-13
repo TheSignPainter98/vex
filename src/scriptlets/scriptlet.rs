@@ -21,7 +21,7 @@ use crate::{
         action::Action,
         app_object::AppObject,
         event::EventKind,
-        extra_data::{InvocationData, UnfrozenInvocationData},
+        extra_data::{DataStore, InvocationData, UnfrozenDataStore},
         print_handler::PrintHandler,
         query_cache::QueryCache,
         store::PreinitedModuleCache,
@@ -98,12 +98,8 @@ impl PreinitingScriptlet {
 
         let preinited_module = {
             let preinited_module = Module::new();
-            UnfrozenInvocationData::new(
-                Action::Preiniting,
-                path.pretty_path.dupe(),
-                &QueryCache::new(),
-            )
-            .insert_into(&preinited_module);
+            UnfrozenDataStore::new(Action::Preiniting, &QueryCache::new())
+                .insert_into(&preinited_module);
             {
                 let mut eval = Evaluator::new(&preinited_module);
                 eval.set_loader(&cache);
@@ -316,13 +312,15 @@ impl InitingScriptlet {
         let module = {
             let module = Module::new();
             {
-                UnfrozenInvocationData::new(
-                    Action::Initing,
-                    path.pretty_path.dupe(),
-                    &QueryCache::new(),
-                )
-                .insert_into(&module);
+                let query_cache = QueryCache::new();
+                let data = UnfrozenDataStore::new(Action::Initing, &query_cache);
+                data.insert_into(&module);
+
+                let inv_data = InvocationData {
+                    vex_path: path.pretty_path.dupe(),
+                };
                 let mut eval = Evaluator::new(&module);
+                eval.extra = Some(&inv_data);
                 eval.set_print_handler(&PrintHandler);
                 eval.eval_function(init.value(), &[], &[])?;
             }
@@ -331,7 +329,7 @@ impl InitingScriptlet {
         frozen_heap.add_reference(module.frozen_heap());
 
         let observer_data = {
-            let invocation_data = InvocationData::get_from(&module);
+            let invocation_data = DataStore::get_from(&module);
             let intents = invocation_data.intents();
             let mut observer_data = ObserverData::with_capacity(intents.len());
             intents.iter().for_each(|intent| match intent {

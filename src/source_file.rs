@@ -48,29 +48,7 @@ impl SourceFile {
         let Some(language) = self.language else {
             return Err(Error::Unparseable(self.path.pretty_path.dupe()));
         };
-        let tree = {
-            let mut parser = Parser::new();
-            parser
-                .set_language(language.ts_language())
-                .map_err(Error::Language)?;
-            let tree = parser
-                .parse(&content, None)
-                .expect("unexpected parser failure");
-            if tree.root_node().has_error() {
-                return Err(Error::UnparseableAsLanguage {
-                    path: self.path.pretty_path.dupe(),
-                    language,
-                });
-            }
-            tree
-        };
-        let path = self.path.dupe();
-        Ok(ParsedSourceFile {
-            path,
-            content,
-            tree,
-            language,
-        })
+        ParsedSourceFile::new_with_content(self.path.dupe(), content, language)
     }
 }
 
@@ -80,6 +58,37 @@ pub struct ParsedSourceFile {
     pub content: String,
     pub language: SupportedLanguage,
     pub tree: Tree,
+}
+
+impl ParsedSourceFile {
+    pub fn new_with_content(
+        path: SourcePath,
+        content: impl Into<String>,
+        language: SupportedLanguage,
+    ) -> Result<Self> {
+        let content = content.into();
+
+        let tree = {
+            let mut parser = Parser::new();
+            parser.set_language(language.ts_language())?;
+            let tree = parser
+                .parse(&content, None)
+                .expect("unexpected parser failure");
+            if tree.root_node().has_error() {
+                return Err(Error::UnparseableAsLanguage {
+                    path: path.pretty_path.dupe(),
+                    language,
+                });
+            }
+            tree
+        };
+        Ok(ParsedSourceFile {
+            path,
+            content,
+            tree,
+            language,
+        })
+    }
 }
 
 impl PartialEq for ParsedSourceFile {
