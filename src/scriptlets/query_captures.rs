@@ -167,7 +167,7 @@ impl<'v> Capture<'v> {
                 panic!("internal error: zero-quantified capture yielded")
             }
             (CaptureQuantifier::One, 1) | (CaptureQuantifier::ZeroOrOne, 1) => {
-                panic!("internal error: one-max quantifier yielded more than once")
+                panic!("internal error: one-max quantified capture yielded more than once")
             }
             _ => {}
         }

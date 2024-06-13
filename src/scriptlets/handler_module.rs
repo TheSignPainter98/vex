@@ -19,9 +19,8 @@ pub struct HandlerModule {
 
 impl HandlerModule {
     pub fn new(event_kind: EventKind, query_cache: &QueryCache) -> Self {
-        let action = Action::Vexing(event_kind);
-
         let module = Module::new();
+        let action = Action::Vexing(event_kind);
         let data = UnfrozenDataStore::new(action, query_cache);
         data.insert_into(&module);
 
