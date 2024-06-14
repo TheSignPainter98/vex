@@ -16,7 +16,7 @@ use tree_sitter::{CaptureQuantifier, Query, QueryMatch};
 
 use crate::{scriptlets::node::Node, source_file::ParsedSourceFile};
 
-#[derive(Clone, Debug, Dupe, ProvidesStaticType, NoSerialize, Allocative)]
+#[derive(Clone, Debug, Dupe, ProvidesStaticType, NoSerialize, Allocative, Trace)]
 pub struct QueryCaptures<'v> {
     captures: Value<'v>, // This is a dict.
 }
@@ -48,12 +48,6 @@ impl<'v> QueryCaptures<'v> {
                 .map(|(name, capture)| (name, capture.into_value_on(heap))),
         ));
         Self { captures }
-    }
-}
-
-unsafe impl<'v> Trace<'v> for QueryCaptures<'v> {
-    fn trace(&mut self, _tracer: &starlark::values::Tracer<'v>) {
-        // Safety: Capture<'v> contains no Values
     }
 }
 
@@ -143,10 +137,6 @@ struct Capture<'v> {
     quantifier: CaptureQuantifier,
     #[allocative(skip)]
     matches: SmallVec<[Node<'v>; Capture::CHUNK_SIZE]>,
-}
-
-unsafe impl<'v> Trace<'v> for Capture<'v> {
-    fn trace(&mut self, _tracer: &starlark::values::Tracer<'v>) {}
 }
 
 impl<'v> Capture<'v> {
