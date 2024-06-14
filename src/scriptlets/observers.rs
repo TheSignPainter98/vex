@@ -10,8 +10,8 @@ use starlark_derive::{starlark_value, NoSerialize, ProvidesStaticType, Trace};
 use crate::{
     result::Result,
     scriptlets::{
-        event::EventKind, extra_data::InvocationData, handler_module::HandlerModule,
-        print_handler::PrintHandler,
+        action::Action, event::EventKind, extra_data::TempData, handler_module::HandlerModule,
+        print_handler::PrintHandler, query_cache::QueryCache,
     },
     source_path::PrettyPath,
 };
@@ -98,17 +98,35 @@ pub struct Observer {
 }
 
 pub trait Observable {
-    fn observe<'v>(&self, handler_module: &'v HandlerModule, event: Value<'v>) -> Result<()>;
+    fn observe<'v>(
+        &self,
+        handler_module: &'v HandlerModule,
+        event: Value<'v>,
+        opts: ObserveOptions<'_>,
+    ) -> Result<()>;
+}
+
+#[derive(Clone, Debug, Dupe)]
+pub struct ObserveOptions<'qc> {
+    pub action: Action,
+    pub query_cache: &'qc QueryCache,
 }
 
 impl Observable for Observer {
-    fn observe<'v>(&self, handler_module: &'v HandlerModule, event: Value<'v>) -> Result<()> {
-        let data = InvocationData {
+    fn observe<'v>(
+        &self,
+        handler_module: &'v HandlerModule,
+        event: Value<'v>,
+        opts: ObserveOptions<'_>,
+    ) -> Result<()> {
+        let temp_data = TempData {
+            action: opts.action,
+            query_cache: opts.query_cache,
             vex_path: self.vex_path.dupe(),
         };
 
         let mut eval = Evaluator::new(handler_module);
-        eval.extra = Some(&data);
+        eval.extra = Some(&temp_data);
         eval.set_print_handler(&PrintHandler);
 
         let func = self.callback.dupe().to_value(); // TODO(kcza): check thread safety! Can this unfrozen
@@ -120,8 +138,13 @@ impl Observable for Observer {
 }
 
 impl Observable for &[Observer] {
-    fn observe<'v>(&self, handler_module: &'v HandlerModule, event: Value<'v>) -> Result<()> {
+    fn observe<'v>(
+        &self,
+        handler_module: &'v HandlerModule,
+        event: Value<'v>,
+        opts: ObserveOptions<'_>,
+    ) -> Result<()> {
         self.iter()
-            .try_for_each(|observer| observer.observe(handler_module, event.dupe()))
+            .try_for_each(|observer| observer.observe(handler_module, event.dupe(), opts.dupe()))
     }
 }

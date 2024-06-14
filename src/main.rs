@@ -32,7 +32,9 @@ use dupe::Dupe;
 use lazy_static::lazy_static;
 use log::{info, log_enabled, trace, warn};
 use owo_colors::{OwoColorize, Stream, Style};
-use scriptlets::{event::EventKind, handler_module::HandlerModule, Observable};
+use scriptlets::{
+    action::Action, event::EventKind, handler_module::HandlerModule, Observable, ObserveOptions,
+};
 use source_file::SourceFile;
 use strum::IntoEnumIterator;
 use tree_sitter::QueryCursor;
@@ -191,10 +193,16 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
         let mut project_queries = Vec::with_capacity(project_queries_hint);
 
         let event = OpenProjectEvent::new(ctx.project_root.dupe());
-        let handler_module = HandlerModule::new(event.kind(), &query_cache);
-        store
-            .observers_for(event.kind())
-            .observe(&handler_module, handler_module.heap().alloc(event))?;
+        let handler_module = HandlerModule::new();
+        let observe_opts = ObserveOptions {
+            action: Action::Vexing(event.kind()),
+            query_cache: &query_cache,
+        };
+        store.observers_for(event.kind()).observe(
+            &handler_module,
+            handler_module.heap().alloc(event),
+            observe_opts,
+        )?;
         handler_module
             .into_intents(&frozen_heap)?
             .into_iter()
@@ -223,10 +231,16 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
             let path = file.path().pretty_path.dupe();
 
             let event = OpenFileEvent::new(path);
-            let handler_module = HandlerModule::new(event.kind(), &query_cache);
-            store
-                .observers_for(event.kind())
-                .observe(&handler_module, handler_module.heap().alloc(event))?;
+            let handler_module = HandlerModule::new();
+            let observ_opts = ObserveOptions {
+                action: Action::Vexing(event.kind()),
+                query_cache: &query_cache,
+            };
+            store.observers_for(event.kind()).observe(
+                &handler_module,
+                handler_module.heap().alloc(event),
+                observ_opts,
+            )?;
             handler_module
                 .into_intents(frozen_heap)?
                 .into_iter()
@@ -262,13 +276,17 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
                         parsed_file.content.as_bytes(),
                     )
                     .try_for_each(|qmatch| {
-                        let handler_module = HandlerModule::new(EventKind::Match, &query_cache);
+                        let handler_module = HandlerModule::new();
                         let event = {
                             let path = parsed_file.path.pretty_path.dupe();
                             let captures = QueryCaptures::new(query, qmatch, &parsed_file);
                             handler_module.heap().alloc(MatchEvent::new(path, captures))
                         };
-                        on_match.observe(&handler_module, event)?;
+                        let observe_opts = ObserveOptions {
+                            action: Action::Vexing(EventKind::Match),
+                            query_cache: &query_cache,
+                        };
+                        on_match.observe(&handler_module, event, observe_opts)?;
                         handler_module
                             .into_intents(&frozen_heap)?
                             .into_iter()

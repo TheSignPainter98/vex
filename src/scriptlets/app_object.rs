@@ -21,7 +21,7 @@ use crate::{
     scriptlets::{
         action::Action,
         event::EventKind,
-        extra_data::{InvocationData, UnfrozenDataStore},
+        extra_data::{TempData, UnfrozenRetainedData},
         intents::UnfrozenIntent,
         observers::UnfrozenObserver,
         Node,
@@ -59,19 +59,21 @@ impl AppObject {
                 ],
             )?;
 
-            let data = UnfrozenDataStore::get_from(eval.module());
+            let temp_data = TempData::get_from(eval);
+
+            let ret_data = UnfrozenRetainedData::get_from(eval.module());
             let language = language.parse::<SupportedLanguage>()?;
             let query = {
                 if query.is_empty() {
                     return Err(Error::EmptyQuery.into());
                 }
-                data.query_cache().get(language, query)?
+                temp_data.query_cache.get(language, query)?
             };
             let on_match = {
-                let vex_path = InvocationData::get_from(eval).vex_path.dupe();
+                let vex_path = TempData::get_from(eval).vex_path.dupe();
                 UnfrozenObserver::new(vex_path, on_match)
             };
-            data.declare_intent(UnfrozenIntent::Find {
+            ret_data.declare_intent(UnfrozenIntent::Find {
                 language,
                 query,
                 on_match,
@@ -88,13 +90,13 @@ impl AppObject {
         ) -> anyhow::Result<NoneType> {
             AppObject::check_attr_available(eval, "vex.observe", &[Action::Initing])?;
 
-            let data = UnfrozenDataStore::get_from(eval.module());
+            let ret_data = UnfrozenRetainedData::get_from(eval.module());
             let event_kind = event.parse()?;
             let observer = {
-                let vex_path = InvocationData::get_from(eval).vex_path.dupe();
+                let vex_path = TempData::get_from(eval).vex_path.dupe();
                 UnfrozenObserver::new(vex_path, observer)
             };
-            data.declare_intent(UnfrozenIntent::Observe {
+            ret_data.declare_intent(UnfrozenIntent::Observe {
                 event_kind,
                 observer,
             });
@@ -127,8 +129,8 @@ impl AppObject {
                 .into());
             }
 
-            let data = UnfrozenDataStore::get_from(eval.module());
-            let vex_path = InvocationData::get_from(eval).vex_path.dupe();
+            let ret_data = UnfrozenRetainedData::get_from(eval.module());
+            let vex_path = TempData::get_from(eval).vex_path.dupe();
             let mut irritation_renderer = IrritationRenderer::new(vex_path.dupe(), message);
             if let Some(at) = at {
                 irritation_renderer.set_source(at)
@@ -139,7 +141,7 @@ impl AppObject {
             if let Some(extra_info) = extra_info {
                 irritation_renderer.set_extra_info(extra_info);
             }
-            data.declare_intent(UnfrozenIntent::Warn(irritation_renderer.render()));
+            ret_data.declare_intent(UnfrozenIntent::Warn(irritation_renderer.render()));
 
             Ok(NoneType)
         }
@@ -150,7 +152,7 @@ impl AppObject {
         attr_path: &'static str,
         available_actions: &'static [Action],
     ) -> Result<()> {
-        let curr_action = UnfrozenDataStore::get_from(eval.module()).action();
+        let curr_action = TempData::get_from(eval).action;
         if !available_actions.contains(&curr_action) {
             return Err(Error::ActionUnavailable {
                 what: attr_path,

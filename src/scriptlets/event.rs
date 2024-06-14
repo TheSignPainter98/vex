@@ -15,7 +15,7 @@ use crate::{error::Error, result::Result, scriptlets::QueryCaptures, source_path
 const PATH_ATTR_NAME: &str = "path";
 const NAME_ATTR_NAME: &str = "name";
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, EnumIter, Display, Allocative)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, EnumIter, Display, Allocative, Dupe)]
 pub enum EventKind {
     OpenProject,
     OpenFile,

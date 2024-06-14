@@ -5,10 +5,7 @@ use starlark::{environment::Module, values::FrozenHeap};
 use crate::{
     result::Result,
     scriptlets::{
-        action::Action,
-        event::EventKind,
-        extra_data::{DataStore, UnfrozenDataStore},
-        query_cache::QueryCache,
+        extra_data::{RetainedData, UnfrozenRetainedData},
         Intents,
     },
 };
@@ -18,11 +15,10 @@ pub struct HandlerModule {
 }
 
 impl HandlerModule {
-    pub fn new(event_kind: EventKind, query_cache: &QueryCache) -> Self {
+    pub fn new() -> Self {
         let module = Module::new();
-        let action = Action::Vexing(event_kind);
-        let data = UnfrozenDataStore::new(action, query_cache);
-        data.insert_into(&module);
+        let ret_data = UnfrozenRetainedData::new();
+        ret_data.insert_into(&module);
 
         Self { module }
     }
@@ -32,8 +28,12 @@ impl HandlerModule {
         let module = module.freeze()?;
         frozen_heap.add_reference(module.frozen_heap());
 
-        let data = DataStore::get_from(&module);
-        Ok(data.intents().clone())
+        let ret_data = RetainedData::get_from(&module);
+        Ok(ret_data.intents().clone())
+    }
+
+    pub fn into_module(self) -> Module {
+        self.module
     }
 }
 

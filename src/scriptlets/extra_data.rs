@@ -18,22 +18,15 @@ use crate::{
 };
 
 #[derive(Debug, Display, ProvidesStaticType, NoSerialize, Allocative, Trace)]
-#[display(fmt = "UnfrozenDataStore")]
-pub struct UnfrozenDataStore<'v> {
-    action: Action,
-    #[allocative(visit = QueryCache::visit)]
-    query_cache: &'v QueryCache,
+#[display(fmt = "RetainedData")]
+pub struct UnfrozenRetainedData<'v> {
     intents: UnfrozenIntents<'v>,
 }
 
-impl<'v> UnfrozenDataStore<'v> {
-    pub fn new(action: Action, query_cache: &'v QueryCache) -> Self {
+impl<'v> UnfrozenRetainedData<'v> {
+    pub fn new() -> Self {
         let intents = UnfrozenIntents::new();
-        Self {
-            action,
-            query_cache,
-            intents,
-        }
+        Self { intents }
     }
 
     pub fn insert_into(self, module: &'v Module) {
@@ -48,49 +41,37 @@ impl<'v> UnfrozenDataStore<'v> {
             .expect("Module extra has wrong type")
     }
 
-    pub fn action(&self) -> Action {
-        self.action
-    }
-
-    pub fn query_cache(&self) -> &QueryCache {
-        self.query_cache
-    }
-
     pub fn declare_intent(&self, intent: UnfrozenIntent<'v>) {
         self.intents.declare(intent)
     }
 }
 
-#[starlark_value(type = "DataStore")]
-impl<'v> StarlarkValue<'v> for UnfrozenDataStore<'v> {}
+#[starlark_value(type = "RetainedData")]
+impl<'v> StarlarkValue<'v> for UnfrozenRetainedData<'v> {}
 
-impl<'v> AllocValue<'v> for UnfrozenDataStore<'v> {
+impl<'v> AllocValue<'v> for UnfrozenRetainedData<'v> {
     fn alloc_value(self, heap: &'v starlark::values::Heap) -> starlark::values::Value<'v> {
         heap.alloc_complex(self)
     }
 }
 
-impl Freeze for UnfrozenDataStore<'_> {
-    type Frozen = DataStore;
+impl Freeze for UnfrozenRetainedData<'_> {
+    type Frozen = RetainedData;
 
     fn freeze(self, freezer: &starlark::values::Freezer) -> anyhow::Result<Self::Frozen> {
-        let Self {
-            action: _,
-            query_cache: _,
-            intents,
-        } = self;
+        let Self { intents } = self;
         let intents = intents.freeze(freezer)?;
-        Ok(DataStore { intents })
+        Ok(RetainedData { intents })
     }
 }
 
 #[derive(Debug, NoSerialize, ProvidesStaticType, Allocative, Display)]
 #[display(fmt = "DataStore")]
-pub struct DataStore {
+pub struct RetainedData {
     intents: Intents,
 }
 
-impl DataStore {
+impl RetainedData {
     pub fn get_from(module: &FrozenModule) -> &Self {
         module
             .extra_value()
@@ -104,22 +85,24 @@ impl DataStore {
     }
 }
 
-#[starlark_value(type = "DataStore")]
-impl<'v> StarlarkValue<'v> for DataStore {}
+#[starlark_value(type = "RetainedData")]
+impl<'v> StarlarkValue<'v> for RetainedData {}
 
-impl<'v> AllocValue<'v> for DataStore {
+impl<'v> AllocValue<'v> for RetainedData {
     fn alloc_value(self, heap: &'v starlark::values::Heap) -> starlark::values::Value<'v> {
         heap.alloc_simple(self)
     }
 }
 
 #[derive(Debug, ProvidesStaticType)]
-pub struct InvocationData {
+pub struct TempData<'qc> {
+    pub action: Action,
+    pub query_cache: &'qc QueryCache,
     pub vex_path: PrettyPath,
 }
 
-impl InvocationData {
-    pub fn get_from<'a>(eval: &Evaluator<'_, 'a>) -> &'a Self {
+impl<'qc> TempData<'qc> {
+    pub fn get_from(eval: &Evaluator<'_, 'qc>) -> &'qc Self {
         eval.extra
             .expect("internal error: Evaluator extra not set")
             .downcast_ref()

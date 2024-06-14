@@ -21,7 +21,7 @@ use crate::{
         action::Action,
         app_object::AppObject,
         event::EventKind,
-        extra_data::{DataStore, InvocationData, UnfrozenDataStore},
+        extra_data::{RetainedData, TempData, UnfrozenRetainedData},
         print_handler::PrintHandler,
         query_cache::QueryCache,
         store::PreinitedModuleCache,
@@ -29,6 +29,8 @@ use crate::{
     },
     source_path::{PrettyPath, SourcePath},
 };
+
+use super::handler_module::HandlerModule;
 
 #[derive(Debug)]
 pub struct PreinitingScriptlet {
@@ -98,12 +100,18 @@ impl PreinitingScriptlet {
 
         let preinited_module = {
             let preinited_module = Module::new();
-            UnfrozenDataStore::new(Action::Preiniting, &QueryCache::new())
-                .insert_into(&preinited_module);
+            UnfrozenRetainedData::new().insert_into(&preinited_module);
+
             {
+                let temp_data = TempData {
+                    action: Action::Preiniting,
+                    vex_path: path.pretty_path.dupe(),
+                    query_cache: &QueryCache::new(),
+                };
                 let mut eval = Evaluator::new(&preinited_module);
                 eval.set_loader(&cache);
                 eval.set_print_handler(&PrintHandler);
+                eval.extra = Some(&temp_data);
                 eval.eval_module(ast, &Self::globals(*lenient))?;
             };
             preinited_module.freeze()?
@@ -310,26 +318,24 @@ impl InitingScriptlet {
         };
 
         let module = {
-            let module = Module::new();
+            let module = HandlerModule::new();
             {
-                let query_cache = QueryCache::new();
-                let data = UnfrozenDataStore::new(Action::Initing, &query_cache);
-                data.insert_into(&module);
-
-                let inv_data = InvocationData {
+                let temp_data = TempData {
+                    action: Action::Initing,
+                    query_cache: &QueryCache::new(),
                     vex_path: path.pretty_path.dupe(),
                 };
                 let mut eval = Evaluator::new(&module);
-                eval.extra = Some(&inv_data);
+                eval.extra = Some(&temp_data);
                 eval.set_print_handler(&PrintHandler);
                 eval.eval_function(init.value(), &[], &[])?;
             }
-            module.freeze()?
+            module.into_module().freeze()?
         };
         frozen_heap.add_reference(module.frozen_heap());
 
         let observer_data = {
-            let invocation_data = DataStore::get_from(&module);
+            let invocation_data = RetainedData::get_from(&module);
             let intents = invocation_data.intents();
             let mut observer_data = ObserverData::with_capacity(intents.len());
             intents.iter().for_each(|intent| match intent {

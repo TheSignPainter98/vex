@@ -14,8 +14,7 @@ mod store;
 
 pub use intents::{Intent, Intents};
 pub use node::Node;
-pub use observers::Observable;
-pub use observers::{Observer, ObserverData};
+pub use observers::{Observable, ObserveOptions, Observer, ObserverData};
 pub use query_captures::QueryCaptures;
 pub use scriptlet::LoadStatementModule;
 pub use store::{PreinitOptions, PreinitingStore, VexingStore};
