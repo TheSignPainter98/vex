@@ -8,7 +8,7 @@ use starlark::{
 };
 use tree_sitter::Query;
 
-use crate::{result::Result, supported_language::SupportedLanguage};
+use crate::{error::Error, result::Result, supported_language::SupportedLanguage};
 
 #[derive(Clone, Debug, Allocative)]
 pub struct QueryCache {
@@ -40,6 +40,10 @@ impl QueryCache {
         }
 
         let query = Arc::new(Query::new(language.ts_language(), &raw_query)?);
+        if query.pattern_count() == 0 {
+            return Err(Error::EmptyQuery);
+        }
+
         self.cache
             .borrow_mut()
             .insert((language, query_hash), CachedQuery(query.dupe()));

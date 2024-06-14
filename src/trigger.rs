@@ -246,6 +246,25 @@ mod test {
                 "#},
             )
             .returns_error(r"query is empty");
+        VexTest::new("comment only")
+            .with_scriptlet(
+                "vexes/test.star",
+                indoc! {r#"
+                    def init():
+                        vex.observe('open_project', on_open_project)
+
+                    def on_open_project(event):
+                        vex.search(
+                            'rust',
+                            '; this query contains nothing!',
+                            on_match,
+                        )
+
+                    def on_match(event):
+                        pass
+                "#},
+            )
+            .returns_error(r"query is empty");
         VexTest::new("syntax-error")
             .with_scriptlet(
                 "vexes/test.star",
