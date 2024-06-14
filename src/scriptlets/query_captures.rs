@@ -31,7 +31,7 @@ impl<'v> QueryCaptures<'v> {
         let names = query.capture_names();
         let quantifiers = query.capture_quantifiers(qmatch.pattern_index);
 
-        let mut captures: Vec<_> = names
+        let mut captures: SmallVec<[_; 10]> = names
             .iter()
             .zip(quantifiers)
             .map(|(name, quantifier)| (name, Capture::new(*quantifier)))
