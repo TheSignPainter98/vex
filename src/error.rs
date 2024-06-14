@@ -29,13 +29,13 @@ pub enum Error {
         other_language: SupportedLanguage,
     },
 
-    #[error("{0}")]
+    #[error(transparent)]
     Clap(#[from] clap::Error),
 
     #[error("query is empty")]
     EmptyQuery,
 
-    #[error("{0}")]
+    #[error(transparent)]
     FromPathBuf(#[from] camino::FromPathBufError),
 
     #[error("import cycle detected: {}", .0.iter().join_with(" -> "))]
@@ -58,7 +58,7 @@ pub enum Error {
         cause: io::Error,
     },
 
-    #[error("{0}")]
+    #[error(transparent)]
     Language(#[from] tree_sitter::LanguageError),
 
     #[error("cannot find manifest, try running `vex init` in the project’s root")]
@@ -82,7 +82,7 @@ pub enum Error {
     #[error("{0} is not a check path")]
     NotACheckPath(PrettyPath),
 
-    #[error("{0}")]
+    #[error(transparent)]
     ParseInt(#[from] num::ParseIntError),
 
     #[error(r#"cannot compile "{pattern}": {} at position {}"#, cause.msg, cause.pos - cause_pos_offset)]
@@ -92,19 +92,19 @@ pub enum Error {
         cause: glob::PatternError,
     },
 
-    #[error("{0}")]
+    #[error(transparent)]
     Query(#[from] tree_sitter::QueryError),
 
-    #[error("{0}")]
+    #[error(transparent)]
     SetLogger(#[from] log::SetLoggerError),
 
-    #[error("{0}")]
+    #[error(transparent)]
     Starlark(anyhow::Error),
 
-    #[error("{0}")]
+    #[error(transparent)]
     StripPrefix(#[from] path::StripPrefixError),
 
-    #[error("{0}")]
+    #[error(transparent)]
     Toml(#[from] toml_edit::de::Error),
 
     #[error(
