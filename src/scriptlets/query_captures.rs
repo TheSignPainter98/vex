@@ -699,7 +699,7 @@ mod test {
     }
 
     #[test]
-    fn captures() {
+    fn quantifiers() {
         let src_path = SourcePath::new_in(&Utf8Path::new("main.rs"), &Utf8Path::new("./"));
         let content = indoc! {r#"
             fn main() {
@@ -739,25 +739,29 @@ mod test {
         let heap = Heap::new();
         let captures = heap.alloc(QueryCaptures::new(&query, qmatch, &src_file));
 
+        enum Expectatation {
+            AttrType(&'static str),
+            NoSuchAttr,
+        }
+        use Expectatation::*;
         let property_types = [
-            ("absent", Some("NoneType")),
-            ("optional_block_comments", Some("list")),
-            ("mandatory_line_comments", Some("list")),
-            ("optional_absent_str", Some("NoneType")),
-            ("optional_present_let", Some("Node")),
-            ("mandatory_expression", Some("Node")),
-            ("no_such_attr", None),
+            ("absent", AttrType("NoneType")),
+            ("optional_block_comments", AttrType("list")),
+            ("mandatory_line_comments", AttrType("list")),
+            ("optional_absent_str", AttrType("NoneType")),
+            ("optional_present_let", AttrType("Node")),
+            ("mandatory_expression", AttrType("Node")),
+            ("no_such_attr", NoSuchAttr),
         ];
-        for (property, typ) in property_types {
+        for (property, expected) in property_types {
             let capture = captures.at(heap.alloc(property), &heap);
-            if let Some(typ) = typ {
-                assert_eq!(
+            match expected {
+                AttrType(typ) => assert_eq!(
                     capture.unwrap().get_type(),
                     typ,
                     "wrong type for {property}"
-                );
-            } else {
-                assert!(capture.is_err(), "expected error for {property}");
+                ),
+                NoSuchAttr => assert!(capture.is_err(), "expected error for {property}"),
             }
         }
 
