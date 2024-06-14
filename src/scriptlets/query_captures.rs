@@ -598,7 +598,8 @@ mod test {
 
         let language = tree_sitter_rust::language();
         let query_source = indoc! {r"
-            (binary_expression) @absent ; zero-quantified
+            (binary_expression) @absent_singleton ; zero-quantified
+            (trait_item)+ @absent_list            ; one-or-more, unused
             (
                 (block_comment)* @optional_block_comments    ; zero-or-more (absent)
                 (line_comment)+ @mandatory_line_comments     ; one-or-more
@@ -629,7 +630,8 @@ mod test {
         }
         use Expectatation::*;
         let property_types = [
-            ("absent", AttrType("NoneType")),
+            ("absent_singleton", AttrType("NoneType")),
+            ("absent_list", AttrType("NoneType")),
             ("optional_block_comments", AttrType("list")),
             ("mandatory_line_comments", AttrType("list")),
             ("optional_absent_str", AttrType("NoneType")),
