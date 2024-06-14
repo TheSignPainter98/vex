@@ -150,7 +150,7 @@ unsafe impl<'v> Trace<'v> for Capture<'v> {
 }
 
 impl<'v> Capture<'v> {
-    const CHUNK_SIZE: usize = 4;
+    const CHUNK_SIZE: usize = 10;
 
     fn new(quantifier: CaptureQuantifier) -> Self {
         let capacity = match quantifier {
