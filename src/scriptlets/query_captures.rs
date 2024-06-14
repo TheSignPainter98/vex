@@ -731,13 +731,6 @@ mod test {
             assert!(!tree.root_node().has_error());
             tree
         };
-        println!(
-            "{:#?}",
-            QueryCursor::new()
-                .matches(&query, tree.root_node(), content.as_bytes())
-                .map(|qmatch| QueryCaptures::new(&query, qmatch, &src_file).captures)
-                .collect::<Vec<_>>()
-        );
         let mut cursor = QueryCursor::new();
         let qmatch = cursor
             .matches(&query, tree.root_node(), content.as_bytes())
