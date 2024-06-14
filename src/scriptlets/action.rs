@@ -1,8 +1,9 @@
 use allocative::Allocative;
+use dupe::Dupe;
 
 use crate::scriptlets::event::EventKind;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Allocative)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Allocative, Dupe)]
 pub enum Action {
     Preiniting,
     Initing,

@@ -15,32 +15,7 @@ use crate::{error::Error, result::Result, scriptlets::QueryCaptures, source_path
 const PATH_ATTR_NAME: &str = "path";
 const NAME_ATTR_NAME: &str = "name";
 
-#[derive(Clone, Debug, Dupe, ProvidesStaticType, NoSerialize, Allocative, Trace)]
-pub enum Event<'v> {
-    OpenProject(OpenProjectEvent),
-    OpenFile(OpenFileEvent),
-    Match(MatchEvent<'v>),
-}
-
-impl<'v> Event<'v> {
-    pub fn kind(&self) -> EventKind {
-        match self {
-            Self::OpenProject(_) => EventKind::OpenProject,
-            Self::OpenFile(_) => EventKind::OpenFile,
-            Self::Match(_) => EventKind::Match,
-        }
-    }
-
-    pub fn into_value_on(self, heap: &'v Heap) -> Value<'v> {
-        match self {
-            Self::OpenProject(e) => heap.alloc(e),
-            Self::OpenFile(e) => heap.alloc(e),
-            Self::Match(e) => heap.alloc(e),
-        }
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, EnumIter, Display, Allocative)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, EnumIter, Display, Allocative, Dupe)]
 pub enum EventKind {
     OpenProject,
     OpenFile,
@@ -106,7 +81,7 @@ pub struct OpenProjectEvent {
 starlark_simple_value!(OpenProjectEvent);
 
 impl OpenProjectEvent {
-    fn event_kind() -> EventKind {
+    pub fn kind(&self) -> EventKind {
         EventKind::OpenProject
     }
 }
@@ -122,7 +97,7 @@ impl<'v> StarlarkValue<'v> for OpenProjectEvent {
 
     fn get_attr(&self, attr: &str, heap: &'v Heap) -> Option<Value<'v>> {
         match attr {
-            NAME_ATTR_NAME => Some(heap.alloc(heap.alloc_str(Self::event_kind().name()))),
+            NAME_ATTR_NAME => Some(heap.alloc(heap.alloc_str(self.kind().name()))),
             PATH_ATTR_NAME => Some(heap.alloc(self.path.dupe())),
             _ => None,
         }
@@ -147,7 +122,7 @@ pub struct OpenFileEvent {
 starlark_simple_value!(OpenFileEvent);
 
 impl OpenFileEvent {
-    fn event_kind() -> EventKind {
+    pub fn kind(&self) -> EventKind {
         EventKind::OpenFile
     }
 }
@@ -163,7 +138,7 @@ impl<'v> StarlarkValue<'v> for OpenFileEvent {
 
     fn get_attr(&self, attr: &str, heap: &'v Heap) -> Option<Value<'v>> {
         match attr {
-            NAME_ATTR_NAME => Some(heap.alloc(heap.alloc_str(Self::event_kind().name()))),
+            NAME_ATTR_NAME => Some(heap.alloc(heap.alloc_str(self.kind().name()))),
             PATH_ATTR_NAME => Some(heap.alloc(self.path.dupe())),
             _ => None,
         }
@@ -192,7 +167,7 @@ pub struct MatchEvent<'v> {
 impl MatchEvent<'_> {
     const QUERY_CAPTURES_ATTR_NAME: &'static str = "captures";
 
-    fn event_kind() -> EventKind {
+    pub fn kind(&self) -> EventKind {
         EventKind::Match
     }
 }
@@ -212,7 +187,7 @@ impl<'v> StarlarkValue<'v> for MatchEvent<'v> {
 
     fn get_attr(&self, attr: &str, heap: &'v Heap) -> Option<Value<'v>> {
         match attr {
-            NAME_ATTR_NAME => Some(heap.alloc(heap.alloc_str(Self::event_kind().name()))),
+            NAME_ATTR_NAME => Some(heap.alloc(heap.alloc_str(self.kind().name()))),
             PATH_ATTR_NAME => Some(heap.alloc(self.path.dupe())),
             Self::QUERY_CAPTURES_ATTR_NAME => Some(heap.alloc(self.query_captures.dupe())),
             _ => None,

@@ -226,6 +226,11 @@ impl<'s> VexTest<'s> {
             check['eq'](type(obj), typ)
         check['type'] = check_type
 
+        def check_sorted(obj):
+            if obj != sorted(obj):
+                fail('assertion failed: %r is not sorted' % obj)
+        check['sorted'] = check_sorted
+
         check
     "#};
 }

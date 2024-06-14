@@ -2,21 +2,16 @@ use allocative::Allocative;
 use derive_new::new;
 use dupe::Dupe;
 use starlark::{
-    environment::Module,
     eval::Evaluator,
-    values::{Freeze, Freezer, FrozenHeap, FrozenValue, StarlarkValue, Value},
+    values::{Freeze, Freezer, FrozenValue, StarlarkValue, Value},
 };
 use starlark_derive::{starlark_value, NoSerialize, ProvidesStaticType, Trace};
 
 use crate::{
     result::Result,
     scriptlets::{
-        action::Action,
-        event::{Event, EventKind},
-        extra_data::{InvocationData, UnfrozenInvocationData},
-        print_handler::PrintHandler,
-        query_cache::QueryCache,
-        Intents,
+        action::Action, event::EventKind, extra_data::TempData, handler_module::HandlerModule,
+        print_handler::PrintHandler, query_cache::QueryCache,
     },
     source_path::PrettyPath,
 };
@@ -68,20 +63,8 @@ impl ObserverData {
         on_open_file.extend(other.on_open_file);
     }
 
-    pub fn handle(
-        &self,
-        event: Event<'_>,
-        query_cache: &QueryCache,
-        frozen_heap: &FrozenHeap,
-    ) -> Result<Intents> {
-        self.observers_for(&event)
-            .iter()
-            .map(|observer| observer.handle(event.dupe(), query_cache, frozen_heap))
-            .collect()
-    }
-
-    fn observers_for(&self, event: &Event<'_>) -> &[Observer] {
-        match event.kind() {
+    pub fn observers_for(&self, event_kind: EventKind) -> &[Observer] {
+        match event_kind {
             EventKind::OpenProject => &self.on_open_project,
             EventKind::OpenFile => &self.on_open_file,
             EventKind::Match => panic!("internal error: query_match not observable"),
@@ -114,31 +97,54 @@ pub struct Observer {
     callback: FrozenValue,
 }
 
-impl Observer {
-    pub fn handle(
+pub trait Observable {
+    fn observe<'v>(
         &self,
-        event: Event<'_>,
-        query_cache: &QueryCache,
-        frozen_heap: &FrozenHeap,
-    ) -> Result<Intents> {
-        let handler_module = Module::new();
-        UnfrozenInvocationData::new(
-            Action::Vexing(event.kind()),
-            self.vex_path.dupe(),
-            query_cache,
-        )
-        .insert_into(&handler_module);
-        {
-            let mut eval = Evaluator::new(&handler_module);
-            eval.set_print_handler(&PrintHandler);
+        handler_module: &'v HandlerModule,
+        event: Value<'v>,
+        opts: ObserveOptions<'_>,
+    ) -> Result<()>;
+}
 
-            let func = self.callback.dupe().to_value(); // TODO(kcza): check thread safety! Can this unfrozen
-                                                        // function mutate upvalues if it is a closure?
-            eval.eval_function(func, &[event.into_value_on(handler_module.heap())], &[])?;
-        }
+#[derive(Clone, Debug, Dupe)]
+pub struct ObserveOptions<'qc> {
+    pub action: Action,
+    pub query_cache: &'qc QueryCache,
+}
 
-        let handler_module = handler_module.freeze()?;
-        frozen_heap.add_reference(handler_module.frozen_heap());
-        Ok(InvocationData::get_from(&handler_module).intents().clone())
+impl Observable for Observer {
+    fn observe<'v>(
+        &self,
+        handler_module: &'v HandlerModule,
+        event: Value<'v>,
+        opts: ObserveOptions<'_>,
+    ) -> Result<()> {
+        let temp_data = TempData {
+            action: opts.action,
+            query_cache: opts.query_cache,
+            vex_path: self.vex_path.dupe(),
+        };
+
+        let mut eval = Evaluator::new(handler_module);
+        eval.extra = Some(&temp_data);
+        eval.set_print_handler(&PrintHandler);
+
+        let func = self.callback.dupe().to_value(); // TODO(kcza): check thread safety! Can this unfrozen
+                                                    // function mutate upvalues if it is a closure?
+        eval.eval_function(func, &[event], &[])?;
+
+        Ok(())
+    }
+}
+
+impl Observable for &[Observer] {
+    fn observe<'v>(
+        &self,
+        handler_module: &'v HandlerModule,
+        event: Value<'v>,
+        opts: ObserveOptions<'_>,
+    ) -> Result<()> {
+        self.iter()
+            .try_for_each(|observer| observer.observe(handler_module, event.dupe(), opts.dupe()))
     }
 }

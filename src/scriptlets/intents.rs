@@ -116,6 +116,16 @@ impl<'v> Freeze for UnfrozenIntent<'v> {
 #[display(fmt = "Intents")]
 pub struct Intents(Vec<Intent>);
 
+impl IntoIterator for Intents {
+    type Item = Intent;
+
+    type IntoIter = <Vec<Intent> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
 impl Deref for Intents {
     type Target = [Intent];
 

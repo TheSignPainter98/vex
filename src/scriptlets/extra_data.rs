@@ -2,6 +2,7 @@ use allocative::Allocative;
 use derive_more::Display;
 use starlark::{
     environment::{FrozenModule, Module},
+    eval::Evaluator,
     values::{AllocValue, Freeze, ProvidesStaticType, StarlarkValue, ValueLike},
 };
 use starlark_derive::{starlark_value, NoSerialize, Trace};
@@ -17,24 +18,15 @@ use crate::{
 };
 
 #[derive(Debug, Display, ProvidesStaticType, NoSerialize, Allocative, Trace)]
-#[display(fmt = "InvocationData")]
-pub struct UnfrozenInvocationData<'v> {
-    action: Action,
-    vex_path: PrettyPath,
-    #[allocative(visit = QueryCache::visit)]
-    query_cache: &'v QueryCache,
+#[display(fmt = "RetainedData")]
+pub struct UnfrozenRetainedData<'v> {
     intents: UnfrozenIntents<'v>,
 }
 
-impl<'v> UnfrozenInvocationData<'v> {
-    pub fn new(action: Action, vex_path: PrettyPath, query_cache: &'v QueryCache) -> Self {
+impl<'v> UnfrozenRetainedData<'v> {
+    pub fn new() -> Self {
         let intents = UnfrozenIntents::new();
-        Self {
-            action,
-            vex_path,
-            query_cache,
-            intents,
-        }
+        Self { intents }
     }
 
     pub fn insert_into(self, module: &'v Module) {
@@ -49,60 +41,37 @@ impl<'v> UnfrozenInvocationData<'v> {
             .expect("Module extra has wrong type")
     }
 
-    pub fn action(&self) -> Action {
-        self.action
-    }
-
-    pub fn vex_path(&self) -> &PrettyPath {
-        &self.vex_path
-    }
-
-    pub fn query_cache(&self) -> &QueryCache {
-        self.query_cache
-    }
-
     pub fn declare_intent(&self, intent: UnfrozenIntent<'v>) {
         self.intents.declare(intent)
     }
 }
 
-#[starlark_value(type = "InvocationData")]
-impl<'v> StarlarkValue<'v> for UnfrozenInvocationData<'v> {}
+#[starlark_value(type = "RetainedData")]
+impl<'v> StarlarkValue<'v> for UnfrozenRetainedData<'v> {}
 
-impl<'v> AllocValue<'v> for UnfrozenInvocationData<'v> {
+impl<'v> AllocValue<'v> for UnfrozenRetainedData<'v> {
     fn alloc_value(self, heap: &'v starlark::values::Heap) -> starlark::values::Value<'v> {
         heap.alloc_complex(self)
     }
 }
 
-impl Freeze for UnfrozenInvocationData<'_> {
-    type Frozen = InvocationData;
+impl Freeze for UnfrozenRetainedData<'_> {
+    type Frozen = RetainedData;
 
     fn freeze(self, freezer: &starlark::values::Freezer) -> anyhow::Result<Self::Frozen> {
-        let Self {
-            action,
-            vex_path,
-            query_cache: _,
-            intents,
-        } = self;
+        let Self { intents } = self;
         let intents = intents.freeze(freezer)?;
-        Ok(InvocationData {
-            action,
-            vex_path,
-            intents,
-        })
+        Ok(RetainedData { intents })
     }
 }
 
 #[derive(Debug, NoSerialize, ProvidesStaticType, Allocative, Display)]
-#[display(fmt = "InvocationData")]
-pub struct InvocationData {
-    action: Action,
-    vex_path: PrettyPath,
+#[display(fmt = "DataStore")]
+pub struct RetainedData {
     intents: Intents,
 }
 
-impl InvocationData {
+impl RetainedData {
     pub fn get_from(module: &FrozenModule) -> &Self {
         module
             .extra_value()
@@ -116,11 +85,27 @@ impl InvocationData {
     }
 }
 
-#[starlark_value(type = "InvocationData")]
-impl<'v> StarlarkValue<'v> for InvocationData {}
+#[starlark_value(type = "RetainedData")]
+impl<'v> StarlarkValue<'v> for RetainedData {}
 
-impl<'v> AllocValue<'v> for InvocationData {
+impl<'v> AllocValue<'v> for RetainedData {
     fn alloc_value(self, heap: &'v starlark::values::Heap) -> starlark::values::Value<'v> {
         heap.alloc_simple(self)
+    }
+}
+
+#[derive(Debug, ProvidesStaticType)]
+pub struct TempData<'qc> {
+    pub action: Action,
+    pub query_cache: &'qc QueryCache,
+    pub vex_path: PrettyPath,
+}
+
+impl<'qc> TempData<'qc> {
+    pub fn get_from(eval: &Evaluator<'_, 'qc>) -> &'qc Self {
+        eval.extra
+            .expect("internal error: Evaluator extra not set")
+            .downcast_ref()
+            .expect("internal erro: Evaluator extra has wrong type")
     }
 }

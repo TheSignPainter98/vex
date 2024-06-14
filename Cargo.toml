@@ -25,6 +25,7 @@ num-traits = "0.2.17"
 owo-colors = { version = "4.0.0", features = ["supports-colors"] }
 regex = "1.10.3"
 serde = { version = "1.0.193", features = ["derive", "rc"] }
+smallvec = "1.13.2"
 starlark = "0.12.0"
 starlark_derive = "0.12.0"
 strsim = "0.11.0"
