@@ -63,7 +63,7 @@ impl AppObject {
             let language = language.parse::<SupportedLanguage>()?;
             let query = {
                 let temp_data = TempData::get_from(eval);
-                temp_data.query_cache.get(language, query)?
+                temp_data.query_cache.get_or_create(language, query)?
             };
             let on_match = {
                 let vex_path = TempData::get_from(eval).vex_path.dupe();
