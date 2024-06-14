@@ -28,7 +28,7 @@ impl QueryCache {
         }
     }
 
-    pub fn get(
+    pub fn get_or_create(
         &self,
         language: SupportedLanguage,
         raw_query: StringValue<'_>,
@@ -82,16 +82,16 @@ mod test {
         let cache = QueryCache::with_capacity(2);
 
         let parsed_query_pair_1_ptr =
-            Arc::as_ptr(&cache.get(query_pair_1.0, query_pair_1.1).unwrap());
+            Arc::as_ptr(&cache.get_or_create(query_pair_1.0, query_pair_1.1).unwrap());
         let parsed_query_pair_1_again_ptr =
-            Arc::as_ptr(&cache.get(query_pair_1.0, query_pair_1.1).unwrap());
+            Arc::as_ptr(&cache.get_or_create(query_pair_1.0, query_pair_1.1).unwrap());
         assert!(
             ptr::eq(parsed_query_pair_1_ptr, parsed_query_pair_1_again_ptr),
             "duplication not avoided"
         );
 
         let parsed_query_pair_2_ptr =
-            Arc::as_ptr(&cache.get(query_pair_2.0, query_pair_2.1).unwrap());
+            Arc::as_ptr(&cache.get_or_create(query_pair_2.0, query_pair_2.1).unwrap());
         assert!(
             !ptr::eq(parsed_query_pair_1_ptr, parsed_query_pair_2_ptr),
             "returned same query"
@@ -107,9 +107,9 @@ mod test {
         let cache = QueryCache::with_capacity(2);
 
         let parsed_query_pair_1_ptr =
-            Arc::as_ptr(&cache.get(query_pair_1.0, query_pair_1.1).unwrap());
+            Arc::as_ptr(&cache.get_or_create(query_pair_1.0, query_pair_1.1).unwrap());
         let parsed_query_pair_2_ptr =
-            Arc::as_ptr(&cache.get(query_pair_2.0, query_pair_2.1).unwrap());
+            Arc::as_ptr(&cache.get_or_create(query_pair_2.0, query_pair_2.1).unwrap());
         assert!(!ptr::eq(parsed_query_pair_1_ptr, parsed_query_pair_2_ptr));
     }
 }
