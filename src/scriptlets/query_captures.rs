@@ -1,4 +1,4 @@
-use std::{fmt::Display, ops::Deref, rc::Rc};
+use std::fmt::Display;
 
 use allocative::Allocative;
 use dupe::Dupe;
@@ -6,8 +6,9 @@ use smallvec::SmallVec;
 use starlark::{
     environment::{Methods, MethodsBuilder, MethodsStatic},
     values::{
-        list::AllocList, AllocValue, Demand, Heap, NoSerialize, ProvidesStaticType, StarlarkValue,
-        Trace, Value, ValueError,
+        dict::{AllocDict, DictRef},
+        list::AllocList,
+        AllocValue, Demand, Heap, NoSerialize, ProvidesStaticType, StarlarkValue, Trace, Value,
     },
 };
 use starlark_derive::{starlark_module, starlark_value};
@@ -17,7 +18,7 @@ use crate::{scriptlets::node::Node, source_file::ParsedSourceFile};
 
 #[derive(Clone, Debug, Dupe, ProvidesStaticType, NoSerialize, Allocative)]
 pub struct QueryCaptures<'v> {
-    captures: Rc<Vec<Capture<'v>>>,
+    captures: Value<'v>, // This is a dict.
 }
 
 impl<'v> QueryCaptures<'v> {
@@ -25,21 +26,28 @@ impl<'v> QueryCaptures<'v> {
         query: &Query,
         qmatch: QueryMatch<'v, '_>,
         source_file: &'v ParsedSourceFile,
+        heap: &'v Heap,
     ) -> Self {
         let names = query.capture_names();
         let quantifiers = query.capture_quantifiers(qmatch.pattern_index);
 
-        let mut captures: Vec<Capture<'v>> = names
-            .iter()
+        let mut captures: Vec<_> = names
+            .into_iter()
             .zip(quantifiers)
-            .map(|(name, quantifier)| Capture::new(name.clone(), *quantifier))
+            .map(|(name, quantifier)| (name, Capture::new(*quantifier)))
             .collect();
-        qmatch.captures.iter().for_each(|capture| {
-            captures[capture.index as usize].push(Node::new(&capture.node, source_file))
+        qmatch.captures.iter().for_each(|r#match| {
+            captures[r#match.index as usize]
+                .1
+                .push(Node::new(&r#match.node, source_file))
         });
-        captures.sort_by(|cap1, cap2| cap1.name.cmp(&cap2.name));
+        captures.sort_by(|cap1, cap2| cap1.0.cmp(&cap2.0));
 
-        let captures = Rc::new(captures);
+        let captures = heap.alloc(AllocDict(
+            captures
+                .into_iter()
+                .map(|(name, capture)| (name, capture.into_value_on(heap))),
+        ));
         Self { captures }
     }
 }
@@ -53,25 +61,35 @@ unsafe impl<'v> Trace<'v> for QueryCaptures<'v> {
 impl<'v> QueryCaptures<'v> {
     #[starlark_module]
     fn methods(builder: &mut MethodsBuilder) {
-        fn keys<'v>(this: Value<'v>) -> starlark::Result<QueryCapturesKeys<'v>> {
+        fn keys<'v>(this: Value<'v>) -> starlark::Result<Vec<Value<'v>>> {
             let this = this
-                .request_value::<&QueryCaptures>()
-                .expect("receiver has wrong type");
-            Ok(QueryCapturesKeys(this.dupe()))
+                .request_value::<&QueryCaptures<'_>>()
+                .expect("internal error: incorrect receiver");
+            Ok(DictRef::from_value(this.captures.dupe())
+                .expect("internal error: captures not a dict")
+                .keys()
+                .collect())
         }
 
-        fn values<'v>(this: Value<'v>) -> starlark::Result<QueryCapturesValues<'v>> {
+        fn values<'v>(this: Value<'v>) -> starlark::Result<Vec<Value<'v>>> {
             let this = this
-                .request_value::<&QueryCaptures>()
-                .expect("receiver has wrong type");
-            Ok(QueryCapturesValues(this.dupe()))
+                .request_value::<&QueryCaptures<'_>>()
+                .expect("internal error: incorrect receiver");
+            Ok(DictRef::from_value(this.captures.dupe())
+                .expect("internal error: captures not a dict")
+                .values()
+                .collect())
         }
 
-        fn items<'v>(this: Value<'v>) -> starlark::Result<QueryCapturesItems<'v>> {
+        fn items<'v>(this: Value<'v>, heap: &'v Heap) -> starlark::Result<Vec<Value<'v>>> {
             let this = this
-                .request_value::<&QueryCaptures>()
-                .expect("receiver has wrong type");
-            Ok(QueryCapturesItems(this.dupe()))
+                .request_value::<&QueryCaptures<'_>>()
+                .expect("internal error: incorrect receiver");
+            Ok(DictRef::from_value(this.captures.dupe())
+                .expect("internal error: captures not a dict")
+                .iter()
+                .map(|kv| heap.alloc(kv))
+                .collect())
         }
     }
 }
@@ -83,32 +101,22 @@ impl<'v> StarlarkValue<'v> for QueryCaptures<'v> {
     }
 
     fn length(&self) -> starlark::Result<i32> {
-        Ok(self.captures.len() as i32)
+        self.captures.length()
     }
 
     fn is_in(&self, other: Value<'v>) -> starlark::Result<bool> {
-        let Some(key) = other.unpack_str() else {
-            return Ok(false);
-        };
-        Ok(self.captures.iter().any(|capture| capture.name == key))
+        self.captures.is_in(other)
     }
 
     fn at(&self, index: Value<'v>, heap: &'v Heap) -> starlark::Result<Value<'v>> {
-        let Some(key) = index.unpack_str() else {
-            return ValueError::unsupported_with(self, "[]", index);
-        };
-        let Some(capture) = self.captures.iter().find(|capture| capture.name == key) else {
-            return Err(ValueError::KeyNotFound(key.into()).into());
-        };
-        Ok(capture.to_value_on(heap))
+        self.captures.at(index, heap)
     }
 
     fn iterate_collect(&self, heap: &'v Heap) -> starlark::Result<Vec<Value<'v>>> {
         Ok(self
             .captures
-            .iter()
-            .map(|capture| &capture.name)
-            .map(|name| heap.alloc(name))
+            .iterate(heap)
+            .expect("internal error: captures not iterable")
             .collect())
     }
 
@@ -133,8 +141,6 @@ impl Display for QueryCaptures<'_> {
 #[derive(Clone, Debug, Allocative)]
 struct Capture<'v> {
     #[allocative(skip)]
-    name: String,
-    #[allocative(skip)]
     quantifier: CaptureQuantifier,
     #[allocative(skip)]
     matches: SmallVec<[Node<'v>; Capture::CHUNK_SIZE]>,
@@ -147,7 +153,7 @@ unsafe impl<'v> Trace<'v> for Capture<'v> {
 impl<'v> Capture<'v> {
     const CHUNK_SIZE: usize = 4;
 
-    fn new(name: String, quantifier: CaptureQuantifier) -> Self {
+    fn new(quantifier: CaptureQuantifier) -> Self {
         let capacity = match quantifier {
             CaptureQuantifier::Zero => 0,
             CaptureQuantifier::ZeroOrOne | CaptureQuantifier::One => 1,
@@ -155,7 +161,6 @@ impl<'v> Capture<'v> {
         };
         let matches = SmallVec::with_capacity(capacity);
         Self {
-            name,
             quantifier,
             matches,
         }
@@ -175,16 +180,16 @@ impl<'v> Capture<'v> {
         self.matches.push(node);
     }
 
-    fn to_value_on(&self, heap: &'v Heap) -> Value<'v> {
+    fn into_value_on(self, heap: &'v Heap) -> Value<'v> {
         match self.quantifier {
             CaptureQuantifier::Zero => Value::new_none(),
             CaptureQuantifier::One => {
                 let first = self
                     .matches
-                    .iter()
+                    .into_iter()
                     .next()
                     .expect("internal error: one-quantified capture never matched");
-                heap.alloc(first.dupe())
+                heap.alloc(first)
             }
             CaptureQuantifier::ZeroOrOne => self
                 .matches
@@ -192,126 +197,17 @@ impl<'v> Capture<'v> {
                 .next()
                 .map(|n| heap.alloc(n.dupe()))
                 .unwrap_or_else(Value::new_none),
-            CaptureQuantifier::ZeroOrMore => heap.alloc(AllocList(
-                self.matches.iter().map(Node::dupe).map(|n| heap.alloc(n)),
-            )),
+            CaptureQuantifier::ZeroOrMore => {
+                heap.alloc(AllocList(self.matches.into_iter().map(|n| heap.alloc(n))))
+            }
             CaptureQuantifier::OneOrMore => {
                 assert!(
                     self.matches.len() >= 1,
                     "internal error: one-or-more quantified capture never matched"
                 );
-                heap.alloc(AllocList(
-                    self.matches.iter().map(Node::dupe).map(|n| heap.alloc(n)),
-                ))
+                heap.alloc(AllocList(self.matches.into_iter().map(|n| heap.alloc(n))))
             }
         }
-    }
-}
-
-#[derive(Debug, ProvidesStaticType, NoSerialize, Allocative, Trace)]
-struct QueryCapturesKeys<'v>(QueryCaptures<'v>);
-
-impl<'v> Deref for QueryCapturesKeys<'v> {
-    type Target = QueryCaptures<'v>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-#[starlark_value(type = "QueryCapturesKeys")]
-impl<'v> StarlarkValue<'v> for QueryCapturesKeys<'v> {
-    type Canonical = Self;
-
-    fn iterate_collect(&self, heap: &'v Heap) -> starlark::Result<Vec<Value<'v>>> {
-        self.0.iterate_collect(heap)
-    }
-}
-
-impl<'v> AllocValue<'v> for QueryCapturesKeys<'v> {
-    fn alloc_value(self, heap: &'v starlark::values::Heap) -> starlark::values::Value<'v> {
-        heap.alloc_complex_no_freeze(self)
-    }
-}
-
-impl Display for QueryCapturesKeys<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}.keys()", QueryCaptures::TYPE)
-    }
-}
-
-#[derive(Debug, ProvidesStaticType, NoSerialize, Allocative, Trace)]
-struct QueryCapturesValues<'v>(QueryCaptures<'v>);
-
-#[starlark_value(type = "QueryCapturesValues")]
-impl<'v> StarlarkValue<'v> for QueryCapturesValues<'v> {
-    type Canonical = Self;
-
-    fn iterate_collect(&self, heap: &'v Heap) -> starlark::Result<Vec<Value<'v>>> {
-        Ok(self
-            .0
-            .captures
-            .iter()
-            .map(|captures| captures.to_value_on(heap))
-            .collect())
-    }
-}
-
-impl<'v> Deref for QueryCapturesValues<'v> {
-    type Target = QueryCaptures<'v>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<'v> AllocValue<'v> for QueryCapturesValues<'v> {
-    fn alloc_value(self, heap: &'v starlark::values::Heap) -> starlark::values::Value<'v> {
-        heap.alloc_complex_no_freeze(self)
-    }
-}
-
-impl Display for QueryCapturesValues<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}.values()", QueryCaptures::TYPE)
-    }
-}
-
-#[derive(Debug, ProvidesStaticType, NoSerialize, Allocative, Trace)]
-struct QueryCapturesItems<'v>(QueryCaptures<'v>);
-
-impl<'v> Deref for QueryCapturesItems<'v> {
-    type Target = QueryCaptures<'v>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-#[starlark_value(type = "QueryCapturesItems")]
-impl<'v> StarlarkValue<'v> for QueryCapturesItems<'v> {
-    type Canonical = Self;
-
-    fn iterate_collect(&self, heap: &'v Heap) -> starlark::Result<Vec<Value<'v>>> {
-        Ok(self
-            .0
-            .captures
-            .iter()
-            .map(|capture| (heap.alloc(&capture.name), capture.to_value_on(heap)))
-            .map(|pair| heap.alloc(pair))
-            .collect())
-    }
-}
-
-impl<'v> AllocValue<'v> for QueryCapturesItems<'v> {
-    fn alloc_value(self, heap: &'v starlark::values::Heap) -> starlark::values::Value<'v> {
-        heap.alloc_complex_no_freeze(self)
-    }
-}
-
-impl Display for QueryCapturesItems<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}.items()", QueryCaptures::TYPE)
     }
 }
 
@@ -567,8 +463,8 @@ mod test {
                         def on_match(event):
                             captures = event.captures
 
-                            check['type'](captures.keys(), "QueryCapturesKeys")
-                            check['eq'](str(captures.keys()), "QueryCaptures.keys()")
+                            check['type'](captures.keys(), "list")
+
                             for key in captures.keys():
                                 check['in'](key, captures)
                             check['sorted'](list(captures.keys()))
@@ -616,8 +512,8 @@ mod test {
                         def on_match(event):
                             captures = event.captures
 
-                            check['type'](captures.values(), "QueryCapturesValues")
-                            check['eq'](str(captures.values()), "QueryCaptures.values()")
+                            check['type'](captures.values(), "list")
+
                             values = [captures[k] for k in captures.keys()]
                             for value in captures.values():
                                 check['in'](value, values)
@@ -671,8 +567,7 @@ mod test {
                         def on_match(event):
                             captures = event.captures
 
-                            check['type'](captures.items(), "QueryCapturesItems")
-                            check['eq'](str(captures.items()), "QueryCaptures.items()")
+                            check['type'](captures.items(), "list")
 
                             # All valid
                             for k,v in captures.items():
@@ -737,7 +632,7 @@ mod test {
             .next()
             .unwrap();
         let heap = Heap::new();
-        let captures = heap.alloc(QueryCaptures::new(&query, qmatch, &src_file));
+        let captures = heap.alloc(QueryCaptures::new(&query, qmatch, &src_file, &heap));
 
         enum Expectatation {
             AttrType(&'static str),

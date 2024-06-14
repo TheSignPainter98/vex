@@ -279,7 +279,12 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
                         let handler_module = HandlerModule::new();
                         let event = {
                             let path = parsed_file.path.pretty_path.dupe();
-                            let captures = QueryCaptures::new(query, qmatch, &parsed_file);
+                            let captures = QueryCaptures::new(
+                                query,
+                                qmatch,
+                                &parsed_file,
+                                handler_module.heap(),
+                            );
                             handler_module.heap().alloc(MatchEvent::new(path, captures))
                         };
                         let observe_opts = ObserveOptions {
