@@ -62,9 +62,6 @@ impl AppObject {
             let ret_data = UnfrozenRetainedData::get_from(eval.module());
             let language = language.parse::<SupportedLanguage>()?;
             let query = {
-                if query.is_empty() {
-                    return Err(Error::EmptyQuery.into());
-                }
                 let temp_data = TempData::get_from(eval);
                 temp_data.query_cache.get(language, query)?
             };
