@@ -32,16 +32,15 @@ impl<'v> QueryCaptures<'v> {
         let quantifiers = query.capture_quantifiers(qmatch.pattern_index);
 
         let mut captures: Vec<_> = names
-            .into_iter()
+            .iter()
             .zip(quantifiers)
             .map(|(name, quantifier)| (name, Capture::new(*quantifier)))
             .collect();
         qmatch.captures.iter().for_each(|r#match| {
-            captures[r#match.index as usize]
-                .1
-                .push(Node::new(&r#match.node, source_file))
+            let (_, ref mut capture) = captures[r#match.index as usize];
+            capture.push(Node::new(&r#match.node, source_file))
         });
-        captures.sort_by(|cap1, cap2| cap1.0.cmp(&cap2.0));
+        captures.sort_by(|cap1, cap2| cap1.0.cmp(cap2.0));
 
         let captures = heap.alloc(AllocDict(
             captures
@@ -202,7 +201,7 @@ impl<'v> Capture<'v> {
             }
             CaptureQuantifier::OneOrMore => {
                 assert!(
-                    self.matches.len() >= 1,
+                    !self.matches.is_empty(),
                     "internal error: one-or-more quantified capture never matched"
                 );
                 heap.alloc(AllocList(self.matches.into_iter().map(|n| heap.alloc(n))))
@@ -595,7 +594,7 @@ mod test {
 
     #[test]
     fn quantifiers() {
-        let src_path = SourcePath::new_in(&Utf8Path::new("main.rs"), &Utf8Path::new("./"));
+        let src_path = SourcePath::new_in(Utf8Path::new("main.rs"), Utf8Path::new("./"));
         let content = indoc! {r#"
             fn main() {
                 // some
@@ -622,7 +621,7 @@ mod test {
         let tree = {
             let mut parser = Parser::new();
             parser.set_language(language).unwrap();
-            let tree = parser.parse(&content, None).unwrap();
+            let tree = parser.parse(content, None).unwrap();
             assert!(!tree.root_node().has_error());
             tree
         };
@@ -676,7 +675,6 @@ mod test {
         assert!(line_comments
             .iterate(&heap)
             .unwrap()
-            .into_iter()
             .all(|elem| elem.get_type() == "Node"));
     }
 }

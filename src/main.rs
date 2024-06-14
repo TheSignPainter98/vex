@@ -204,16 +204,16 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
             observe_opts,
         )?;
         handler_module
-            .into_intents(&frozen_heap)?
+            .into_intents_on(frozen_heap)?
             .into_iter()
             .for_each(|intent| match intent {
                 Intent::Find {
                     language,
                     query,
                     on_match,
-                } => project_queries.push((*language, query.dupe(), on_match.dupe())),
+                } => project_queries.push((language, query, on_match)),
                 Intent::Observe { .. } => panic!("internal error: non-init observe"),
-                Intent::Warn(irr) => irritations.push(irr.clone()),
+                Intent::Warn(irr) => irritations.push(irr),
             });
         project_queries
     };
@@ -232,24 +232,24 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
 
             let event = OpenFileEvent::new(path);
             let handler_module = HandlerModule::new();
-            let observ_opts = ObserveOptions {
+            let observe_opts = ObserveOptions {
                 action: Action::Vexing(event.kind()),
                 query_cache: &query_cache,
             };
             store.observers_for(event.kind()).observe(
                 &handler_module,
                 handler_module.heap().alloc(event),
-                observ_opts,
+                observe_opts,
             )?;
             handler_module
-                .into_intents(frozen_heap)?
+                .into_intents_on(frozen_heap)?
                 .into_iter()
                 .for_each(|intent| match intent {
                     Intent::Find {
                         language,
                         query,
                         on_match,
-                    } => file_queries.push((*language, query.dupe(), on_match.dupe())),
+                    } => file_queries.push((language, query, on_match)),
                     Intent::Observe { .. } => panic!("internal error: non-init observe"),
                     Intent::Warn(irr) => irritations.push(irr.clone()),
                 });
@@ -293,7 +293,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
                         };
                         on_match.observe(&handler_module, event, observe_opts)?;
                         handler_module
-                            .into_intents(&frozen_heap)?
+                            .into_intents_on(frozen_heap)?
                             .into_iter()
                             .for_each(|intent| match intent {
                                 Intent::Find { .. } => {
@@ -302,7 +302,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
                                 Intent::Observe { .. } => {
                                     panic!("internal error: non-init observe")
                                 }
-                                Intent::Warn(irr) => irritations.push(irr.clone()),
+                                Intent::Warn(irr) => irritations.push(irr),
                             });
 
                         Ok::<_, Error>(())

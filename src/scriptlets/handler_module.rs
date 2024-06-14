@@ -23,7 +23,7 @@ impl HandlerModule {
         Self { module }
     }
 
-    pub fn into_intents(self, frozen_heap: &FrozenHeap) -> Result<Intents> {
+    pub fn into_intents_on(self, frozen_heap: &FrozenHeap) -> Result<Intents> {
         let Self { module, .. } = self;
         let module = module.freeze()?;
         frozen_heap.add_reference(module.frozen_heap());

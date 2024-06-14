@@ -22,6 +22,7 @@ use crate::{
         app_object::AppObject,
         event::EventKind,
         extra_data::{RetainedData, TempData, UnfrozenRetainedData},
+        handler_module::HandlerModule,
         print_handler::PrintHandler,
         query_cache::QueryCache,
         store::PreinitedModuleCache,
@@ -29,8 +30,6 @@ use crate::{
     },
     source_path::{PrettyPath, SourcePath},
 };
-
-use super::handler_module::HandlerModule;
 
 #[derive(Debug)]
 pub struct PreinitingScriptlet {
