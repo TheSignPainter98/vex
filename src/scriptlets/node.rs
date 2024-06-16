@@ -1,4 +1,4 @@
-use std::{fmt::Display, hash::Hasher, ops::Deref};
+use std::{fmt::Display, hash::Hasher, iter, ops::Deref};
 
 use allocative::Allocative;
 use derive_new::new;
@@ -9,18 +9,18 @@ use starlark::{
     starlark_simple_value,
     values::{
         AllocValue, Demand, Heap, NoSerialize, ProvidesStaticType, StarlarkValue, Trace,
-        UnpackValue, Value,
+        UnpackValue, Value, ValueError,
     },
 };
 use starlark_derive::{starlark_attrs, starlark_module, starlark_value, StarlarkAttrs};
 use tree_sitter::{Node as TSNode, Point};
 
-use crate::{scriptlets::tree_walker::TreeWalker, source_file::ParsedSourceFile};
+use crate::{error::Error, source_file::ParsedSourceFile};
 
-#[derive(new, Clone, Debug, PartialEq, Eq, ProvidesStaticType, NoSerialize, Allocative, Dupe)]
+#[derive(new, Clone, Debug, PartialEq, Eq, ProvidesStaticType, NoSerialize, Allocative)]
 pub struct Node<'v> {
     #[allocative(skip)]
-    ts_node: &'v TSNode<'v>,
+    ts_node: TSNode<'v>,
 
     #[allocative(skip)]
     pub source_file: &'v ParsedSourceFile,
@@ -52,8 +52,12 @@ impl<'v> Deref for Node<'v> {
     type Target = TSNode<'v>;
 
     fn deref(&self) -> &Self::Target {
-        self.ts_node
+        &self.ts_node
     }
+}
+
+impl Dupe for Node<'_> {
+    // Cloning TSNode is cheap.
 }
 
 #[starlark_value(type = "Node")]

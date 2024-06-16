@@ -38,7 +38,7 @@ impl<'v> QueryCaptures<'v> {
             .collect();
         qmatch.captures.iter().for_each(|r#match| {
             let (_, ref mut capture) = captures[r#match.index as usize];
-            capture.push(Node::new(&r#match.node, source_file))
+            capture.push(Node::new(r#match.node, source_file))
         });
         captures.sort_by(|cap1, cap2| cap1.0.cmp(cap2.0));
 
