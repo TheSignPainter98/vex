@@ -48,7 +48,7 @@ impl SupportedLanguage {
         lazy_static! {
             static ref LANGUAGES: EnumMap<SupportedLanguage, OnceLock<Language>> =
                 SupportedLanguage::iter()
-                    .zip(iter::repeat_with(|| OnceLock::new()))
+                    .zip(iter::repeat_with(OnceLock::new))
                     .collect();
         };
 
