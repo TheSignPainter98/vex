@@ -211,10 +211,15 @@ impl<'s> VexTest<'s> {
                 fail('assertion failed: %r.%s not in dir(%r)' % (obj, attr, obj))
         check['dir'] = check_dir
 
-        def check_in(what, expected):
-            if what not in expected:
-                fail('assertion failed: %r not in %r' % (what, expected))
+        def check_in(what, obj):
+            if what not in obj:
+                fail('assertion failed: %r not in %r' % (what, obj))
         check['in'] = check_in
+
+        def check_not_in(what, obj):
+            if what in obj:
+                fail('assertion failed: %r in %r' % (what, obj))
+        check['not in'] = check_not_in
 
         def check_is_path(to_check):
             str_to_check = str(to_check)

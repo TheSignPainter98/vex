@@ -44,6 +44,66 @@ impl Node<'_> {
             Ok(this.is_named())
         }
 
+        fn parent<'v>(this: Node<'v>) -> starlark::Result<Option<Node<'v>>> {
+            Ok(this
+                .parent()
+                .map(|ts_node| Node::new(ts_node, this.source_file)))
+        }
+
+        fn parents<'v>(this: Node<'v>) -> starlark::Result<Vec<Node<'v>>> {
+            let parents = {
+                let mut curr = Some(this.ts_node);
+                iter::from_fn(|| {
+                    curr = curr?.parent();
+                    curr
+                })
+                .map(|ts_node| Node::new(ts_node, this.source_file))
+                .collect()
+            };
+            Ok(parents)
+        }
+
+        fn next_sibling<'v>(this: Node<'v>) -> starlark::Result<Option<Node<'v>>> {
+            Ok(this
+                .next_sibling()
+                .map(|ts_node| Node::new(ts_node, this.source_file)))
+        }
+
+        fn next_siblings<'v>(this: Node<'v>) -> starlark::Result<Vec<Node<'v>>> {
+            let mut curr = Some(this.ts_node);
+            let ret = iter::from_fn(|| {
+                curr = curr?.next_sibling();
+                curr
+            })
+            .map(|ts_node| Node::new(ts_node, this.source_file))
+            .collect();
+            Ok(ret)
+        }
+
+        fn previous_sibling<'v>(this: Node<'v>) -> starlark::Result<Option<Node<'v>>> {
+            Ok(this
+                .prev_sibling()
+                .map(|ts_node| Node::new(ts_node, this.source_file)))
+        }
+
+        fn previous_siblings<'v>(this: Node<'v>) -> starlark::Result<Vec<Node<'v>>> {
+            let mut curr = Some(this.ts_node);
+            let ret = iter::from_fn(|| {
+                curr = curr?.prev_sibling();
+                curr
+            })
+            .map(|ts_node| Node::new(ts_node, this.source_file))
+            .collect();
+            Ok(ret)
+        }
+
+        fn children<'v>(this: Node<'v>) -> starlark::Result<Vec<Node<'v>>> {
+            Ok(this
+                .children(&mut this.walk())
+                .map(|ts_node| Node::new(ts_node, this.source_file))
+                .collect())
+        }
+
         fn text<'v>(this: Node<'v>) -> starlark::Result<&'v str> {
             this.utf8_text(this.source_file.content.as_bytes())
                 .map_err(Error::Utf8)
@@ -75,6 +135,54 @@ impl<'v> StarlarkValue<'v> for Node<'v> {
             return Ok(false);
         };
         Ok(self == other)
+    }
+
+    fn is_in(&self, other: Value<'v>) -> starlark::Result<bool> {
+        let ret = if let Some(field_name) = other.unpack_str() {
+            self.child_by_field_name(field_name).is_some()
+        } else if let Some(index) = other.unpack_i32() {
+            let child_count = self.child_count() as i32;
+            let adjusted_index = if index < 0 {
+                index + child_count
+            } else {
+                index
+            };
+            0 <= adjusted_index && adjusted_index < child_count
+        } else if let Some(node) = other.request_value::<&Self>() {
+            self.children(&mut self.walk())
+                .any(|child| child == node.ts_node)
+        } else {
+            false
+        };
+        Ok(ret)
+    }
+
+    fn length(&self) -> starlark::Result<i32> {
+        Ok(self.child_count() as i32)
+    }
+
+    fn at(&self, index: Value<'v>, heap: &'v Heap) -> starlark::Result<Value<'v>> {
+        if let Some(field_name) = index.unpack_str() {
+            self.child_by_field_name(field_name.as_bytes())
+                .map(|ts_node| Node::new(ts_node, self.source_file))
+                .map(|node| heap.alloc(node))
+                .ok_or_else(|| ValueError::KeyNotFound(field_name.to_string()).into())
+        } else if let Some(index) = index.unpack_i32() {
+            let adjusted_index = if index < 0 {
+                index + self.child_count() as i32
+            } else {
+                index
+            };
+            if adjusted_index < 0 {
+                return Err(ValueError::IndexOutOfBound(index).into());
+            }
+            self.child(adjusted_index as usize)
+                .map(|ts_node| Node::new(ts_node, self.source_file))
+                .map(|node| heap.alloc(node))
+                .ok_or_else(|| ValueError::IndexOutOfBound(index).into())
+        } else {
+            ValueError::unsupported_with(self, "[]", index)
+        }
     }
 
     fn write_hash(&self, hasher: &mut StarlarkHasher) -> starlark::Result<()> {
@@ -290,10 +398,17 @@ mod test {
 
                         def on_match(event):
                             expected_attrs = [
+                                'children',
                                 'is_extra',
                                 'is_named',
                                 'kind',
                                 'location',
+                                'next_sibling',
+                                'next_siblings',
+                                'parent',
+                                'parents',
+                                'previous_sibling',
+                                'previous_siblings',
                                 'text',
                             ]
                             check['attrs'](event.captures['bin_expr'], expected_attrs)
@@ -443,6 +558,122 @@ mod test {
                         // line_comment
                     }
                 "},
+            )
+            .assert_irritation_free();
+    }
+
+    #[test]
+    fn navigation() {
+        VexTest::new("navigation")
+            .with_scriptlet(
+                "vexes/test.star",
+                formatdoc! {
+                    r#"
+                        load('{check_path}', 'check')
+
+                        def init():
+                            vex.observe('open_project', on_open_project)
+
+                        def on_open_project(event):
+                            vex.search(
+                                'rust',
+                                '(expression_statement (binary_expression)) @expr',
+                                on_match,
+                            )
+
+                        def on_match(event):
+                            expr = event.captures['expr']
+                            check['true'](len(expr) > 1)
+
+                            parent = expr.parent()
+                            check['neq'](parent, None)
+                            some_parent_is_none = False
+                            for _ in range(25):
+                                parent = parent.parent()
+                                if parent == None:
+                                    some_parent_is_none = True
+                                    break
+                            check['true'](some_parent_is_none)
+
+                            bin_expr = expr[0]
+                            check['eq'](bin_expr.kind, 'binary_expression')
+
+                            check['not in']('asdf', bin_expr)
+                            check['not in'](True, bin_expr)
+                            check['not in'](-4, bin_expr)
+                            check['in'](-3, bin_expr)
+                            check['in'](-2, bin_expr)
+                            check['in'](-1, bin_expr)
+                            check['in'](0, bin_expr)
+                            check['in'](1, bin_expr)
+                            check['in'](2, bin_expr)
+                            check['not in'](3, bin_expr)
+                            check['not in'](expr, bin_expr)
+                            check['in'](bin_expr, expr)
+
+                            check['in']('left', bin_expr)
+                            check['eq'](bin_expr['left'].kind, 'integer_literal')
+                            check['eq'](bin_expr['left'], bin_expr[0])
+                            check['eq'](bin_expr['left'], bin_expr[-3])
+
+                            check['in']('right', bin_expr)
+                            check['eq'](bin_expr['right'].kind, 'char_literal')
+                            check['eq'](bin_expr['right'], bin_expr[2])
+                            check['eq'](bin_expr['right'], bin_expr[-1])
+
+                            check['eq'](bin_expr[1].kind, '+')
+                            check['eq'](bin_expr[1], bin_expr[-2])
+
+                            line_comment = expr.previous_sibling()
+                            check['eq'](line_comment.kind, 'line_comment')
+                            check['eq'](line_comment.previous_sibling().kind, '{{')
+                            check['eq'](line_comment.previous_sibling().previous_sibling(), None)
+                            check['eq'](line_comment.next_sibling(), expr)
+
+                            call_expr = expr.next_sibling()
+                            check['eq'](call_expr.kind, 'call_expression')
+                            check['eq'](call_expr.next_sibling().kind, '}}')
+                            check['eq'](call_expr.next_sibling().next_sibling(), None)
+                            check['eq'](call_expr.previous_sibling(), expr)
+
+                            curr = expr
+                            for _ in range(len(list(expr.parents()))):
+                                next_curr = curr.parent()
+                                check['neq'](next_curr, None)
+                                curr = next_curr
+                            check['eq'](curr.parent(), None)
+
+                            curr = expr
+                            for _ in range(len(list(expr.next_siblings()))):
+                                next_curr = curr.next_sibling()
+                                check['neq'](next_curr, None)
+                                curr = next_curr
+                            check['eq'](curr.next_sibling(), None)
+
+                            curr = expr
+                            for _ in range(len(list(expr.previous_siblings()))):
+                                next_curr = curr.previous_sibling()
+                                check['neq'](next_curr, None)
+                                curr = next_curr
+                            check['eq'](curr.previous_sibling(), None)
+
+                            children = list(bin_expr.children())
+                            check['eq'](len(bin_expr), len(children))
+                            for i in range(len(children)):
+                                check['in'](bin_expr[i], children)
+                    "#,
+                    check_path = VexTest::CHECK_STARLARK_PATH,
+                },
+            )
+            .with_source_file(
+                "src/main.rs",
+                indoc! {r#"
+                    fn main() {
+                        // some comment
+                        1 + 'a';
+                        func()
+                    }
+                "#},
             )
             .assert_irritation_free();
     }
