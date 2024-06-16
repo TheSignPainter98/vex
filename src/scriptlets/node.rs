@@ -40,8 +40,10 @@ impl Node<'_> {
             Ok(TreeWalker::new(this.walk()))
         }
 
-        fn text<'v>(this: Node<'v>) -> anyhow::Result<&'v str> {
-            Ok(this.utf8_text(this.source_file.content.as_bytes())?)
+        fn text<'v>(this: Node<'v>) -> starlark::Result<&'v str> {
+            this.utf8_text(this.source_file.content.as_bytes())
+                .map_err(Error::Utf8)
+                .map_err(starlark::Error::new_other)
         }
     }
 }
