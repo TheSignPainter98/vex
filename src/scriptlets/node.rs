@@ -36,8 +36,8 @@ impl Node<'_> {
 
     #[starlark_module]
     fn methods(builder: &mut MethodsBuilder) {
-        fn walk<'v>(this: Node<'v>) -> anyhow::Result<TreeWalker<'v>> {
-            Ok(TreeWalker::new(this.walk()))
+        fn is_extra<'v>(this: Node<'v>) -> starlark::Result<bool> {
+            Ok(this.is_extra())
         }
 
         fn text<'v>(this: Node<'v>) -> starlark::Result<&'v str> {
@@ -285,7 +285,13 @@ mod test {
                             )
 
                         def on_match(event):
-                            check['attrs'](event.captures['bin_expr'], ['kind', 'location', 'text', 'walk'])
+                            expected_attrs = [
+                                'is_extra',
+                                'kind',
+                                'location',
+                                'text',
+                            ]
+                            check['attrs'](event.captures['bin_expr'], expected_attrs)
                     "#,
                     check_path = VexTest::CHECK_STARLARK_PATH,
                 },
@@ -341,6 +347,52 @@ mod test {
                         println!("{x}");
                     }
                 "#},
+            )
+            .assert_irritation_free();
+    }
+
+    #[test]
+    fn is_extra() {
+        VexTest::new("is_extra")
+            .with_scriptlet(
+                "vexes/test.star",
+                formatdoc! {
+                    r"
+                        load('{check_path}', 'check')
+
+                        def init():
+                            vex.observe('open_project', on_open_project)
+
+                        def on_open_project(event):
+                            vex.search(
+                                'rust',
+                                '''
+                                    (
+                                        (line_comment) @line_comment
+                                        (call_expression) @call_expr
+                                    )
+                                ''',
+                                on_match,
+                            )
+
+                        def on_match(event):
+                            line_comment = event.captures['line_comment']
+                            call_expr = event.captures['call_expr']
+
+                            check['true'](line_comment.is_extra())
+                            check['false'](call_expr.is_extra())
+                    ",
+                    check_path = VexTest::CHECK_STARLARK_PATH,
+                },
+            )
+            .with_source_file(
+                "src/main.rs",
+                indoc! {"
+                    fn main() {
+                        // line_comment
+                        call_expr()
+                    }
+                "},
             )
             .assert_irritation_free();
     }
