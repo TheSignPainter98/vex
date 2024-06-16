@@ -40,6 +40,10 @@ impl Node<'_> {
             Ok(this.is_extra())
         }
 
+        fn is_named<'v>(this: Node<'v>) -> starlark::Result<bool> {
+            Ok(this.is_named())
+        }
+
         fn text<'v>(this: Node<'v>) -> starlark::Result<&'v str> {
             this.utf8_text(this.source_file.content.as_bytes())
                 .map_err(Error::Utf8)
@@ -287,6 +291,7 @@ mod test {
                         def on_match(event):
                             expected_attrs = [
                                 'is_extra',
+                                'is_named',
                                 'kind',
                                 'location',
                                 'text',
@@ -391,6 +396,51 @@ mod test {
                     fn main() {
                         // line_comment
                         call_expr()
+                    }
+                "},
+            )
+            .assert_irritation_free();
+    }
+
+    #[test]
+    fn is_named() {
+        VexTest::new("is_named")
+            .with_scriptlet(
+                "vexes/test.star",
+                formatdoc! {
+                    r#"
+                        load('{check_path}', 'check')
+
+                        def init():
+                            vex.observe('open_project', on_open_project)
+
+                        def on_open_project(event):
+                            vex.search(
+                                'rust',
+                                '''
+                                    (
+                                        (line_comment) @line_comment
+                                        ("}}") @closing_brace
+                                    )
+                                ''',
+                                on_match,
+                            )
+
+                        def on_match(event):
+                            line_comment = event.captures['line_comment']
+                            closing_brace = event.captures['closing_brace']
+
+                            check['true'](line_comment.is_named())
+                            check['false'](closing_brace.is_named())
+                    "#,
+                    check_path = VexTest::CHECK_STARLARK_PATH,
+                },
+            )
+            .with_source_file(
+                "src/main.rs",
+                indoc! {"
+                    fn main() {
+                        // line_comment
                     }
                 "},
             )
