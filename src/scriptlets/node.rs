@@ -176,14 +176,6 @@ impl<'v> StarlarkValue<'v> for Node<'v> {
     fn is_in(&self, other: Value<'v>) -> starlark::Result<bool> {
         let ret = if let Some(field_name) = other.unpack_str() {
             self.child_by_field_name(field_name).is_some()
-        } else if let Some(index) = other.unpack_i32() {
-            let child_count = self.child_count() as i32;
-            let adjusted_index = if index < 0 {
-                index + child_count
-            } else {
-                index
-            };
-            0 <= adjusted_index && adjusted_index < child_count
         } else if let Some(node) = other.request_value::<&Self>() {
             self.children(&mut self.walk()).any(|child| &child == node)
         } else {
@@ -631,16 +623,8 @@ mod test {
                             bin_expr = expr[0]
                             check['eq'](bin_expr.kind, 'binary_expression')
 
-                            check['not in']('asdf', bin_expr)
+                            check['not in']('non-existent-field', bin_expr)
                             check['not in'](True, bin_expr)
-                            check['not in'](-4, bin_expr)
-                            check['in'](-3, bin_expr)
-                            check['in'](-2, bin_expr)
-                            check['in'](-1, bin_expr)
-                            check['in'](0, bin_expr)
-                            check['in'](1, bin_expr)
-                            check['in'](2, bin_expr)
-                            check['not in'](3, bin_expr)
                             check['not in'](expr, bin_expr)
                             check['in'](bin_expr, expr)
 
