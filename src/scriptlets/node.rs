@@ -1,8 +1,10 @@
-use std::{fmt::Display, hash::Hasher, iter, ops::Deref};
+use std::{cell::RefCell, fmt::Display, hash::Hasher, ops::Deref};
 
 use allocative::Allocative;
+use derive_more::Display;
 use derive_new::new;
 use dupe::Dupe;
+use paste::paste;
 use starlark::{
     collections::StarlarkHasher,
     environment::{Methods, MethodsBuilder, MethodsStatic},
@@ -93,47 +95,24 @@ impl<'tree> Node<'tree> {
             Ok(this.parent())
         }
 
-        fn parents<'v>(this: Node<'v>) -> starlark::Result<Vec<Node<'v>>> {
-            let parents = {
-                let mut curr = Some(this.ts_node);
-                iter::from_fn(|| {
-                    curr = curr?.parent();
-                    curr
-                })
-                .map(|ts_node| Node::new(ts_node, this.source_file))
-                .collect()
-            };
-            Ok(parents)
+        fn parents<'v>(this: Node<'v>) -> starlark::Result<ParentsIterable<'v>> {
+            Ok(ParentsIterable::new(this))
         }
 
         fn next_sibling<'v>(this: Node<'v>) -> starlark::Result<Option<Node<'v>>> {
             Ok(this.next_sibling())
         }
 
-        fn next_siblings<'v>(this: Node<'v>) -> starlark::Result<Vec<Node<'v>>> {
-            let mut curr = Some(this.ts_node);
-            let ret = iter::from_fn(|| {
-                curr = curr?.next_sibling();
-                curr
-            })
-            .map(|ts_node| Node::new(ts_node, this.source_file))
-            .collect();
-            Ok(ret)
+        fn next_siblings<'v>(this: Node<'v>) -> starlark::Result<NextSiblingsIterable<'v>> {
+            Ok(NextSiblingsIterable::new(this))
         }
 
         fn previous_sibling<'v>(this: Node<'v>) -> starlark::Result<Option<Node<'v>>> {
             Ok(this.prev_sibling())
         }
 
-        fn previous_siblings<'v>(this: Node<'v>) -> starlark::Result<Vec<Node<'v>>> {
-            let mut curr = Some(this.ts_node);
-            let ret = iter::from_fn(|| {
-                curr = curr?.prev_sibling();
-                curr
-            })
-            .map(|ts_node| Node::new(ts_node, this.source_file))
-            .collect();
-            Ok(ret)
+        fn previous_siblings<'v>(this: Node<'v>) -> starlark::Result<PreviousSiblingsIterable<'v>> {
+            Ok(PreviousSiblingsIterable::new(this))
         }
 
         fn children<'v>(this: Node<'v>) -> starlark::Result<Vec<Node<'v>>> {
@@ -257,6 +236,65 @@ impl Display for Node<'_> {
         self.to_sexp().fmt(f)
     }
 }
+
+macro_rules! walking_iterator {
+    ($name:ident, $next:expr) => {
+        paste! {
+            #[derive(
+                new, Clone, Debug, Display, Dupe, Allocative, NoSerialize, ProvidesStaticType, Trace,
+            )]
+            #[display(fmt = "" $name)]
+            struct [<$name Iterable>]<'v> {
+                current: Node<'v>,
+            }
+
+            #[starlark_value(type = "" $name)]
+            impl<'v> StarlarkValue<'v> for [<$name Iterable>]<'v> {
+                unsafe fn iterate(&self, _: Value<'v>, heap: &'v Heap) -> starlark::Result<Value<'v>> {
+                    Ok(heap.alloc([<$name Iterator>] {
+                        current: RefCell::new(self.current.dupe()),
+                    }))
+                }
+            }
+
+            impl<'v> AllocValue<'v> for [<$name Iterable>]<'v> {
+                fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+                    heap.alloc_complex_no_freeze(self)
+                }
+            }
+
+            #[derive(
+                new, Clone, Debug, Display, Allocative, NoSerialize, ProvidesStaticType, Trace,
+            )]
+            #[display(fmt = "" $name)]
+            struct [<$name Iterator>]<'v> {
+                current: RefCell<Node<'v>>,
+            }
+
+            #[starlark_value(type = "" $name)]
+            impl<'v> StarlarkValue<'v> for [<$name Iterator>]<'v> {
+                unsafe fn iter_next(&self, _: usize, heap: &'v Heap) -> Option<Value<'v>> {
+                    let next = $next(&self.current.borrow());
+                    if let Some(next) = &next {
+                        *self.current.borrow_mut() = next.dupe();
+                    }
+                    next.map(|node| heap.alloc(node))
+                }
+
+                unsafe fn iter_stop(&self) {}
+            }
+
+            impl<'v> AllocValue<'v> for [<$name Iterator>]<'v> {
+                fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+                    heap.alloc_complex_no_freeze(self)
+                }
+            }
+        }
+    };
+}
+walking_iterator!(Parents, Node::parent);
+walking_iterator!(NextSiblings, Node::next_sibling);
+walking_iterator!(PreviousSiblings, Node::prev_sibling);
 
 #[derive(
     Clone,
@@ -653,6 +691,7 @@ mod test {
                             check['eq'](call_expr.next_sibling().next_sibling(), None)
                             check['eq'](call_expr.previous_sibling(), expr)
 
+                            check['type'](expr.parents(), 'Parents')
                             curr = expr
                             for _ in range(len(list(expr.parents()))):
                                 next_curr = curr.parent()
@@ -660,6 +699,7 @@ mod test {
                                 curr = next_curr
                             check['eq'](curr.parent(), None)
 
+                            check['type'](expr.next_siblings(), 'NextSiblings')
                             curr = expr
                             for _ in range(len(list(expr.next_siblings()))):
                                 next_curr = curr.next_sibling()
@@ -667,6 +707,7 @@ mod test {
                                 curr = next_curr
                             check['eq'](curr.next_sibling(), None)
 
+                            check['type'](expr.previous_siblings(), 'PreviousSiblings')
                             curr = expr
                             for _ in range(len(list(expr.previous_siblings()))):
                                 next_curr = curr.previous_sibling()
