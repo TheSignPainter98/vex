@@ -241,11 +241,17 @@ macro_rules! walking_iterator {
     ($name:ident, $next:expr) => {
         paste! {
             #[derive(
-                new, Clone, Debug, Display, Dupe, Allocative, NoSerialize, ProvidesStaticType, Trace,
+                Clone, Debug, Display, Dupe, Allocative, NoSerialize, ProvidesStaticType, Trace,
             )]
             #[display(fmt = "" $name)]
             struct [<$name Iterable>]<'v> {
                 current: Node<'v>,
+            }
+
+            impl<'v> [<$name Iterable>]<'v> {
+                fn new(current: Node<'v>) -> Self {
+                    Self { current }
+                }
             }
 
             #[starlark_value(type = "" $name)]
@@ -264,7 +270,7 @@ macro_rules! walking_iterator {
             }
 
             #[derive(
-                new, Clone, Debug, Display, Allocative, NoSerialize, ProvidesStaticType, Trace,
+                Clone, Debug, Display, Allocative, NoSerialize, ProvidesStaticType, Trace,
             )]
             #[display(fmt = "" $name)]
             struct [<$name Iterator>]<'v> {
