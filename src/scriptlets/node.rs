@@ -13,7 +13,7 @@ use starlark::{
     },
 };
 use starlark_derive::{starlark_attrs, starlark_module, starlark_value, StarlarkAttrs};
-use tree_sitter::{Node as TSNode, Point};
+use tree_sitter::{Node as TSNode, Point, TreeCursor};
 
 use crate::{error::Error, source_file::ParsedSourceFile};
 
@@ -30,9 +30,54 @@ unsafe impl<'v> Trace<'v> for Node<'v> {
     fn trace(&mut self, _tracer: &starlark::values::Tracer<'v>) {}
 }
 
-impl Node<'_> {
+impl<'tree> Node<'tree> {
     const KIND_ATTR_NAME: &'static str = "kind";
     const LOCATION_ATTR_NAME: &'static str = "location";
+
+    #[inline]
+    fn parent(&self) -> Option<Self> {
+        self.ts_node
+            .parent()
+            .map(|ts_node| Self::new(ts_node, self.source_file))
+    }
+
+    #[inline]
+    fn next_sibling(&self) -> Option<Self> {
+        self.ts_node
+            .next_sibling()
+            .map(|ts_node| Self::new(ts_node, self.source_file))
+    }
+
+    #[inline]
+    fn prev_sibling(&self) -> Option<Self> {
+        self.ts_node
+            .prev_sibling()
+            .map(|ts_node| Self::new(ts_node, self.source_file))
+    }
+
+    #[inline]
+    fn children<'cursor>(
+        &self,
+        cursor: &'cursor mut TreeCursor<'tree>,
+    ) -> impl ExactSizeIterator<Item = Self> + 'cursor {
+        self.ts_node
+            .children(cursor)
+            .map(|ts_node| Self::new(ts_node, self.source_file))
+    }
+
+    #[inline]
+    pub fn child_by_field_name(&self, field_name: impl AsRef<[u8]>) -> Option<Self> {
+        self.ts_node
+            .child_by_field_name(field_name)
+            .map(|ts_node| Self::new(ts_node, self.source_file))
+    }
+
+    #[inline]
+    pub fn child(&self, i: usize) -> Option<Self> {
+        self.ts_node
+            .child(i)
+            .map(|ts_node| Self::new(ts_node, self.source_file))
+    }
 
     #[starlark_module]
     fn methods(builder: &mut MethodsBuilder) {
@@ -45,9 +90,7 @@ impl Node<'_> {
         }
 
         fn parent<'v>(this: Node<'v>) -> starlark::Result<Option<Node<'v>>> {
-            Ok(this
-                .parent()
-                .map(|ts_node| Node::new(ts_node, this.source_file)))
+            Ok(this.parent())
         }
 
         fn parents<'v>(this: Node<'v>) -> starlark::Result<Vec<Node<'v>>> {
@@ -64,9 +107,7 @@ impl Node<'_> {
         }
 
         fn next_sibling<'v>(this: Node<'v>) -> starlark::Result<Option<Node<'v>>> {
-            Ok(this
-                .next_sibling()
-                .map(|ts_node| Node::new(ts_node, this.source_file)))
+            Ok(this.next_sibling())
         }
 
         fn next_siblings<'v>(this: Node<'v>) -> starlark::Result<Vec<Node<'v>>> {
@@ -81,9 +122,7 @@ impl Node<'_> {
         }
 
         fn previous_sibling<'v>(this: Node<'v>) -> starlark::Result<Option<Node<'v>>> {
-            Ok(this
-                .prev_sibling()
-                .map(|ts_node| Node::new(ts_node, this.source_file)))
+            Ok(this.prev_sibling())
         }
 
         fn previous_siblings<'v>(this: Node<'v>) -> starlark::Result<Vec<Node<'v>>> {
@@ -98,10 +137,7 @@ impl Node<'_> {
         }
 
         fn children<'v>(this: Node<'v>) -> starlark::Result<Vec<Node<'v>>> {
-            Ok(this
-                .children(&mut this.walk())
-                .map(|ts_node| Node::new(ts_node, this.source_file))
-                .collect())
+            Ok(this.children(&mut this.walk()).collect())
         }
 
         fn text<'v>(this: Node<'v>) -> starlark::Result<&'v str> {
@@ -149,8 +185,7 @@ impl<'v> StarlarkValue<'v> for Node<'v> {
             };
             0 <= adjusted_index && adjusted_index < child_count
         } else if let Some(node) = other.request_value::<&Self>() {
-            self.children(&mut self.walk())
-                .any(|child| child == node.ts_node)
+            self.children(&mut self.walk()).any(|child| &child == node)
         } else {
             false
         };
@@ -164,7 +199,6 @@ impl<'v> StarlarkValue<'v> for Node<'v> {
     fn at(&self, index: Value<'v>, heap: &'v Heap) -> starlark::Result<Value<'v>> {
         if let Some(field_name) = index.unpack_str() {
             self.child_by_field_name(field_name.as_bytes())
-                .map(|ts_node| Node::new(ts_node, self.source_file))
                 .map(|node| heap.alloc(node))
                 .ok_or_else(|| ValueError::KeyNotFound(field_name.to_string()).into())
         } else if let Some(index) = index.unpack_i32() {
@@ -177,7 +211,6 @@ impl<'v> StarlarkValue<'v> for Node<'v> {
                 return Err(ValueError::IndexOutOfBound(index).into());
             }
             self.child(adjusted_index as usize)
-                .map(|ts_node| Node::new(ts_node, self.source_file))
                 .map(|node| heap.alloc(node))
                 .ok_or_else(|| ValueError::IndexOutOfBound(index).into())
         } else {
