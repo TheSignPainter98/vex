@@ -16,6 +16,7 @@ impl Associations {
         Self(
             [
                 ("*.[ch]", SupportedLanguage::C),
+                ("*.[ch]pp", SupportedLanguage::Cpp),
                 ("*.go", SupportedLanguage::Go),
                 ("*.py", SupportedLanguage::Python),
                 ("*.rs", SupportedLanguage::Rust),

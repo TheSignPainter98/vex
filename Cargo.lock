@@ -1547,6 +1547,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tree-sitter-cpp"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e058d4b9cefb54a8f322b31a1bd3cd306919b70b729523473b5aad8d315a8897"
+dependencies = [
+ "cc",
+ "tree-sitter",
+]
+
+[[package]]
 name = "tree-sitter-go"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1688,6 +1698,7 @@ dependencies = [
  "toml_edit",
  "tree-sitter",
  "tree-sitter-c",
+ "tree-sitter-cpp",
  "tree-sitter-go",
  "tree-sitter-python",
  "tree-sitter-rust",
