@@ -16,6 +16,12 @@ impl Associations {
         Self(
             [
                 ("*.[ch]", SupportedLanguage::C),
+                // NOTE: Case-sensitive file systems are not assumed, hence .C and
+                // .H remain unassociated.
+                ("*.[ch]pp", SupportedLanguage::Cpp),
+                ("*.cxx", SupportedLanguage::Cpp),
+                ("*.cc", SupportedLanguage::Cpp),
+                ("*.hh", SupportedLanguage::Cpp),
                 ("*.go", SupportedLanguage::Go),
                 ("*.py", SupportedLanguage::Python),
                 ("*.rs", SupportedLanguage::Rust),
@@ -73,6 +79,11 @@ mod test {
     fn base() {
         Test::file("foo/bar.c").has_association(SupportedLanguage::C);
         Test::file("foo/bar.h").has_association(SupportedLanguage::C);
+        Test::file("foo/bar.cpp").has_association(SupportedLanguage::Cpp);
+        Test::file("foo/bar.hpp").has_association(SupportedLanguage::Cpp);
+        Test::file("foo/bar.cc").has_association(SupportedLanguage::Cpp);
+        Test::file("foo/bar.hh").has_association(SupportedLanguage::Cpp);
+        Test::file("foo/bar.cxx").has_association(SupportedLanguage::Cpp);
         Test::file("foo/bar.go").has_association(SupportedLanguage::Go);
         Test::file("foo/bar.py").has_association(SupportedLanguage::Python);
         Test::file("foo/bar.rs").has_association(SupportedLanguage::Rust);
