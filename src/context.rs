@@ -163,6 +163,11 @@ impl Manifest {
     const DEFAULT_CONTENT: &'static str = indoc! {r#"
         ignore = [ "vex.toml", "vexes/", ".git/", ".gitignore", "/target/" ]
 
+        # If this is a C++ project where header files have file-extension .h, uncomment the
+        # following lines.
+        # [cpp]
+        # use-for = [ "*.h" ]
+
         [python]
         use-for = [ "*.star" ]
     "#};
@@ -273,7 +278,7 @@ impl Deref for LanguageData {
 
 #[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
 pub struct LanguageOptions {
-    #[serde(rename = "use-for")]
+    #[serde(rename = "use-for", default)]
     file_associations: Vec<RawFilePattern<String>>,
 }
 
