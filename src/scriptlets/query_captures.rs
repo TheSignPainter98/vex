@@ -690,10 +690,10 @@ mod test {
             (line_comment)+ @duplicated_pattern_name
             (let_declaration) @duplicated_pattern_name
         "};
-        let query = Query::new(language, query_source).unwrap();
+        let query = Query::new(&language, query_source).unwrap();
         let tree = {
             let mut parser = Parser::new();
-            parser.set_language(language).unwrap();
+            parser.set_language(&language).unwrap();
             let tree = parser.parse(content, None).unwrap();
             assert!(!tree.root_node().has_error());
             tree
@@ -749,10 +749,10 @@ mod test {
                 (expression_statement) @duplicated_capture_name
             )
         "};
-        let query = Query::new(language, query_source).unwrap();
+        let query = Query::new(&language, query_source).unwrap();
         let tree = {
             let mut parser = Parser::new();
-            parser.set_language(language).unwrap();
+            parser.set_language(&language).unwrap();
             let tree = parser.parse(content, None).unwrap();
             assert!(!tree.root_node().has_error());
             tree
