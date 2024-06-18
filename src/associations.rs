@@ -9,7 +9,7 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct Associations(Vec<(Vec<FilePattern>, SupportedLanguage)>);
+pub struct Associations(Vec<Association>);
 
 impl Associations {
     pub fn base() -> Self {
@@ -22,43 +22,64 @@ impl Associations {
             ]
             .into_iter()
             .map(|(pattern, language)| {
-                (
-                    vec![RawFilePattern::new(pattern).compile().unwrap()],
+                let file_patterns = vec![RawFilePattern::new(pattern).compile().unwrap()];
+                let in_base = true;
+                Association {
+                    file_patterns,
+                    in_base,
                     language,
-                )
+                }
             })
             .collect(),
         )
     }
 
     pub fn insert(&mut self, file_patterns: Vec<FilePattern>, language: SupportedLanguage) {
-        self.0.push((file_patterns, language))
+        self.0.push(Association {
+            file_patterns,
+            in_base: false,
+            language,
+        })
     }
 
     pub fn get_language(&self, source_path: &SourcePath) -> Result<Option<SupportedLanguage>> {
-        let mut language_matches = self.0.iter().filter_map(|(patterns, language)| {
-            if patterns
+        let mut language_matches = self.0.iter().rev().filter_map(|association| {
+            let Association {
+                file_patterns,
+                in_base,
+                language,
+            } = association;
+            if file_patterns
                 .iter()
                 .any(|pattern| pattern.matches(&source_path.pretty_path))
             {
-                Some(*language)
+                Some((*language, in_base))
             } else {
                 None
             }
         });
-        let Some(language) = language_matches.next() else {
+        let Some((language, in_base)) = language_matches.next() else {
             return Ok(None);
         };
-        if let Some(other_language) = language_matches.next() {
-            let path = source_path.pretty_path.dupe();
-            return Err(Error::AmbiguousLanguage {
-                path,
-                language,
-                other_language,
-            });
+        if let Some((other_language, other_in_base)) = language_matches.next() {
+            if language != other_language && in_base == other_in_base {
+                let path = source_path.pretty_path.dupe();
+                return Err(Error::AmbiguousLanguage {
+                    path,
+                    language,
+                    other_language,
+                });
+            }
         }
         Ok(Some(language))
     }
+}
+
+#[derive(Debug)]
+struct Association {
+    file_patterns: Vec<FilePattern>,
+    in_base: bool,
+    language: SupportedLanguage,
 }
 
 #[cfg(test)]
@@ -120,14 +141,31 @@ mod test {
     fn ambiguous() {
         let associations = {
             let mut associations = Associations::base();
-            let pattern = RawFilePattern::new("*.ambiguous").compile().unwrap();
+            let pattern = RawFilePattern::new("*.c").compile().unwrap();
             associations.insert(vec![pattern.clone()], SupportedLanguage::Rust);
             associations.insert(vec![pattern], SupportedLanguage::C);
             associations
         };
         associations
-            .get_language(&SourcePath::new_in("foo.ambiguous".into(), "".into()))
+            .get_language(&SourcePath::new_in("foo.c".into(), "".into()))
             .unwrap_err();
+    }
+
+    #[test]
+    fn override_base() {
+        let associations = {
+            let mut associations = Associations::base();
+            let pattern = RawFilePattern::new("*.c").compile().unwrap();
+            associations.insert(vec![pattern], SupportedLanguage::Python);
+            associations
+        };
+        assert_eq!(
+            associations
+                .get_language(&SourcePath::new_in("actually_python.c".into(), "".into()))
+                .unwrap()
+                .unwrap(),
+            SupportedLanguage::Python,
+        );
     }
 
     #[test]
