@@ -1,4 +1,9 @@
-use std::{cell::RefCell, fmt::Display, hash::Hasher, ops::Deref};
+use std::{
+    cell::{Cell, RefCell},
+    fmt::Display,
+    hash::Hasher,
+    ops::Deref,
+};
 
 use allocative::Allocative;
 use derive_more::Display;
@@ -32,7 +37,7 @@ unsafe impl<'v> Trace<'v> for Node<'v> {
     fn trace(&mut self, _tracer: &starlark::values::Tracer<'v>) {}
 }
 
-impl<'tree> Node<'tree> {
+impl<'v> Node<'v> {
     const KIND_ATTR_NAME: &'static str = "kind";
     const LOCATION_ATTR_NAME: &'static str = "location";
 
@@ -60,7 +65,7 @@ impl<'tree> Node<'tree> {
     #[inline]
     fn children<'cursor>(
         &self,
-        cursor: &'cursor mut TreeCursor<'tree>,
+        cursor: &'cursor mut TreeCursor<'v>,
     ) -> impl ExactSizeIterator<Item = Self> + 'cursor {
         self.ts_node
             .children(cursor)
@@ -68,16 +73,16 @@ impl<'tree> Node<'tree> {
     }
 
     #[inline]
-    pub fn child_by_field_name(&self, field_name: impl AsRef<[u8]>) -> Option<Self> {
+    pub fn child(&self, i: usize) -> Option<Self> {
         self.ts_node
-            .child_by_field_name(field_name)
+            .child(i)
             .map(|ts_node| Self::new(ts_node, self.source_file))
     }
 
     #[inline]
-    pub fn child(&self, i: usize) -> Option<Self> {
+    pub fn child_by_field_name(&self, field_name: impl AsRef<[u8]>) -> Option<Self> {
         self.ts_node
-            .child(i)
+            .child_by_field_name(field_name)
             .map(|ts_node| Self::new(ts_node, self.source_file))
     }
 
@@ -115,8 +120,8 @@ impl<'tree> Node<'tree> {
             Ok(PreviousSiblingsIterable::new(this))
         }
 
-        fn children<'v>(this: Node<'v>) -> starlark::Result<Vec<Node<'v>>> {
-            Ok(this.children(&mut this.walk()).collect())
+        fn children<'v>(this: Node<'v>) -> starlark::Result<ChildrenIterable<'v>> {
+            Ok(ChildrenIterable::new(this))
         }
 
         fn text<'v>(this: Node<'v>) -> starlark::Result<&'v str> {
@@ -136,7 +141,7 @@ impl<'v> Deref for Node<'v> {
 }
 
 impl Dupe for Node<'_> {
-    // Cloning TSNode is cheap.
+    // Cloning TSNode is cheap. All other fields are Dupe.
 }
 
 #[starlark_value(type = "Node")]
@@ -203,7 +208,7 @@ impl<'v> StarlarkValue<'v> for Node<'v> {
 
     fn get_attr(&self, attr: &str, heap: &'v Heap) -> Option<Value<'v>> {
         match attr {
-            Self::KIND_ATTR_NAME => Some(heap.alloc(heap.alloc_str(self.ts_node.grammar_name()))),
+            Self::KIND_ATTR_NAME => Some(heap.alloc(heap.alloc_str(self.grammar_name()))),
             Self::LOCATION_ATTR_NAME => Some(heap.alloc(Location::of(self))),
             _ => None,
         }
@@ -301,6 +306,67 @@ macro_rules! walking_iterator {
 walking_iterator!(Parents, Node::parent);
 walking_iterator!(NextSiblings, Node::next_sibling);
 walking_iterator!(PreviousSiblings, Node::prev_sibling);
+
+#[derive(Clone, Debug, Display, Dupe, Allocative, NoSerialize, ProvidesStaticType, Trace)]
+#[display(fmt = "Children")]
+struct ChildrenIterable<'v> {
+    current: Node<'v>,
+}
+
+impl<'v> ChildrenIterable<'v> {
+    fn new(current: Node<'v>) -> Self {
+        Self { current }
+    }
+}
+
+#[starlark_value(type = "Children")]
+impl<'v> StarlarkValue<'v> for ChildrenIterable<'v> {
+    unsafe fn iterate(&self, _: Value<'v>, heap: &'v Heap) -> starlark::Result<Value<'v>> {
+        Ok(heap.alloc(ChildrenIterator {
+            current: RefCell::new(self.current.dupe()),
+            root: Cell::new(true),
+        }))
+    }
+}
+
+impl<'v> AllocValue<'v> for ChildrenIterable<'v> {
+    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+        heap.alloc_complex_no_freeze(self)
+    }
+}
+
+#[derive(Clone, Debug, Display, Allocative, NoSerialize, ProvidesStaticType, Trace)]
+#[display(fmt = "Children")]
+struct ChildrenIterator<'v> {
+    current: RefCell<Node<'v>>,
+
+    #[allocative(skip)]
+    root: Cell<bool>,
+}
+
+#[starlark_value(type = "Children")]
+impl<'v> StarlarkValue<'v> for ChildrenIterator<'v> {
+    unsafe fn iter_next(&self, _: usize, heap: &'v Heap) -> Option<Value<'v>> {
+        let next = if self.root.get() {
+            self.root.set(true);
+            self.current.borrow().child(0)
+        } else {
+            self.current.borrow().next_sibling()
+        };
+        if let Some(next) = &next {
+            *self.current.borrow_mut() = next.dupe();
+        }
+        next.map(|node| heap.alloc(node))
+    }
+
+    unsafe fn iter_stop(&self) {}
+}
+
+impl<'v> AllocValue<'v> for ChildrenIterator<'v> {
+    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+        heap.alloc_complex_no_freeze(self)
+    }
+}
 
 #[derive(
     Clone,
@@ -632,8 +698,8 @@ mod test {
     }
 
     #[test]
-    fn navigation() {
-        VexTest::new("navigation")
+    fn tree_interaction() {
+        VexTest::new("tree_interaction")
             .with_scriptlet(
                 "vexes/test.star",
                 formatdoc! {
@@ -721,10 +787,9 @@ mod test {
                                 curr = next_curr
                             check['eq'](curr.previous_sibling(), None)
 
-                            children = list(bin_expr.children())
-                            check['eq'](len(bin_expr), len(children))
-                            for i in range(len(children)):
-                                check['in'](bin_expr[i], children)
+                            check['type'](bin_expr.children(), 'Children')
+                            children = [ bin_expr[i] for i in range(len(list(bin_expr.children()))) ]
+                            check['eq'](children, list(bin_expr.children()))
                     "#,
                     check_path = VexTest::CHECK_STARLARK_PATH,
                 },
