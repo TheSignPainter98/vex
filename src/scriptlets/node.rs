@@ -632,8 +632,8 @@ mod test {
     }
 
     #[test]
-    fn navigation() {
-        VexTest::new("navigation")
+    fn tree_interaction() {
+        VexTest::new("tree_interaction")
             .with_scriptlet(
                 "vexes/test.star",
                 formatdoc! {
