@@ -202,13 +202,15 @@ impl<'v> Capture<'v> {
 
 #[cfg(test)]
 mod test {
+    use super::*;
+
     use camino::Utf8Path;
     use indoc::{formatdoc, indoc};
     use starlark::values::Heap;
     use tree_sitter::{Parser, Query, QueryCursor};
 
     use crate::{
-        scriptlets::QueryCaptures, source_file::ParsedSourceFile, source_path::SourcePath,
+        source_file::ParsedSourceFile, source_path::SourcePath,
         supported_language::SupportedLanguage, vextest::VexTest,
     };
 
@@ -668,5 +670,115 @@ mod test {
             .iterate(&heap)
             .unwrap()
             .all(|elem| elem.get_type() == "Node"));
+    }
+
+    #[test]
+    fn duplicate_pattern_names() {
+        let src_path = SourcePath::new_in(Utf8Path::new("main.rs"), Utf8Path::new("./"));
+        let content = indoc! {r#"
+            fn main() {
+                // some
+                // comment
+                let x = 1;
+            }
+        "#};
+        let src_file =
+            ParsedSourceFile::new_with_content(src_path, content, SupportedLanguage::Rust).unwrap();
+
+        let language = tree_sitter_rust::language();
+        let query_source = indoc! {r"
+            (line_comment)+ @duplicated_pattern_name
+            (let_declaration) @duplicated_pattern_name
+        "};
+        let query = Query::new(language, query_source).unwrap();
+        let tree = {
+            let mut parser = Parser::new();
+            parser.set_language(language).unwrap();
+            let tree = parser.parse(content, None).unwrap();
+            assert!(!tree.root_node().has_error());
+            tree
+        };
+        let mut cursor = QueryCursor::new();
+        let heap = Heap::new();
+        let mut matches: Vec<_> = cursor
+            .matches(&query, tree.root_node(), content.as_bytes())
+            .map(|qmatch| QueryCaptures::new(&query, qmatch, &src_file, &heap))
+            .map(|caps| heap.alloc(caps))
+            .map(|caps| {
+                caps.at(heap.alloc("duplicated_pattern_name"), &heap)
+                    .unwrap()
+            })
+            .collect();
+        matches.sort_by_cached_key(|cap| cap.to_string());
+        assert_eq!(2, matches.len());
+        assert_eq!(matches[0].get_type(), "Node");
+        assert!(matches[0].to_string().contains("let_declaration"));
+        assert_eq!(matches[1].get_type(), "list");
+        assert!(matches[1]
+            .at(heap.alloc(0), &heap)
+            .unwrap()
+            .to_string()
+            .contains("line_comment"));
+        assert!(matches[1]
+            .at(heap.alloc(1), &heap)
+            .unwrap()
+            .to_string()
+            .contains("line_comment"));
+    }
+
+    #[test]
+    fn duplicate_capture_names() {
+        let src_path = SourcePath::new_in(Utf8Path::new("main.rs"), Utf8Path::new("./"));
+        let content = indoc! {r#"
+            fn main() {
+                // some
+                // comment
+                let x = 1;
+                let y = 2;
+                z();
+            }
+        "#};
+        let src_file =
+            ParsedSourceFile::new_with_content(src_path, content, SupportedLanguage::Rust).unwrap();
+
+        let language = tree_sitter_rust::language();
+        let query_source = indoc! {r"
+            (
+                (line_comment)+ @duplicated_capture_name
+                (let_declaration)+ @duplicated_capture_name
+                (expression_statement) @duplicated_capture_name
+            )
+        "};
+        let query = Query::new(language, query_source).unwrap();
+        let tree = {
+            let mut parser = Parser::new();
+            parser.set_language(language).unwrap();
+            let tree = parser.parse(content, None).unwrap();
+            assert!(!tree.root_node().has_error());
+            tree
+        };
+        let mut cursor = QueryCursor::new();
+        let heap = Heap::new();
+        let mut matches: Vec<_> = cursor
+            .matches(&query, tree.root_node(), content.as_bytes())
+            .map(|qmatch| QueryCaptures::new(&query, qmatch, &src_file, &heap))
+            .map(|caps| heap.alloc(caps))
+            .map(|caps| {
+                caps.at(heap.alloc("duplicated_capture_name"), &heap)
+                    .unwrap()
+            })
+            .collect();
+        matches.sort_by_cached_key(|cap| cap.to_string());
+        assert_eq!(1, matches.len());
+        assert_eq!(matches[0].get_type(), "list");
+        assert_eq!(matches[0].length().unwrap(), 5);
+        let node_kinds = ["line_comment", "line_comment", "let_declaration"];
+        node_kinds.iter().enumerate().for_each(|(i, node_kind)| {
+            assert!(matches[0]
+                .at(heap.alloc(i), &heap)
+                .unwrap()
+                .to_string()
+                .contains(node_kind));
+        })
     }
 }
