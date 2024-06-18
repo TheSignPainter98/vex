@@ -165,7 +165,7 @@ impl Manifest {
 
         # If this is a C++ project where header files have file-extension .h, uncomment the
         # following lines.
-        # [cpp]
+        # ["c++"]
         # use-for = [ "*.h" ]
 
         [python]

@@ -29,6 +29,7 @@ use crate::{error::Error, result::Result};
 #[serde(rename_all = "kebab-case")]
 pub enum SupportedLanguage {
     C,
+    #[serde(rename = "c++")]
     Cpp,
     Go,
     Python,
