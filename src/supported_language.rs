@@ -1,11 +1,12 @@
-use std::{fmt::Display, str::FromStr};
+use std::{fmt::Display, iter, str::FromStr, sync::OnceLock};
 
 use allocative::Allocative;
 use clap::Subcommand;
 use dupe::Dupe;
-use enum_map::Enum;
+use enum_map::{Enum, EnumMap};
+use lazy_static::lazy_static;
 use serde::{Deserialize as Deserialise, Serialize as Serialise};
-use strum::EnumIter;
+use strum::{EnumIter, IntoEnumIterator};
 use tree_sitter::Language;
 
 use crate::{error::Error, result::Result};
@@ -43,13 +44,20 @@ impl SupportedLanguage {
         }
     }
 
-    pub fn ts_language(&self) -> Language {
-        match self {
+    pub fn ts_language(&self) -> &Language {
+        lazy_static! {
+            static ref LANGUAGES: EnumMap<SupportedLanguage, OnceLock<Language>> =
+                SupportedLanguage::iter()
+                    .zip(iter::repeat_with(OnceLock::new))
+                    .collect();
+        };
+
+        LANGUAGES[*self].get_or_init(|| match self {
             Self::C => tree_sitter_c::language(),
             Self::Go => tree_sitter_go::language(),
             Self::Python => tree_sitter_python::language(),
             Self::Rust => tree_sitter_rust::language(),
-        }
+        })
     }
 }
 

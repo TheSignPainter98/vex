@@ -1,4 +1,4 @@
-use std::{io, num, path};
+use std::{io, num, path, str::Utf8Error};
 
 use camino::Utf8PathBuf;
 use derive_more::Display;
@@ -125,6 +125,9 @@ pub enum Error {
         path: PrettyPath,
         language: SupportedLanguage,
     },
+
+    #[error(transparent)]
+    Utf8(#[from] Utf8Error),
 }
 
 impl From<anyhow::Error> for Error {
