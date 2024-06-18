@@ -32,7 +32,7 @@ unsafe impl<'v> Trace<'v> for Node<'v> {
     fn trace(&mut self, _tracer: &starlark::values::Tracer<'v>) {}
 }
 
-impl<'tree> Node<'tree> {
+impl<'v> Node<'v> {
     const KIND_ATTR_NAME: &'static str = "kind";
     const LOCATION_ATTR_NAME: &'static str = "location";
 
@@ -60,7 +60,7 @@ impl<'tree> Node<'tree> {
     #[inline]
     fn children<'cursor>(
         &self,
-        cursor: &'cursor mut TreeCursor<'tree>,
+        cursor: &'cursor mut TreeCursor<'v>,
     ) -> impl ExactSizeIterator<Item = Self> + 'cursor {
         self.ts_node
             .children(cursor)
