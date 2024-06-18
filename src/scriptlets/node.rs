@@ -203,7 +203,7 @@ impl<'v> StarlarkValue<'v> for Node<'v> {
 
     fn get_attr(&self, attr: &str, heap: &'v Heap) -> Option<Value<'v>> {
         match attr {
-            Self::KIND_ATTR_NAME => Some(heap.alloc(heap.alloc_str(self.ts_node.grammar_name()))),
+            Self::KIND_ATTR_NAME => Some(heap.alloc(heap.alloc_str(self.grammar_name()))),
             Self::LOCATION_ATTR_NAME => Some(heap.alloc(Location::of(self))),
             _ => None,
         }
