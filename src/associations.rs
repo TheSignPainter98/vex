@@ -19,9 +19,9 @@ impl Associations {
                 // NOTE: Case-sensitive file systems are not assumed, hence .C and
                 // .H remain unassociated.
                 ("*.[ch]pp", SupportedLanguage::Cpp),
+                ("*.cxx", SupportedLanguage::Cpp),
                 ("*.cc", SupportedLanguage::Cpp),
                 ("*.hh", SupportedLanguage::Cpp),
-                ("*.cxx", SupportedLanguage::Cpp),
                 ("*.go", SupportedLanguage::Go),
                 ("*.py", SupportedLanguage::Python),
                 ("*.rs", SupportedLanguage::Rust),
