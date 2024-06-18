@@ -14,8 +14,9 @@ use starlark::{
 };
 use starlark_derive::{starlark_value, ProvidesStaticType};
 
-#[derive(Clone, Debug, PartialEq, Eq, Dupe)]
+#[derive(Clone, Debug, PartialEq, Eq, Dupe, Allocative)]
 pub struct SourcePath {
+    #[allocative(skip)]
     pub abs_path: Arc<Utf8Path>,
     pub pretty_path: PrettyPath,
 }
