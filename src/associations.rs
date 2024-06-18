@@ -29,10 +29,9 @@ impl Associations {
             .into_iter()
             .map(|(pattern, language)| {
                 let file_patterns = vec![RawFilePattern::new(pattern).compile().unwrap()];
-                let in_base = true;
                 Association {
                     file_patterns,
-                    in_base,
+                    in_base: true,
                     language,
                 }
             })
