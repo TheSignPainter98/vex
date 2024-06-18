@@ -136,7 +136,7 @@ impl<'v> Deref for Node<'v> {
 }
 
 impl Dupe for Node<'_> {
-    // Cloning TSNode is cheap.
+    // Cloning TSNode is cheap. All other fields are Dupe.
 }
 
 #[starlark_value(type = "Node")]
