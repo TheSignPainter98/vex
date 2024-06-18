@@ -169,6 +169,32 @@ mod test {
     }
 
     #[test]
+    fn nonambiguous_overlap() {
+        let associations = {
+            let mut associations = Associations::base();
+            associations.insert(
+                vec![RawFilePattern::new("*.rust-file").compile().unwrap()],
+                SupportedLanguage::Rust,
+            );
+            associations.insert(
+                vec![RawFilePattern::new("rust-files/*").compile().unwrap()],
+                SupportedLanguage::Rust,
+            );
+            associations
+        };
+        assert_eq!(
+            associations
+                .get_language(&SourcePath::new_in(
+                    "rust-files/some.rust-file".into(),
+                    "".into()
+                ))
+                .unwrap()
+                .unwrap(),
+            SupportedLanguage::Rust,
+        );
+    }
+
+    #[test]
     fn from_manifest() {
         let tempdir = tempfile::tempdir().unwrap();
         let tempdir_path = Utf8PathBuf::try_from(tempdir.path().to_owned()).unwrap();
