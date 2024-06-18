@@ -68,16 +68,16 @@ impl<'v> Node<'v> {
     }
 
     #[inline]
-    pub fn child_by_field_name(&self, field_name: impl AsRef<[u8]>) -> Option<Self> {
+    pub fn child(&self, i: usize) -> Option<Self> {
         self.ts_node
-            .child_by_field_name(field_name)
+            .child(i)
             .map(|ts_node| Self::new(ts_node, self.source_file))
     }
 
     #[inline]
-    pub fn child(&self, i: usize) -> Option<Self> {
+    pub fn child_by_field_name(&self, field_name: impl AsRef<[u8]>) -> Option<Self> {
         self.ts_node
-            .child(i)
+            .child_by_field_name(field_name)
             .map(|ts_node| Self::new(ts_node, self.source_file))
     }
 
