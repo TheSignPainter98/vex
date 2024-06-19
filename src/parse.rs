@@ -128,7 +128,6 @@ mod test {
     use clap::Parser;
     use indoc::indoc;
     use tempfile::TempDir;
-    use tree_sitter::{Query, QueryCursor};
 
     use crate::{cli::Args, supported_language::SupportedLanguage};
 
