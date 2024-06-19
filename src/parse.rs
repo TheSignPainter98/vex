@@ -1,7 +1,4 @@
-use std::{
-    env,
-    io::{self, Write},
-};
+use std::{env, fmt::Write};
 
 use camino::{Utf8Path, Utf8PathBuf};
 
@@ -34,8 +31,10 @@ pub fn parse(cmd: ParseCmd) -> Result<()> {
     };
     let src_file = SourceFile::new(src_path, language)?.parse()?;
 
-    PrettyFormatter::new(cmd.compact).write(&mut io::stdout().lock(), &src_file)?;
-    println!("");
+    let capacity_estimate = 20 * src_file.tree.root_node().descendant_count();
+    let mut buf = String::with_capacity(capacity_estimate);
+    PrettyFormatter::new(cmd.compact).write(&mut buf, &src_file)?;
+    println!("{buf}");
 
     Ok(())
 }
@@ -129,8 +128,9 @@ mod test {
     use clap::Parser;
     use indoc::indoc;
     use tempfile::TempDir;
+    use tree_sitter::{Query, QueryCursor};
 
-    use crate::cli::Args;
+    use crate::{cli::Args, supported_language::SupportedLanguage};
 
     use super::*;
 
@@ -245,5 +245,33 @@ mod test {
                 PrettyPath::new(&test_file.path)
             )
         );
+    }
+
+    #[test]
+    fn format() {
+        let test_file = ParsedSourceFile::new_with_content(
+            SourcePath::new_in("test.rs".into(), "".into()),
+            "const X: usize = 1 + 2;",
+            SupportedLanguage::Rust,
+        )
+        .unwrap();
+
+        let compact_fmt = {
+            let mut compact_fmt = String::new();
+            PrettyFormatter::new(true)
+                .write(&mut compact_fmt, &test_file)
+                .unwrap();
+            compact_fmt
+        };
+        let expanded_fmt = {
+            let mut expanded_fmt = String::new();
+            PrettyFormatter::new(false)
+                .write(&mut expanded_fmt, &test_file)
+                .unwrap();
+            expanded_fmt
+        };
+        assert!(compact_fmt.len() < expanded_fmt.len());
+        assert!(!compact_fmt.contains('\n'));
+        assert!(expanded_fmt.contains('\n'));
     }
 }
