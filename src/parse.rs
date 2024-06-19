@@ -11,8 +11,8 @@ use crate::{
     context::Context,
     error::{Error, IOAction},
     result::Result,
-    scriptlets::Node,
-    source_file::SourceFile,
+    scriptlets::{Location, Node},
+    source_file::{ParsedSourceFile, SourceFile},
     source_path::{PrettyPath, SourcePath},
 };
 
@@ -34,24 +34,87 @@ pub fn parse(cmd: ParseCmd) -> Result<()> {
     };
     let src_file = SourceFile::new(src_path, language)?.parse()?;
 
-    let root = Node::new(src_file.tree.root_node(), &src_file);
-    PrettyFormatter::new(cmd.compact).write(&io::stdout().lock(), root)?;
+    PrettyFormatter::new(cmd.compact).write(&mut io::stdout().lock(), &src_file)?;
+    println!("");
 
     Ok(())
 }
 
 struct PrettyFormatter {
-    curr_indent: Option<u32>,
+    compact: bool,
+    curr_indent: u32,
 }
 
 impl PrettyFormatter {
     fn new(compact: bool) -> Self {
-        let curr_indent = if compact { None } else { Some(0) };
-        Self { curr_indent }
+        let curr_indent = 0;
+        Self {
+            compact,
+            curr_indent,
+        }
     }
 
-    fn write(&mut self, out: &impl Write, node: Node<'_>) -> Result<()> {
-        unimplemented!()
+    fn write(&mut self, w: &mut impl Write, src_file: &ParsedSourceFile) -> Result<()> {
+        let root = Node::new(src_file.tree.root_node(), src_file);
+        self.write_node(w, root, None)
+    }
+
+    fn write_node(
+        &mut self,
+        w: &mut impl Write,
+        node: Node<'_>,
+        field_name: Option<&'static str>,
+    ) -> Result<()> {
+        let expandable_separator = if self.compact { ' ' } else { '\n' };
+
+        self.write_indent(w)?;
+        if let Some(field_name) = field_name {
+            write!(w, "{field_name}: ").unwrap();
+        }
+        write!(w, "(").unwrap();
+        if node.is_named() {
+            write!(w, "{}", node.grammar_name()).unwrap();
+        } else {
+            write!(w, "{:?}", node.grammar_name()).unwrap();
+        }
+
+        self.curr_indent += 1;
+        node.children(&mut node.walk())
+            .enumerate()
+            .try_for_each(|(i, child)| {
+                write!(w, "{expandable_separator}").unwrap();
+                let field_name = node.field_name_for_child(i as u32);
+                self.write_node(w, Node::new(child, node.source_file), field_name)
+            })?;
+        self.curr_indent -= 1;
+
+        if !self.compact && node.child_count() != 0 {
+            write!(w, "{expandable_separator}").unwrap();
+            self.write_indent(w)?;
+        }
+        write!(w, ")").unwrap();
+        self.write_location(w, &Location::of(&node))?;
+        Ok(())
+    }
+
+    fn write_indent(&self, w: &mut impl Write) -> Result<()> {
+        if self.compact {
+            return Ok(());
+        }
+
+        (0..self.curr_indent)
+            .try_for_each(|_| write!(w, "  "))
+            .unwrap();
+        Ok(())
+    }
+
+    fn write_location(&self, w: &mut impl Write, loc: &Location) -> Result<()> {
+        if self.compact {
+            return Ok(());
+        }
+
+        write!(w, " ; {loc}").unwrap();
+        Ok(())
     }
 }
 
