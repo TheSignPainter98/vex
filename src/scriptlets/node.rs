@@ -422,10 +422,16 @@ impl Display for Location {
             end_row,
             end_column,
         } = self;
-        write!(
-            f,
-            "[{start_row}, {start_column}] - [{end_row}, {end_column}]"
-        )
+        if start_row == end_row {
+            write!(f, "{}:{start_column}-{end_column}", start_row + 1)
+        } else {
+            write!(
+                f,
+                "{}:{start_column} - {}:{end_column}",
+                start_row + 1,
+                end_row + 1
+            )
+        }
     }
 }
 
@@ -831,15 +837,17 @@ mod test {
                             )
 
                         def on_match(event):
-                            location = event.captures['bin_expr'].location
+                            location_1 = event.captures['l_int'].location
+                            check['type'](location_1, 'Location')
+                            check['eq'](str(location_1), '2:12-13')
+                            check['eq'](str(location_1), repr(location_1))
+                            check['eq'](location_1.start_row, 1)
+                            check['eq'](location_1.start_column, 12)
+                            check['eq'](location_1.end_row, 1)
+                            check['eq'](location_1.end_column, 13)
 
-                            check['type'](location, 'Location')
-                            check['eq'](str(location), '[1, 12] - [1, 23]')
-                            check['eq'](str(location), repr(location))
-                            check['eq'](location.start_row, 1)
-                            check['eq'](location.start_column, 12)
-                            check['eq'](location.end_row, 1)
-                            check['eq'](location.end_column, 23)
+                            location_2 = event.captures['bin_expr'].location
+                            check['eq'](str(location_2), '2:12 - 3:15')
                     "#,
                     check_path = VexTest::CHECK_STARLARK_PATH,
                 },
@@ -848,7 +856,8 @@ mod test {
                 "src/main.rs",
                 indoc! {r#"
                     fn main() {
-                        let x = 1 + (2 + 3);
+                        let x = 1 +
+                            (2 + 3);
                         println!("{x}");
                     }
                 "#},
