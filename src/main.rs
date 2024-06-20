@@ -186,7 +186,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
             .map(|p| SourcePath::new(&p, &ctx.project_root))
             .map(|p| {
                 let language = associations.get_language(&p)?;
-                SourceFile::new(p, language)
+                Ok(SourceFile::new(p, language))
             })
             .collect::<Result<Vec<_>>>()?
     };
@@ -409,7 +409,7 @@ fn parse(parse_args: ParseCmd) -> Result<()> {
             .unwrap_or_else(Associations::base)
             .get_language(&src_path)?,
     };
-    let src_file = SourceFile::new(src_path, language)?.parse()?;
+    let src_file = SourceFile::new(src_path, language).parse()?;
     println!("{}", src_file.tree.root_node().to_sexp());
 
     Ok(())

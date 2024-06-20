@@ -19,9 +19,9 @@ pub struct SourceFile {
 }
 
 impl SourceFile {
-    pub fn new(path: SourcePath, language: Option<SupportedLanguage>) -> Result<Self> {
+    pub fn new(path: SourcePath, language: Option<SupportedLanguage>) -> Self {
         let path = path.dupe();
-        Ok(Self { path, language })
+        Self { path, language }
     }
 
     pub fn path(&self) -> &SourcePath {
