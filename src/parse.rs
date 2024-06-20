@@ -1,4 +1,4 @@
-use std::{env, fmt::Write};
+use std::env;
 
 use camino::{Utf8Path, Utf8PathBuf};
 
@@ -8,8 +8,8 @@ use crate::{
     context::Context,
     error::{Error, IOAction},
     result::Result,
-    scriptlets::{Location, Node},
-    source_file::{ParsedSourceFile, SourceFile},
+    scriptlets::{NodeFormatter, WhitespaceSeparators},
+    source_file::SourceFile,
     source_path::{PrettyPath, SourcePath},
 };
 
@@ -33,88 +33,15 @@ pub fn parse(cmd: ParseCmd) -> Result<()> {
 
     let capacity_estimate = 20 * src_file.tree.root_node().descendant_count();
     let mut buf = String::with_capacity(capacity_estimate);
-    PrettyFormatter::new(cmd.compact).write(&mut buf, &src_file)?;
+    let whitespace_separators = if cmd.compact {
+        WhitespaceSeparators::Compact
+    } else {
+        WhitespaceSeparators::Pretty
+    };
+    NodeFormatter::new(whitespace_separators).write(&mut buf, &src_file)?;
     println!("{buf}");
 
     Ok(())
-}
-
-struct PrettyFormatter {
-    compact: bool,
-    curr_indent: u32,
-}
-
-impl PrettyFormatter {
-    fn new(compact: bool) -> Self {
-        let curr_indent = 0;
-        Self {
-            compact,
-            curr_indent,
-        }
-    }
-
-    fn write(&mut self, w: &mut impl Write, src_file: &ParsedSourceFile) -> Result<()> {
-        let root = Node::new(src_file.tree.root_node(), src_file);
-        self.write_node(w, root, None)
-    }
-
-    fn write_node(
-        &mut self,
-        w: &mut impl Write,
-        node: Node<'_>,
-        field_name: Option<&'static str>,
-    ) -> Result<()> {
-        let expandable_separator = if self.compact { ' ' } else { '\n' };
-
-        self.write_indent(w)?;
-        if let Some(field_name) = field_name {
-            write!(w, "{field_name}: ").unwrap();
-        }
-        write!(w, "(").unwrap();
-        if node.is_named() {
-            write!(w, "{}", node.grammar_name()).unwrap();
-        } else {
-            write!(w, r#""{}""#, node.grammar_name()).unwrap();
-        }
-
-        self.curr_indent += 1;
-        node.children(&mut node.walk())
-            .enumerate()
-            .try_for_each(|(i, child)| {
-                write!(w, "{expandable_separator}").unwrap();
-                let field_name = node.field_name_for_child(i as u32);
-                self.write_node(w, Node::new(child, node.source_file), field_name)
-            })?;
-        self.curr_indent -= 1;
-
-        if !self.compact && node.child_count() != 0 {
-            write!(w, "{expandable_separator}").unwrap();
-            self.write_indent(w)?;
-        }
-        write!(w, ")").unwrap();
-        self.write_location(w, &Location::of(&node))?;
-        Ok(())
-    }
-
-    fn write_indent(&self, w: &mut impl Write) -> Result<()> {
-        if self.compact {
-            return Ok(());
-        }
-
-        (0..self.curr_indent)
-            .try_for_each(|_| write!(w, "  "))
-            .unwrap();
-        Ok(())
-    }
-
-    fn write_location(&self, w: &mut impl Write, loc: &Location) -> Result<()> {
-        if self.compact {
-            return Ok(());
-        }
-
-        write!(w, " ; {loc}").unwrap();
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -129,7 +56,7 @@ mod test {
     use indoc::indoc;
     use tempfile::TempDir;
 
-    use crate::{cli::Args, supported_language::SupportedLanguage};
+    use crate::{cli::Args, source_file::ParsedSourceFile, supported_language::SupportedLanguage};
 
     use super::*;
 
@@ -257,20 +184,20 @@ mod test {
 
         let compact_fmt = {
             let mut compact_fmt = String::new();
-            PrettyFormatter::new(true)
+            NodeFormatter::new(WhitespaceSeparators::Compact)
                 .write(&mut compact_fmt, &test_file)
                 .unwrap();
             compact_fmt
         };
-        let expanded_fmt = {
-            let mut expanded_fmt = String::new();
-            PrettyFormatter::new(false)
-                .write(&mut expanded_fmt, &test_file)
+        let pretty_fmt = {
+            let mut pretty_fmt = String::new();
+            NodeFormatter::new(WhitespaceSeparators::Pretty)
+                .write(&mut pretty_fmt, &test_file)
                 .unwrap();
-            expanded_fmt
+            pretty_fmt
         };
-        assert!(compact_fmt.len() < expanded_fmt.len());
+        assert!(compact_fmt.len() < pretty_fmt.len());
         assert!(!compact_fmt.contains('\n'));
-        assert!(expanded_fmt.contains('\n'));
+        assert!(pretty_fmt.contains('\n'));
     }
 }

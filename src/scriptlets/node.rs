@@ -1,6 +1,6 @@
 use std::{
     cell::{Cell, RefCell},
-    fmt::Display,
+    fmt::{Display, Write},
     hash::Hasher,
     ops::Deref,
 };
@@ -20,9 +20,10 @@ use starlark::{
     },
 };
 use starlark_derive::{starlark_attrs, starlark_module, starlark_value, StarlarkAttrs};
+use strum::EnumIs;
 use tree_sitter::{Node as TSNode, Point, TreeCursor};
 
-use crate::{error::Error, source_file::ParsedSourceFile};
+use crate::{error::Error, result::Result, source_file::ParsedSourceFile};
 
 #[derive(new, Clone, Debug, PartialEq, Eq, ProvidesStaticType, NoSerialize, Allocative)]
 pub struct Node<'v> {
@@ -237,8 +238,15 @@ impl<'v> AllocValue<'v> for Node<'v> {
 }
 
 impl Display for Node<'_> {
+    #[allow(clippy::print_in_format_impl)]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.to_sexp().fmt(f)
+        let mut buf = String::new();
+        if let Err(err) =
+            NodeFormatter::new(WhitespaceSeparators::Compact).write(&mut buf, self.source_file)
+        {
+            eprintln!("node formatter failed: {err}");
+        }
+        f.write_str(&buf)
     }
 }
 
@@ -365,6 +373,99 @@ impl<'v> StarlarkValue<'v> for ChildrenIterator<'v> {
 impl<'v> AllocValue<'v> for ChildrenIterator<'v> {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
         heap.alloc_complex_no_freeze(self)
+    }
+}
+
+pub struct NodeFormatter {
+    whitespace: WhitespaceSeparators,
+    curr_indent: u32,
+}
+
+impl NodeFormatter {
+    pub fn new(whitespace: WhitespaceSeparators) -> Self {
+        let curr_indent = 0;
+        Self {
+            whitespace,
+            curr_indent,
+        }
+    }
+
+    pub fn write(&mut self, w: &mut impl Write, src_file: &ParsedSourceFile) -> Result<()> {
+        let root = Node::new(src_file.tree.root_node(), src_file);
+        self.write_node(w, root, None)
+    }
+
+    fn write_node(
+        &mut self,
+        w: &mut impl Write,
+        node: Node<'_>,
+        field_name: Option<&'static str>,
+    ) -> Result<()> {
+        let expandable_separator = self.whitespace.expandable_separator();
+
+        self.write_indent(w)?;
+        if let Some(field_name) = field_name {
+            write!(w, "{field_name}: ").unwrap();
+        }
+        write!(w, "(").unwrap();
+        if node.is_named() {
+            write!(w, "{}", node.grammar_name()).unwrap();
+        } else {
+            write!(w, r#""{}""#, node.grammar_name()).unwrap();
+        }
+
+        self.curr_indent += 1;
+        node.children(&mut node.walk())
+            .enumerate()
+            .try_for_each(|(i, child)| {
+                write!(w, "{expandable_separator}").unwrap();
+                let field_name = node.field_name_for_child(i as u32);
+                self.write_node(w, child, field_name)
+            })?;
+        self.curr_indent -= 1;
+
+        if self.whitespace.is_pretty() && node.child_count() != 0 {
+            write!(w, "{expandable_separator}").unwrap();
+            self.write_indent(w)?;
+        }
+        write!(w, ")").unwrap();
+        self.write_location(w, &Location::of(&node))?;
+        Ok(())
+    }
+
+    fn write_indent(&self, w: &mut impl Write) -> Result<()> {
+        if self.whitespace.is_compact() {
+            return Ok(());
+        }
+
+        (0..self.curr_indent)
+            .try_for_each(|_| write!(w, "  "))
+            .unwrap();
+        Ok(())
+    }
+
+    fn write_location(&self, w: &mut impl Write, loc: &Location) -> Result<()> {
+        if self.whitespace.is_compact() {
+            return Ok(());
+        }
+
+        write!(w, " ; {loc}").unwrap();
+        Ok(())
+    }
+}
+
+#[derive(EnumIs)]
+pub enum WhitespaceSeparators {
+    Pretty,
+    Compact,
+}
+
+impl WhitespaceSeparators {
+    fn expandable_separator(&self) -> char {
+        match self {
+            Self::Pretty => '\n',
+            Self::Compact => ' ',
+        }
     }
 }
 
@@ -503,6 +604,7 @@ mod test {
                             check['true'](str(bin_expr).startswith('(')) # Looks like an s-expression
                             check['true'](str(bin_expr).endswith(')'))   # Looks like an s-expression
                             check['eq'](str(bin_expr), repr(bin_expr))
+                            check['in']('("+")', str(bin_expr))
                     "#,
                     check_path = VexTest::CHECK_STARLARK_PATH,
                 },
