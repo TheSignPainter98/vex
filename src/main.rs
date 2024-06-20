@@ -9,6 +9,7 @@ mod check_id;
 mod cli;
 mod context;
 mod error;
+mod ignores;
 mod irritation;
 mod logger;
 mod plural;
