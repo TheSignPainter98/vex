@@ -53,12 +53,14 @@ mod test {
 
     #[test]
     fn ignore_markers() {
-        let mut ignore_markers_builder = IgnoreMarkers::builder();
-        ignore_markers_builder.add(3..10);
-        ignore_markers_builder.add(4..9);
-        ignore_markers_builder.add(4..10);
-        ignore_markers_builder.add(11..13);
-        let ignore_markers = ignore_markers_builder.build();
+        let ignore_markers = {
+            let mut builder = IgnoreMarkers::builder();
+            builder.add(3..10);
+            builder.add(4..9);
+            builder.add(4..10);
+            builder.add(11..13);
+            builder.build()
+        };
 
         let tests = [
             (1, false),
