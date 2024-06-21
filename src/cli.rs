@@ -166,7 +166,7 @@ pub struct ParseCmd {
     pub path: Utf8PathBuf,
 
     #[arg(long)]
-    pub compact: bool,
+    pub expanded: bool,
 
     #[arg(long = "as", value_name = "language")]
     pub language: Option<SupportedLanguage>,

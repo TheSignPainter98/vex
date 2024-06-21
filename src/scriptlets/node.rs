@@ -241,8 +241,7 @@ impl Display for Node<'_> {
     #[allow(clippy::print_in_format_impl)]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut buf = String::new();
-        if let Err(err) =
-            NodeFormatter::new(WhitespaceSeparators::Compact).write(&mut buf, self.source_file)
+        if let Err(err) = NodeFormatter::new(NodeFormat::Compact).write(&mut buf, self.source_file)
         {
             eprintln!("node formatter failed: {err}");
         }
@@ -377,15 +376,15 @@ impl<'v> AllocValue<'v> for ChildrenIterator<'v> {
 }
 
 pub struct NodeFormatter {
-    whitespace: WhitespaceSeparators,
+    format: NodeFormat,
     curr_indent: u32,
 }
 
 impl NodeFormatter {
-    pub fn new(whitespace: WhitespaceSeparators) -> Self {
+    pub fn new(format: NodeFormat) -> Self {
         let curr_indent = 0;
         Self {
-            whitespace,
+            format,
             curr_indent,
         }
     }
@@ -401,7 +400,7 @@ impl NodeFormatter {
         node: Node<'_>,
         field_name: Option<&'static str>,
     ) -> Result<()> {
-        let expandable_separator = self.whitespace.expandable_separator();
+        let expandable_separator = self.format.expandable_separator();
 
         self.write_indent(w)?;
         if let Some(field_name) = field_name {
@@ -424,7 +423,7 @@ impl NodeFormatter {
             })?;
         self.curr_indent -= 1;
 
-        if self.whitespace.is_pretty() && node.child_count() != 0 {
+        if self.format.is_expanded() && node.child_count() != 0 {
             write!(w, "{expandable_separator}").unwrap();
             self.write_indent(w)?;
         }
@@ -434,7 +433,7 @@ impl NodeFormatter {
     }
 
     fn write_indent(&self, w: &mut impl Write) -> Result<()> {
-        if self.whitespace.is_compact() {
+        if self.format.is_compact() {
             return Ok(());
         }
 
@@ -445,7 +444,7 @@ impl NodeFormatter {
     }
 
     fn write_location(&self, w: &mut impl Write, loc: &Location) -> Result<()> {
-        if self.whitespace.is_compact() {
+        if self.format.is_compact() {
             return Ok(());
         }
 
@@ -455,15 +454,15 @@ impl NodeFormatter {
 }
 
 #[derive(EnumIs)]
-pub enum WhitespaceSeparators {
-    Pretty,
+pub enum NodeFormat {
+    Expanded,
     Compact,
 }
 
-impl WhitespaceSeparators {
+impl NodeFormat {
     fn expandable_separator(&self) -> char {
         match self {
-            Self::Pretty => '\n',
+            Self::Expanded => '\n',
             Self::Compact => ' ',
         }
     }
