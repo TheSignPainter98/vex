@@ -410,7 +410,7 @@ impl NodeFormatter {
         if node.is_named() {
             write!(w, "{}", node.grammar_name()).unwrap();
         } else {
-            write!(w, r#""{}""#, node.grammar_name()).unwrap();
+            write!(w, r#"{:?}"#, node.grammar_name()).unwrap();
         }
 
         self.curr_indent += 1;
