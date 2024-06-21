@@ -18,6 +18,11 @@ impl IgnoreMarkers {
             .iter()
             .any(|range| index < range.end)
     }
+
+    #[cfg(test)]
+    pub fn ignore_ranges(&self) -> &[Range<usize>] {
+        &self.ignore_ranges
+    }
 }
 
 pub struct IgnoreMarkersBuilder {

@@ -75,16 +75,23 @@ impl SupportedLanguage {
 
         IGNORE_QUERIES[*self].get_or_init(|| {
             let raw = match self {
-                Self::C | Self::Cpp | Self::Go | Self::Python => indoc! {r#"
+                Self::C | Self::Cpp | Self::Go => indoc! {r#"
                     (
-                        (comment) @ignore_tag (#match-any? @ignore_tag "^// vex:ignore" "^/\* vex:ignore")
+                        (comment) @ignore_tag (#match? @ignore_tag "^/[/*] *vex:ignore")
+                        .
+                        (_) @ignore
+                    )
+                "#},
+                Self::Python => indoc! {r#"
+                    (
+                        (comment) @ignore_tag (#match? @ignore_tag "^# *vex:ignore")
                         .
                         (_) @ignore
                     )
                 "#},
                 Self::Rust => indoc! {r#"
                     (
-                        (line_comment) @ignore_tag (#match? @ignore_tag "^// vex:ignore")
+                        (line_comment) @ignore_tag (#match? @ignore_tag "^// *vex:ignore")
                         .
                         (_) @ignore
                     )
@@ -121,7 +128,6 @@ mod test {
     use std::ops::Range;
 
     use strum::IntoEnumIterator;
-    use tree_sitter::QueryCursor;
 
     use crate::{source_file::ParsedSourceFile, source_path::SourcePath};
 
@@ -152,6 +158,8 @@ mod test {
                         2,
                         3,
                     };
+                    // unrelated
+                    int z = 1;
                 }
             "#})
             .ignores_ranges(&[18..31, 36..87, 92..108, 113..164]);
@@ -170,6 +178,8 @@ mod test {
                         2,
                         3,
                     };
+                    // unrelated
+                    int z = 1;
                 }
             "#})
             .ignores_ranges(&[18..31, 36..91, 96..112, 117..174]);
@@ -184,20 +194,25 @@ mod test {
                         2,
                         3,
                     }
+                    // unrelated
+                    z := 1;
                 }
             "#})
             .ignores_ranges(&[32..45, 50..100]);
         Test::language(SupportedLanguage::Python)
             .with_source(indoc! {r#"
                 def main():
+                    _ = _ # Placeholder line to avoid bug in Python grammar causing two consecutive body fields to be created.
                     # vex:ignore
                     x = [
                         1,
                         2,
                         3,
                     ]
+                    # unrelated
+                    z = 1;
             "#})
-            .ignores_ranges(&[16..28, 33..77]);
+            .ignores_ranges(&[127..139, 144..188]);
         Test::language(SupportedLanguage::Rust)
             .with_source(indoc! {r#"
                 fn main() {
@@ -207,6 +222,8 @@ mod test {
                         2,
                         3,
                     ];
+                    // unrelated
+                    let z = 1;
                 }
             "#})
             .ignores_ranges(&[16..29, 34..83]);
@@ -240,18 +257,8 @@ mod test {
                     self.language,
                 )
                 .unwrap();
-
-                let ignore_query = self.language.ignore_query();
-                let ignore_ranges: Vec<_> = QueryCursor::new()
-                    .matches(
-                        ignore_query,
-                        source_file.tree.root_node(),
-                        source_file.content.as_bytes(),
-                    )
-                    .flat_map(|qmatch| qmatch.captures)
-                    .map(|qcap| qcap.node.byte_range())
-                    .collect();
-                assert_eq!(ranges, ignore_ranges);
+                let ignore_markers = source_file.ignore_markers();
+                assert_eq!(ranges, ignore_markers.ignore_ranges());
             }
 
             fn setup(&self) {
