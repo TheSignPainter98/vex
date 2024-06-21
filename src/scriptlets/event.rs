@@ -10,7 +10,10 @@ use starlark::{
 use starlark_derive::starlark_value;
 use strum::{Display, EnumIter, IntoEnumIterator};
 
-use crate::{error::Error, result::Result, scriptlets::QueryCaptures, source_path::PrettyPath};
+use crate::{
+    error::Error, result::Result, scriptlets::QueryCaptures, source_path::PrettyPath,
+    suggestion::suggest,
+};
 
 const PATH_ATTR_NAME: &str = "path";
 const NAME_ATTR_NAME: &str = "name";
@@ -57,16 +60,12 @@ impl FromStr for EventKind {
             _ => Err(Error::UnknownEvent {
                 name: s.to_owned(),
                 suggestion: {
-                    let (event, distance) = Self::iter()
-                        .filter(Self::parseable)
-                        .map(|event| (event, strsim::damerau_levenshtein(s, event.name())))
-                        .min_by_key(|(_, distance)| *distance)
-                        .unwrap();
-                    if distance <= 2 {
-                        Some(event.name())
-                    } else {
-                        None
-                    }
+                    suggest(
+                        s,
+                        Self::iter()
+                            .filter(Self::parseable)
+                            .map(|event| event.name()),
+                    )
                 },
             }),
         }
