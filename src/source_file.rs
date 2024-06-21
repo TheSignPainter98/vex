@@ -3,10 +3,11 @@ use std::fs;
 use allocative::Allocative;
 use dupe::Dupe;
 use log::{info, log_enabled};
-use tree_sitter::{Parser, Tree};
+use tree_sitter::{Parser, QueryCursor, Tree};
 
 use crate::{
     error::{Error, IOAction},
+    ignore_markers::IgnoreMarkers,
     result::Result,
     source_path::SourcePath,
     supported_language::SupportedLanguage,
@@ -19,9 +20,9 @@ pub struct SourceFile {
 }
 
 impl SourceFile {
-    pub fn new(path: SourcePath, language: Option<SupportedLanguage>) -> Result<Self> {
+    pub fn new(path: SourcePath, language: Option<SupportedLanguage>) -> Self {
         let path = path.dupe();
-        Ok(Self { path, language })
+        Self { path, language }
     }
 
     pub fn path(&self) -> &SourcePath {
@@ -86,6 +87,19 @@ impl ParsedSourceFile {
             tree,
             language,
         })
+    }
+
+    pub fn ignore_markers(&self) -> IgnoreMarkers {
+        let mut builder = IgnoreMarkers::builder();
+
+        let ignore_query = self.language.ignore_query();
+        QueryCursor::new()
+            .matches(ignore_query, self.tree.root_node(), self.content.as_bytes())
+            .flat_map(|qmatch| qmatch.captures)
+            .map(|qcap| qcap.node.byte_range())
+            .for_each(|ignore_range| builder.add(ignore_range));
+
+        builder.build()
     }
 }
 

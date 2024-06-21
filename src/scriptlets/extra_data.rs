@@ -8,6 +8,7 @@ use starlark::{
 use starlark_derive::{starlark_value, NoSerialize, Trace};
 
 use crate::{
+    ignore_markers::IgnoreMarkers,
     scriptlets::{
         action::Action,
         intents::{UnfrozenIntent, UnfrozenIntents},
@@ -95,14 +96,15 @@ impl<'v> AllocValue<'v> for RetainedData {
 }
 
 #[derive(Debug, ProvidesStaticType)]
-pub struct TempData<'qc> {
+pub struct TempData<'v> {
     pub action: Action,
-    pub query_cache: &'qc QueryCache,
+    pub query_cache: &'v QueryCache,
     pub vex_path: PrettyPath,
+    pub ignore_markers: Option<&'v IgnoreMarkers>,
 }
 
-impl<'qc> TempData<'qc> {
-    pub fn get_from(eval: &Evaluator<'_, 'qc>) -> &'qc Self {
+impl<'v> TempData<'v> {
+    pub fn get_from(eval: &Evaluator<'_, 'v>) -> &'v Self {
         eval.extra
             .expect("internal error: Evaluator extra not set")
             .downcast_ref()
