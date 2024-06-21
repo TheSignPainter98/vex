@@ -106,6 +106,7 @@ impl PreinitingScriptlet {
                     action: Action::Preiniting,
                     vex_path: path.pretty_path.dupe(),
                     query_cache: &QueryCache::new(),
+                    ignores: None,
                 };
                 let mut eval = Evaluator::new(&preinited_module);
                 eval.set_loader(&cache);
@@ -323,6 +324,7 @@ impl InitingScriptlet {
                     action: Action::Initing,
                     query_cache: &QueryCache::new(),
                     vex_path: path.pretty_path.dupe(),
+                    ignores: None,
                 };
                 let mut eval = Evaluator::new(&module);
                 eval.extra = Some(&temp_data);

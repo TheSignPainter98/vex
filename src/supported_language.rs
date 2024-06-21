@@ -136,7 +136,7 @@ mod test {
     }
 
     #[test]
-    fn ignore_extraction() {
+    fn ignore_queries() {
         Test::language(SupportedLanguage::C)
             .with_source(indoc! {r#"
                 void main() {
@@ -241,10 +241,10 @@ mod test {
                 )
                 .unwrap();
 
-                let query = self.language.ignore_query();
+                let ignore_query = self.language.ignore_query();
                 let ignore_ranges: Vec<_> = QueryCursor::new()
                     .matches(
-                        query,
+                        ignore_query,
                         source_file.tree.root_node(),
                         source_file.content.as_bytes(),
                     )

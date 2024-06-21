@@ -9,7 +9,7 @@ mod check_id;
 mod cli;
 mod context;
 mod error;
-mod ignores;
+mod ignore_markers;
 mod irritation;
 mod logger;
 mod plural;
@@ -206,6 +206,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
         let observe_opts = ObserveOptions {
             action: Action::Vexing(event.kind()),
             query_cache: &query_cache,
+            ignores: None,
         };
         store.observers_for(event.kind()).observe(
             &handler_module,
@@ -244,6 +245,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
             let observe_opts = ObserveOptions {
                 action: Action::Vexing(event.kind()),
                 query_cache: &query_cache,
+                ignores: None,
             };
             store.observers_for(event.kind()).observe(
                 &handler_module,
@@ -273,6 +275,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
             continue; // No need to parse, the user will never search this.
         }
         let parsed_file = file.parse()?;
+        let ignores = parsed_file.ignores();
         project_queries
             .iter()
             .chain(file_queries.iter())
@@ -299,6 +302,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
                         let observe_opts = ObserveOptions {
                             action: Action::Vexing(EventKind::Match),
                             query_cache: &query_cache,
+                            ignores: Some(&ignores),
                         };
                         on_match.observe(&handler_module, event, observe_opts)?;
                         handler_module

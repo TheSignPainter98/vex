@@ -1,41 +1,44 @@
 use std::ops::Range;
 
-pub struct Ignores {
-    ignores: Vec<Range<usize>>,
+#[derive(Debug)]
+pub struct IgnoreMarkers {
+    ignore_ranges: Vec<Range<usize>>,
 }
 
-impl Ignores {
-    pub fn builder() -> IgnoresBuilder {
-        IgnoresBuilder::new()
+impl IgnoreMarkers {
+    pub fn builder() -> IgnoreMarkersBuilder {
+        IgnoreMarkersBuilder::new()
     }
 
     pub fn contains(&self, index: usize) -> bool {
-        let possible_ignores_end = self.ignores.partition_point(|range| range.start <= index);
-        self.ignores[..possible_ignores_end]
+        let possible_ignores_end = self
+            .ignore_ranges
+            .partition_point(|range| range.start <= index);
+        self.ignore_ranges[..possible_ignores_end]
             .iter()
             .any(|range| index < range.end)
     }
 }
 
-pub struct IgnoresBuilder {
-    ignores: Vec<Range<usize>>,
+pub struct IgnoreMarkersBuilder {
+    ignore_ranges: Vec<Range<usize>>,
 }
 
-impl IgnoresBuilder {
+impl IgnoreMarkersBuilder {
     pub fn new() -> Self {
         Self {
-            ignores: Vec::new(),
+            ignore_ranges: Vec::new(),
         }
     }
 
     pub fn add(&mut self, range: Range<usize>) {
-        self.ignores.push(range)
+        self.ignore_ranges.push(range)
     }
 
-    pub fn build(self) -> Ignores {
-        let Self { mut ignores } = self;
-        ignores.sort_by_key(|range| (range.start, -(range.end as i64)));
-        Ignores { ignores }
+    pub fn build(self) -> IgnoreMarkers {
+        let Self { mut ignore_ranges } = self;
+        ignore_ranges.sort_by_key(|range| (range.start, -(range.end as i64)));
+        IgnoreMarkers { ignore_ranges }
     }
 }
 
@@ -45,7 +48,7 @@ mod test {
 
     #[test]
     fn ignores() {
-        let mut ignores_builder = Ignores::builder();
+        let mut ignores_builder = IgnoreMarkers::builder();
         ignores_builder.add(3..10);
         ignores_builder.add(4..9);
         ignores_builder.add(4..10);
