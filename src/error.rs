@@ -107,9 +107,6 @@ pub enum Error {
     #[error(transparent)]
     Toml(#[from] toml_edit::de::Error),
 
-    #[error("operator '#{operator}' undefined")]
-    UndefinedOperator { operator: String },
-
     #[error(
         "unknown event '{name}'{}, expected one of: {}",
         suggestion.map(|suggestion| format!(" (did you mean '{suggestion}'?)")).unwrap_or_default(),
@@ -119,6 +116,9 @@ pub enum Error {
         name: String,
         suggestion: Option<&'static str>,
     },
+
+    #[error("unknown operator '#{operator}'")]
+    UnknownOperator { operator: String },
 
     #[error("unsupported language '{0}'")]
     UnsupportedLanguage(String),

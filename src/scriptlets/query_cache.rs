@@ -45,7 +45,7 @@ impl QueryCache {
         }
         for pattern_index in 0..query.pattern_count() {
             if let Some(predicate) = query.general_predicates(pattern_index).first() {
-                return Err(Error::UndefinedOperator {
+                return Err(Error::UnknownOperator {
                     operator: predicate.operator.to_string(),
                 });
             }
