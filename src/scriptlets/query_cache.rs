@@ -43,6 +43,13 @@ impl QueryCache {
         if query.pattern_count() == 0 {
             return Err(Error::EmptyQuery);
         }
+        for pattern_index in 0..query.pattern_count() {
+            if let Some(predicate) = query.general_predicates(pattern_index).first() {
+                return Err(Error::UndefinedOperator {
+                    operator: predicate.operator.to_string(),
+                });
+            }
+        }
 
         self.cache
             .borrow_mut()
