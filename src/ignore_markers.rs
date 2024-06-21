@@ -37,7 +37,7 @@ impl IgnoreMarkersBuilder {
 
     pub fn build(self) -> IgnoreMarkers {
         let Self { mut ignore_ranges } = self;
-        ignore_ranges.sort_by_key(|range| (range.start, -(range.end as i64)));
+        ignore_ranges.sort_by_key(|range| range.start);
         IgnoreMarkers { ignore_ranges }
     }
 }
