@@ -10,11 +10,11 @@ impl IgnoreMarkers {
         IgnoreMarkersBuilder::new()
     }
 
-    pub fn contains(&self, index: usize) -> bool {
-        let possible_ignores_end = self
+    pub fn check_marked(&self, index: usize) -> bool {
+        let relevant_range_cap = self
             .ignore_ranges
             .partition_point(|range| range.start <= index);
-        self.ignore_ranges[..possible_ignores_end]
+        self.ignore_ranges[..relevant_range_cap]
             .iter()
             .any(|range| index < range.end)
     }
@@ -47,13 +47,13 @@ mod test {
     use super::*;
 
     #[test]
-    fn ignores() {
-        let mut ignores_builder = IgnoreMarkers::builder();
-        ignores_builder.add(3..10);
-        ignores_builder.add(4..9);
-        ignores_builder.add(4..10);
-        ignores_builder.add(11..13);
-        let ignores = ignores_builder.build();
+    fn ignore_markers() {
+        let mut ignore_markers_builder = IgnoreMarkers::builder();
+        ignore_markers_builder.add(3..10);
+        ignore_markers_builder.add(4..9);
+        ignore_markers_builder.add(4..10);
+        ignore_markers_builder.add(11..13);
+        let ignore_markers = ignore_markers_builder.build();
 
         let tests = [
             (1, false),
@@ -70,12 +70,12 @@ mod test {
             (12, true),
             (13, false),
         ];
-        tests.into_iter().for_each(|(index, expect_contained)| {
+        tests.into_iter().for_each(|(index, expected)| {
             assert_eq!(
-                ignores.contains(index),
-                expect_contained,
-                "index {index}: expected {expect_contained}, got {}",
-                ignores.contains(index)
+                ignore_markers.check_marked(index),
+                expected,
+                "index {index}: expected {expected}, got {}",
+                ignore_markers.check_marked(index)
             );
         });
     }

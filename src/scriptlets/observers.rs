@@ -8,7 +8,7 @@ use starlark::{
 use starlark_derive::{starlark_value, NoSerialize, ProvidesStaticType, Trace};
 
 use crate::{
-    ignores::Ignores,
+    ignore_markers::IgnoreMarkers,
     result::Result,
     scriptlets::{
         action::Action, event::EventKind, extra_data::TempData, handler_module::HandlerModule,
@@ -111,7 +111,7 @@ pub trait Observable {
 pub struct ObserveOptions<'v> {
     pub action: Action,
     pub query_cache: &'v QueryCache,
-    pub ignores: Option<&'v Ignores>,
+    pub ignore_markers: Option<&'v IgnoreMarkers>,
 }
 
 impl Observable for Observer {
@@ -125,7 +125,7 @@ impl Observable for Observer {
             action: opts.action,
             query_cache: opts.query_cache,
             vex_path: self.vex_path.dupe(),
-            ignores: opts.ignores,
+            ignore_markers: opts.ignore_markers,
         };
 
         let mut eval = Evaluator::new(handler_module);

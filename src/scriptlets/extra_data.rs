@@ -8,7 +8,7 @@ use starlark::{
 use starlark_derive::{starlark_value, NoSerialize, Trace};
 
 use crate::{
-    ignores::Ignores,
+    ignore_markers::IgnoreMarkers,
     scriptlets::{
         action::Action,
         intents::{UnfrozenIntent, UnfrozenIntents},
@@ -100,7 +100,7 @@ pub struct TempData<'v> {
     pub action: Action,
     pub query_cache: &'v QueryCache,
     pub vex_path: PrettyPath,
-    pub ignores: Option<&'v Ignores>,
+    pub ignore_markers: Option<&'v IgnoreMarkers>,
 }
 
 impl<'v> TempData<'v> {

@@ -130,8 +130,8 @@ impl AppObject {
             let mut irritation_renderer =
                 IrritationRenderer::new(temp_data.vex_path.dupe(), message);
             if let Some(at) = at {
-                if let Some(ignores) = temp_data.ignores {
-                    if ignores.contains(at.0.byte_range().start) {
+                if let Some(ignore_markers) = temp_data.ignore_markers {
+                    if ignore_markers.check_marked(at.0.byte_range().start) {
                         return Ok(NoneType);
                     }
                 }

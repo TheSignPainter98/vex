@@ -154,7 +154,7 @@ mod test {
                     };
                 }
             "#})
-            .ignores(&[18..31, 36..87, 92..108, 113..164]);
+            .ignores_ranges(&[18..31, 36..87, 92..108, 113..164]);
         Test::language(SupportedLanguage::Cpp)
             .with_source(indoc! {r#"
                 void main() {
@@ -172,7 +172,7 @@ mod test {
                     };
                 }
             "#})
-            .ignores(&[18..31, 36..91, 96..112, 117..174]);
+            .ignores_ranges(&[18..31, 36..91, 96..112, 117..174]);
         Test::language(SupportedLanguage::Go)
             .with_source(indoc! {r#"
                 package main
@@ -186,7 +186,7 @@ mod test {
                     }
                 }
             "#})
-            .ignores(&[32..45, 50..100]);
+            .ignores_ranges(&[32..45, 50..100]);
         Test::language(SupportedLanguage::Python)
             .with_source(indoc! {r#"
                 def main():
@@ -197,7 +197,7 @@ mod test {
                         3,
                     ]
             "#})
-            .ignores(&[16..28, 33..77]);
+            .ignores_ranges(&[16..28, 33..77]);
         Test::language(SupportedLanguage::Rust)
             .with_source(indoc! {r#"
                 fn main() {
@@ -209,7 +209,7 @@ mod test {
                     ];
                 }
             "#})
-            .ignores(&[16..29, 34..83]);
+            .ignores_ranges(&[16..29, 34..83]);
 
         // Test structs
         #[must_use]
@@ -231,7 +231,7 @@ mod test {
                 self
             }
 
-            fn ignores(self, ranges: &[Range<usize>]) {
+            fn ignores_ranges(self, ranges: &[Range<usize>]) {
                 self.setup();
 
                 let source_file = ParsedSourceFile::new_with_content(
