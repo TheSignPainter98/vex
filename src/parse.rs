@@ -29,7 +29,7 @@ pub fn parse(cmd: ParseCmd) -> Result<()> {
             .unwrap_or_else(Associations::base)
             .get_language(&src_path)?,
     };
-    let src_file = SourceFile::new(src_path, language)?.parse()?;
+    let src_file = SourceFile::new(src_path, language).parse()?;
 
     let capacity_estimate = 20 * src_file.tree.root_node().descendant_count();
     let mut buf = String::with_capacity(capacity_estimate);

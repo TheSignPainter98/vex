@@ -9,6 +9,7 @@ mod check_id;
 mod cli;
 mod context;
 mod error;
+mod ignore_markers;
 mod irritation;
 mod logger;
 mod parse;
@@ -185,7 +186,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
             .map(|p| SourcePath::new(&p, &ctx.project_root))
             .map(|p| {
                 let language = associations.get_language(&p)?;
-                SourceFile::new(p, language)
+                Ok(SourceFile::new(p, language))
             })
             .collect::<Result<Vec<_>>>()?
     };
@@ -205,6 +206,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
         let observe_opts = ObserveOptions {
             action: Action::Vexing(event.kind()),
             query_cache: &query_cache,
+            ignore_markers: None,
         };
         store.observers_for(event.kind()).observe(
             &handler_module,
@@ -243,6 +245,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
             let observe_opts = ObserveOptions {
                 action: Action::Vexing(event.kind()),
                 query_cache: &query_cache,
+                ignore_markers: None,
             };
             store.observers_for(event.kind()).observe(
                 &handler_module,
@@ -272,6 +275,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
             continue; // No need to parse, the user will never search this.
         }
         let parsed_file = file.parse()?;
+        let ignore_markers = parsed_file.ignore_markers();
         project_queries
             .iter()
             .chain(file_queries.iter())
@@ -298,6 +302,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
                         let observe_opts = ObserveOptions {
                             action: Action::Vexing(EventKind::Match),
                             query_cache: &query_cache,
+                            ignore_markers: Some(&ignore_markers),
                         };
                         on_match.observe(&handler_module, event, observe_opts)?;
                         handler_module

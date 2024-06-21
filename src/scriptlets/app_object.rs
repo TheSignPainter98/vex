@@ -126,9 +126,16 @@ impl AppObject {
             }
 
             let ret_data = UnfrozenRetainedData::get_from(eval.module());
-            let vex_path = TempData::get_from(eval).vex_path.dupe();
-            let mut irritation_renderer = IrritationRenderer::new(vex_path.dupe(), message);
+            let temp_data = TempData::get_from(eval);
+            let mut irritation_renderer =
+                IrritationRenderer::new(temp_data.vex_path.dupe(), message);
             if let Some(at) = at {
+                if let Some(ignore_markers) = temp_data.ignore_markers {
+                    if ignore_markers.check_marked(at.0.byte_range().start) {
+                        return Ok(NoneType);
+                    }
+                }
+
                 irritation_renderer.set_source(at)
             }
             if let Some(show_also) = show_also {
