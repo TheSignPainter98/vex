@@ -119,12 +119,13 @@ pub enum Error {
     },
 
     #[error(
-        "unknown operator '#{operator}'{}, expected one of {}",
+        "unknown operator '{operator_name}' in '#{operator}'{}, expected one of {}",
         suggestion.map(|suggestion| format!(" (did you mean '{suggestion}'?)")).unwrap_or_default(),
         Query::KNOWN_OPERATORS.iter().join_with(", ")
     )]
     UnknownOperator {
         operator: String,
+        operator_name: String,
         suggestion: Option<&'static str>,
     },
 

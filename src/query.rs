@@ -11,14 +11,14 @@ pub struct Query(TSQuery);
 
 impl Query {
     pub const KNOWN_OPERATORS: [&'static str; 8] = [
-        "#eq?",
-        "#match?",
-        "#any-of?",
-        "#not-eq?",
-        "#not-match?",
-        "#not-any-of?",
-        "#any-eq?",
-        "#any-match?",
+        "eq",
+        "match",
+        "any-eq",
+        "any-match",
+        "any-of",
+        "not-eq",
+        "not-match",
+        "not-any-of",
     ];
 
     pub fn new(language: SupportedLanguage, query: &str) -> Result<Self> {
@@ -31,9 +31,17 @@ impl Query {
         for pattern_index in 0..query.pattern_count() {
             if let Some(predicate) = query.general_predicates(pattern_index).first() {
                 let operator = predicate.operator.to_string();
-                let suggestion = suggest(&operator, Self::KNOWN_OPERATORS);
+
+                let operator_name = if operator.ends_with('?') || operator.ends_with('!') {
+                    operator[..operator.len() - 1].to_string()
+                } else {
+                    operator.clone()
+                };
+                let suggestion = suggest(&operator_name, Self::KNOWN_OPERATORS);
+
                 return Err(Error::UnknownOperator {
                     operator,
+                    operator_name,
                     suggestion,
                 });
             }
