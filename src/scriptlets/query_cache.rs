@@ -6,9 +6,8 @@ use starlark::{
     collections::StarlarkHashValue,
     values::{StringValue, Trace},
 };
-use tree_sitter::Query;
 
-use crate::{error::Error, result::Result, supported_language::SupportedLanguage};
+use crate::{query::Query, result::Result, supported_language::SupportedLanguage};
 
 #[derive(Clone, Debug, Allocative)]
 pub struct QueryCache {
@@ -39,18 +38,7 @@ impl QueryCache {
             return Ok(cached_query.0.dupe());
         }
 
-        let query = Arc::new(Query::new(language.ts_language(), &raw_query)?);
-        if query.pattern_count() == 0 {
-            return Err(Error::EmptyQuery);
-        }
-        for pattern_index in 0..query.pattern_count() {
-            if let Some(predicate) = query.general_predicates(pattern_index).first() {
-                return Err(Error::UnknownOperator {
-                    operator: predicate.operator.to_string(),
-                });
-            }
-        }
-
+        let query = Arc::new(Query::new(language, &raw_query)?);
         self.cache
             .borrow_mut()
             .insert((language, query_hash), CachedQuery(query.dupe()));

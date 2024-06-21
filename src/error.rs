@@ -6,6 +6,7 @@ use joinery::JoinableIterator;
 use strum::IntoEnumIterator;
 
 use crate::{
+    query::Query,
     scriptlets::{action::Action, event::EventKind, LoadStatementModule},
     source_path::PrettyPath,
     supported_language::SupportedLanguage,
@@ -117,8 +118,15 @@ pub enum Error {
         suggestion: Option<&'static str>,
     },
 
-    #[error("unknown operator '#{operator}'")]
-    UnknownOperator { operator: String },
+    #[error(
+        "unknown operator '#{operator}'{}, expected one of {}",
+        suggestion.map(|suggestion| format!(" (did you mean '{suggestion}'?)")).unwrap_or_default(),
+        Query::KNOWN_OPERATORS.iter().join_with(", ")
+    )]
+    UnknownOperator {
+        operator: String,
+        suggestion: Option<&'static str>,
+    },
 
     #[error("unsupported language '{0}'")]
     UnsupportedLanguage(String),

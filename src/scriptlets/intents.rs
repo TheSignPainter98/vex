@@ -6,10 +6,10 @@ use allocative::Allocative;
 use derive_more::Display;
 use starlark::values::{AllocValue, Freeze, StarlarkValue, Value};
 use starlark_derive::{starlark_value, NoSerialize, ProvidesStaticType, Trace};
-use tree_sitter::Query;
 
 use crate::{
     irritation::Irritation,
+    query::Query,
     scriptlets::{event::EventKind, observers::UnfrozenObserver, Observer},
     supported_language::SupportedLanguage,
 };
