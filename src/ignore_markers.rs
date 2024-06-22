@@ -20,8 +20,8 @@ impl IgnoreMarkers {
     }
 
     #[cfg(test)]
-    pub fn ignore_ranges(&self) -> &[Range<usize>] {
-        &self.ignore_ranges
+    pub fn ignore_ranges<'a>(&'a self) -> impl Iterator<Item = Range<usize>> + 'a {
+        self.ignore_ranges.iter().cloned()
     }
 }
 

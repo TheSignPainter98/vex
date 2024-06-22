@@ -258,7 +258,7 @@ mod test {
                 )
                 .unwrap();
                 let ignore_markers = source_file.ignore_markers();
-                assert_eq!(ranges, ignore_markers.ignore_ranges());
+                assert_eq!(ranges, ignore_markers.ignore_ranges().collect::<Vec<_>>());
             }
 
             fn setup(&self) {
