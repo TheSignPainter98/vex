@@ -2,7 +2,7 @@ use std::ops::Range;
 
 #[derive(Debug)]
 pub struct IgnoreMarkers {
-    ignore_ranges: Vec<Range<usize>>,
+    markers: Vec<IgnoreMarker>,
 }
 
 impl IgnoreMarkers {
@@ -12,39 +12,44 @@ impl IgnoreMarkers {
 
     pub fn check_marked(&self, index: usize) -> bool {
         let relevant_range_cap = self
-            .ignore_ranges
-            .partition_point(|range| range.start <= index);
-        self.ignore_ranges[..relevant_range_cap]
+            .markers
+            .partition_point(|marker| marker.byte_range.start <= index);
+        self.markers[..relevant_range_cap]
             .iter()
-            .any(|range| index < range.end)
+            .any(|marker| index < marker.byte_range.end)
     }
 
     #[cfg(test)]
     pub fn ignore_ranges<'a>(&'a self) -> impl Iterator<Item = Range<usize>> + 'a {
-        self.ignore_ranges.iter().cloned()
+        self.markers.iter().map(|marker| marker.byte_range.clone())
     }
 }
 
 pub struct IgnoreMarkersBuilder {
-    ignore_ranges: Vec<Range<usize>>,
+    markers: Vec<IgnoreMarker>,
 }
 
 impl IgnoreMarkersBuilder {
     pub fn new() -> Self {
         Self {
-            ignore_ranges: Vec::new(),
+            markers: Vec::new(),
         }
     }
 
-    pub fn add(&mut self, range: Range<usize>) {
-        self.ignore_ranges.push(range)
+    pub fn add(&mut self, byte_range: Range<usize>) {
+        self.markers.push(IgnoreMarker { byte_range })
     }
 
     pub fn build(self) -> IgnoreMarkers {
-        let Self { mut ignore_ranges } = self;
-        ignore_ranges.sort_by_key(|range| range.start);
-        IgnoreMarkers { ignore_ranges }
+        let Self { mut markers } = self;
+        markers.sort_by_key(|range| range.byte_range.start);
+        IgnoreMarkers { markers }
     }
+}
+
+#[derive(Debug)]
+struct IgnoreMarker {
+    byte_range: Range<usize>,
 }
 
 #[cfg(test)]

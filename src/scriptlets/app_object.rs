@@ -66,8 +66,8 @@ impl AppObject {
                 temp_data.query_cache.get_or_create(language, query)?
             };
             let on_match = {
-                let vex_path = TempData::get_from(eval).vex_path.dupe();
-                UnfrozenObserver::new(vex_path, on_match)
+                let vex_id = TempData::get_from(eval).vex_id.dupe();
+                UnfrozenObserver::new(vex_id, on_match)
             };
             ret_data.declare_intent(UnfrozenIntent::Find {
                 language,
@@ -89,8 +89,8 @@ impl AppObject {
             let ret_data = UnfrozenRetainedData::get_from(eval.module());
             let event_kind = event.parse()?;
             let observer = {
-                let vex_path = TempData::get_from(eval).vex_path.dupe();
-                UnfrozenObserver::new(vex_path, observer)
+                let vex_id = TempData::get_from(eval).vex_id.dupe();
+                UnfrozenObserver::new(vex_id, observer)
             };
             ret_data.declare_intent(UnfrozenIntent::Observe {
                 event_kind,
@@ -127,8 +127,7 @@ impl AppObject {
 
             let ret_data = UnfrozenRetainedData::get_from(eval.module());
             let temp_data = TempData::get_from(eval);
-            let mut irritation_renderer =
-                IrritationRenderer::new(temp_data.vex_path.dupe(), message);
+            let mut irritation_renderer = IrritationRenderer::new(temp_data.vex_id.dupe(), message);
             if let Some(at) = at {
                 if let Some(ignore_markers) = temp_data.ignore_markers {
                     if ignore_markers.check_marked(at.0.byte_range().start) {
