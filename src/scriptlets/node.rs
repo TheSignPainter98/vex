@@ -404,30 +404,30 @@ impl NodeFormatter {
 
         self.write_indent(w)?;
         if let Some(field_name) = field_name {
-            write!(w, "{field_name}: ").unwrap();
+            write!(w, "{field_name}: ")?;
         }
-        write!(w, "(").unwrap();
+        write!(w, "(")?;
         if node.is_named() {
-            write!(w, "{}", node.grammar_name()).unwrap();
+            write!(w, "{}", node.grammar_name())?;
         } else {
-            write!(w, r#"{:?}"#, node.grammar_name()).unwrap();
+            write!(w, "{:?}", node.grammar_name())?;
         }
 
         self.curr_indent += 1;
         node.children(&mut node.walk())
             .enumerate()
             .try_for_each(|(i, child)| {
-                write!(w, "{expandable_separator}").unwrap();
+                write!(w, "{expandable_separator}")?;
                 let field_name = node.field_name_for_child(i as u32);
                 self.write_node(w, child, field_name)
             })?;
         self.curr_indent -= 1;
 
         if self.format.is_expanded() && node.child_count() != 0 {
-            write!(w, "{expandable_separator}").unwrap();
+            write!(w, "{expandable_separator}")?;
             self.write_indent(w)?;
         }
-        write!(w, ")").unwrap();
+        write!(w, ")")?;
         self.write_location(w, &Location::of(&node))?;
         Ok(())
     }
@@ -437,9 +437,7 @@ impl NodeFormatter {
             return Ok(());
         }
 
-        (0..self.curr_indent)
-            .try_for_each(|_| write!(w, "  "))
-            .unwrap();
+        (0..self.curr_indent).try_for_each(|_| write!(w, "  "))?;
         Ok(())
     }
 
@@ -448,7 +446,7 @@ impl NodeFormatter {
             return Ok(());
         }
 
-        write!(w, " ; {loc}").unwrap();
+        write!(w, " ; {loc}")?;
         Ok(())
     }
 }
