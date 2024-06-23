@@ -275,7 +275,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
             continue; // No need to parse, the user will never search this.
         }
         let parsed_file = file.parse()?;
-        let ignore_markers = parsed_file.ignore_markers();
+        let ignore_markers = parsed_file.ignore_markers()?;
         project_queries
             .iter()
             .chain(file_queries.iter())

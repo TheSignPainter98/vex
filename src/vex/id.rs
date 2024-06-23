@@ -1,102 +1,122 @@
 use std::{
-    cmp::Ordering,
-    collections::BTreeMap,
-    fmt::Display,
-    ops::{Deref, RangeTo},
-    sync::Mutex,
+    borrow::Borrow, cmp::Ordering, collections::BTreeMap, fmt::Display, ops::RangeTo, sync::Mutex,
 };
 
 use allocative::Allocative;
-use dupe::Dupe;
+use dupe::{Dupe, OptionDupedExt};
 use serde::Serialize;
 
 use crate::source_path::PrettyPath;
 
-#[derive(Clone, Debug, Allocative, Dupe, Serialize)]
-pub struct VexId {
-    #[serde(skip)]
-    id: u32,
+#[derive(Copy, Clone, Debug, Allocative, Dupe)]
+pub struct VexId(usize);
 
-    pub pretty: PrettyVexId,
-}
-
-static ID_STORE: IdStore = IdStore::new();
+static ID_STORE: Mutex<IdStore> = Mutex::new(IdStore::new());
 
 impl VexId {
     pub fn new(path: PrettyPath) -> Self {
-        ID_STORE.create_id(path)
+        ID_STORE
+            .lock()
+            .expect("internal error: failed to lock ID store")
+            .create_id(path)
     }
 
-    pub fn retrieve(pretty: &PrettyVexId) -> Self {
-        ID_STORE.get(pretty)
+    pub fn retrieve(pretty: &PrettyVexId) -> Option<Self> {
+        Self::retrieve_str(pretty.as_str())
+    }
+
+    pub fn retrieve_str(raw: &str) -> Option<Self> {
+        ID_STORE
+            .lock()
+            .expect("internal error: failed to lock ID store")
+            .get_id(raw)
+    }
+
+    pub fn to_pretty(&self) -> PrettyVexId {
+        ID_STORE
+            .lock()
+            .expect("internal error: failed to lock ID store")
+            .get_pretty_id(*self)
+            .expect("internal error: invalid ID")
     }
 }
 
 #[cfg(test)]
 impl VexId {
-    pub fn id(&self) -> u32 {
-        self.id
+    pub fn into_inner(self) -> usize {
+        self.0
     }
 }
 
 impl PartialEq for VexId {
     fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
+        self.0 == other.0
     }
 }
 
 impl Eq for VexId {}
 
-impl PartialOrd for VexId {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
+// impl PartialOrd for VexId {
+//     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+//         Some(self.cmp(other))
+//     }
+// }
+//
+// impl Ord for VexId {
+//     fn cmp(&self, other: &Self) -> Ordering {
+//         let Self { id, pretty } = self;
+//         let Self {
+//             id: other_id,
+//             pretty: other_pretty,
+//         } = other;
+//         (pretty, id).cmp(&(other_pretty, other_id))
+//     }
+// }
 
-impl Ord for VexId {
-    fn cmp(&self, other: &Self) -> Ordering {
-        let Self { id, pretty } = self;
-        let Self {
-            id: other_id,
-            pretty: other_pretty,
-        } = other;
-        (pretty, id).cmp(&(other_pretty, other_id))
-    }
-}
-
-impl Deref for VexId {
-    type Target = PrettyVexId;
-
-    fn deref(&self) -> &Self::Target {
-        &self.pretty
-    }
-}
+// impl Deref for VexId {
+//     type Target = PrettyVexId;
+//
+//     fn deref(&self) -> &Self::Target {
+//         &self.pretty
+//     }
+// }
 
 impl Display for VexId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.pretty.fmt(f)
+        self.to_pretty().fmt(f)
     }
 }
 
 #[derive(Debug, Clone, Allocative)]
-pub struct PrettyVexId {
-    path: PrettyPath,
-    #[allocative(skip)]
-    byte_range: RangeTo<usize>,
+pub enum PrettyVexId {
+    Raw(String),
+    Path {
+        path: PrettyPath,
+
+        #[allocative(skip)]
+        byte_range: RangeTo<usize>,
+    },
 }
 
 impl PrettyVexId {
-    pub fn new(path: PrettyPath) -> Self {
+    pub fn from_path(path: PrettyPath) -> Self {
         let byte_range = if let Some(stripped) = path.as_str().strip_suffix(".star") {
             ..stripped.len()
         } else {
             ..path.as_str().len()
         };
-        Self { path, byte_range }
+        Self::Path { path, byte_range }
+    }
+
+    pub fn from_raw(raw: String) -> Self {
+        Self::Raw(raw)
     }
 
     pub fn as_str(&self) -> &str {
-        &self.path.as_str()[self.byte_range.clone()]
+        match self {
+            Self::Raw(s) => s,
+            Self::Path { path, byte_range } => &path.as_str()[byte_range.clone()],
+        }
     }
 }
 
@@ -126,6 +146,12 @@ impl AsRef<str> for PrettyVexId {
     }
 }
 
+impl Borrow<str> for PrettyVexId {
+    fn borrow(&self) -> &str {
+        self.as_str()
+    }
+}
+
 impl Display for PrettyVexId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.as_str().fmt(f)
@@ -133,7 +159,7 @@ impl Display for PrettyVexId {
 }
 
 impl Serialize for PrettyVexId {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
@@ -149,38 +175,36 @@ impl Dupe for PrettyVexId {
 
 #[derive(Debug, Default)]
 struct IdStore {
-    id_map: Mutex<BTreeMap<PrettyVexId, VexId>>,
+    id_map: BTreeMap<PrettyVexId, VexId>,
+    pretty_map: Vec<PrettyVexId>,
 }
 
 impl IdStore {
     pub const fn new() -> Self {
         Self {
-            id_map: Mutex::new(BTreeMap::new()),
+            id_map: BTreeMap::new(),
+            pretty_map: Vec::new(),
         }
     }
 
-    pub fn create_id(&self, path: PrettyPath) -> VexId {
-        let mut id_map = self
-            .id_map
-            .lock()
-            .expect("internal error: failed to lock ID map");
-        let id = id_map.len() as u32;
-        let pretty = PrettyVexId::new(path);
-        let ret = VexId {
-            id,
-            pretty: pretty.dupe(),
-        };
-        id_map.insert(pretty, ret.dupe());
-        ret
+    pub fn create_id(&mut self, path: PrettyPath) -> VexId {
+        let Self {
+            ref mut id_map,
+            ref mut pretty_map,
+        } = self;
+        let id = VexId(pretty_map.len());
+        let pretty = PrettyVexId::from_path(path);
+        pretty_map.push(pretty.dupe());
+        id_map.insert(pretty, id);
+        id
     }
 
-    pub fn get(&self, pretty: &PrettyVexId) -> VexId {
-        self.id_map
-            .lock()
-            .expect("internal error: failed to lock ID map")
-            .get(pretty)
-            .expect("internal error: invalid vex ID")
-            .dupe()
+    pub fn get_id(&self, pretty: &str) -> Option<VexId> {
+        self.id_map.get(pretty).duped()
+    }
+
+    pub fn get_pretty_id(&self, id: VexId) -> Option<PrettyVexId> {
+        self.pretty_map.get(id.0).duped()
     }
 }
 
@@ -193,14 +217,13 @@ mod test {
         let path = "foo/bar/baz.star".into();
         let x = VexId::new(PrettyPath::new(path));
         let y = VexId::new(PrettyPath::new(path));
-        assert_ne!(x.id(), y.id());
+        assert_ne!(x.into_inner(), y.into_inner());
     }
 
     #[test]
     fn pretty() {
         let path = "foo/bar/baz.star";
         let id = VexId::new(PrettyPath::new(path.into()));
-        assert_eq!(id.as_str(), "foo/bar/baz");
-        assert_eq!(id.as_str(), id.pretty.as_str());
+        assert_eq!(id.to_pretty().as_str(), "foo/bar/baz");
     }
 }

@@ -127,10 +127,11 @@ impl AppObject {
 
             let ret_data = UnfrozenRetainedData::get_from(eval.module());
             let temp_data = TempData::get_from(eval);
-            let mut irritation_renderer = IrritationRenderer::new(temp_data.vex_id.dupe(), message);
+            let mut irritation_renderer =
+                IrritationRenderer::new(temp_data.vex_id.to_pretty(), message);
             if let Some(at) = at {
                 if let Some(ignore_markers) = temp_data.ignore_markers {
-                    if ignore_markers.check_marked(at.0.byte_range().start) {
+                    if ignore_markers.marked(at.0.byte_range().start, temp_data.vex_id) {
                         return Ok(NoneType);
                     }
                 }

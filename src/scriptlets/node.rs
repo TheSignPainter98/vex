@@ -382,7 +382,7 @@ impl<'v> AllocValue<'v> for ChildrenIterator<'v> {
     ProvidesStaticType,
     StarlarkAttrs,
 )]
-struct Location {
+pub struct Location {
     start_row: usize,
     start_column: usize,
     end_row: usize,
@@ -391,7 +391,7 @@ struct Location {
 starlark_simple_value!(Location);
 
 impl Location {
-    fn of(node: &Node<'_>) -> Self {
+    pub fn of(node: &Node<'_>) -> Self {
         let Point {
             row: start_row,
             column: start_column,

@@ -77,23 +77,23 @@ impl SupportedLanguage {
             let raw = match self {
                 Self::C | Self::Cpp | Self::Go => indoc! {r#"
                     (
-                        (comment) @ignore_tag (#match? @ignore_tag "^/[/*] *vex:ignore")
+                        (comment) @marker (#match? @marker "^/[/*] *vex:ignore")
                         .
-                        (_) @ignore
+                        (_)? @ignore
                     )
                 "#},
                 Self::Python => indoc! {r#"
                     (
-                        (comment) @ignore_tag (#match? @ignore_tag "^# *vex:ignore")
+                        (comment) @marker (#match? @marker "^# *vex:ignore")
                         .
-                        (_) @ignore
+                        (_)? @ignore
                     )
                 "#},
                 Self::Rust => indoc! {r#"
                     (
-                        (line_comment) @ignore_tag (#match? @ignore_tag "^// *vex:ignore")
+                        (line_comment) @marker (#match? @marker "^// *vex:ignore")
                         .
-                        (_) @ignore
+                        (_)? @ignore
                     )
                 "#},
             };
@@ -146,13 +146,13 @@ mod test {
         Test::language(SupportedLanguage::C)
             .with_source(indoc! {r#"
                 void main() {
-                    // vex:ignore
+                    // vex:ignore *
                     int x[] = {
                         1,
                         2,
                         3,
                     };
-                    /* vex:ignore */
+                    /* vex:ignore * */
                     int y[] = {
                         1,
                         2,
@@ -162,17 +162,17 @@ mod test {
                     int z = 1;
                 }
             "#})
-            .ignores_ranges(&[18..31, 36..87, 92..108, 113..164]);
+            .ignores_ranges(&[18..89, 94..168]);
         Test::language(SupportedLanguage::Cpp)
             .with_source(indoc! {r#"
                 void main() {
-                    // vex:ignore
+                    // vex:ignore *
                     vector<int> x {
                         1,
                         2,
                         3,
                     };
-                    /* vex:ignore */
+                    /* vex:ignore * */
                     vector<int> y = {
                         1,
                         2,
@@ -182,13 +182,13 @@ mod test {
                     int z = 1;
                 }
             "#})
-            .ignores_ranges(&[18..31, 36..91, 96..112, 117..174]);
+            .ignores_ranges(&[18..93, 98..178]);
         Test::language(SupportedLanguage::Go)
             .with_source(indoc! {r#"
                 package main
 
                 func main() {
-                    // vex:ignore
+                    // vex:ignore *
                     x := []int{
                         1,
                         2,
@@ -198,12 +198,12 @@ mod test {
                     z := 1;
                 }
             "#})
-            .ignores_ranges(&[32..45, 50..100]);
+            .ignores_ranges(&[32..102]);
         Test::language(SupportedLanguage::Python)
             .with_source(indoc! {r#"
                 def main():
                     _ = _ # Placeholder line to avoid bug in Python grammar causing two consecutive body fields to be created.
-                    # vex:ignore
+                    # vex:ignore *
                     x = [
                         1,
                         2,
@@ -212,11 +212,11 @@ mod test {
                     # unrelated
                     z = 1;
             "#})
-            .ignores_ranges(&[127..139, 144..188]);
+            .ignores_ranges(&[127..190]);
         Test::language(SupportedLanguage::Rust)
             .with_source(indoc! {r#"
                 fn main() {
-                    // vex:ignore
+                    // vex:ignore *
                     let x = [
                         1,
                         2,
@@ -226,7 +226,7 @@ mod test {
                     let z = 1;
                 }
             "#})
-            .ignores_ranges(&[16..29, 34..83]);
+            .ignores_ranges(&[16..85]);
 
         // Test structs
         #[must_use]
@@ -257,7 +257,7 @@ mod test {
                     self.language,
                 )
                 .unwrap();
-                let ignore_markers = source_file.ignore_markers();
+                let ignore_markers = source_file.ignore_markers().unwrap();
                 assert_eq!(ranges, ignore_markers.ignore_ranges().collect::<Vec<_>>());
             }
 
