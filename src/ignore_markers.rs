@@ -31,21 +31,19 @@ impl IgnoreMarkers {
     }
 
     #[cfg(test)]
-    pub fn ignore_ranges<'a>(&'a self) -> impl Iterator<Item = Range<usize>> + 'a {
+    pub fn ignore_ranges(&self) -> impl Iterator<Item = Range<usize>> + '_ {
         self.markers.iter().map(|marker| marker.byte_range.clone())
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct IgnoreMarkersBuilder {
     markers: Vec<IgnoreMarker>,
 }
 
 impl IgnoreMarkersBuilder {
     pub fn new() -> Self {
-        Self {
-            markers: Vec::new(),
-        }
+        Self::default()
     }
 
     pub fn add(&mut self, byte_range: Range<usize>, filter: VexIdFilter) {

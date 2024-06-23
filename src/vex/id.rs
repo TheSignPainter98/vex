@@ -32,11 +32,11 @@ impl VexId {
             .get_id(raw)
     }
 
-    pub fn to_pretty(&self) -> PrettyVexId {
+    pub fn to_pretty(self) -> PrettyVexId {
         ID_STORE
             .lock()
             .expect("internal error: failed to lock ID store")
-            .get_pretty_id(*self)
+            .get_pretty_id(self)
             .expect("internal error: invalid ID")
     }
 }
@@ -55,31 +55,6 @@ impl PartialEq for VexId {
 }
 
 impl Eq for VexId {}
-
-// impl PartialOrd for VexId {
-//     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-//         Some(self.cmp(other))
-//     }
-// }
-//
-// impl Ord for VexId {
-//     fn cmp(&self, other: &Self) -> Ordering {
-//         let Self { id, pretty } = self;
-//         let Self {
-//             id: other_id,
-//             pretty: other_pretty,
-//         } = other;
-//         (pretty, id).cmp(&(other_pretty, other_id))
-//     }
-// }
-
-// impl Deref for VexId {
-//     type Target = PrettyVexId;
-//
-//     fn deref(&self) -> &Self::Target {
-//         &self.pretty
-//     }
-// }
 
 impl Display for VexId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -115,7 +90,7 @@ impl PrettyVexId {
     pub fn as_str(&self) -> &str {
         match self {
             Self::Raw(s) => s,
-            Self::Path { path, byte_range } => &path.as_str()[byte_range.clone()],
+            Self::Path { path, byte_range } => &path.as_str()[*byte_range],
         }
     }
 }

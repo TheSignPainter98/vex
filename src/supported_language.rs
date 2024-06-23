@@ -142,6 +142,7 @@ mod test {
     }
 
     #[test]
+    #[allow(clippy::single_range_in_vec_init)]
     fn ignore_queries() {
         Test::language(SupportedLanguage::C)
             .with_source(indoc! {r#"
