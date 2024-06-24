@@ -301,7 +301,14 @@ fn parse_overrides() {
 
 #[cfg(test)]
 mod test {
+    use clap::CommandFactory;
+
     use super::*;
+
+    #[test]
+    fn consistency() {
+        Args::command().debug_assert()
+    }
 
     #[test]
     fn no_default() {
