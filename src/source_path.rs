@@ -168,6 +168,10 @@ impl<'v> StarlarkValue<'v> for PrettyPath {
             .unwrap_or_default())
     }
 
+    fn length(&self) -> starlark::Result<i32> {
+        Ok(self.as_str().len() as i32)
+    }
+
     fn is_in(&self, other: Value<'v>) -> starlark::Result<bool> {
         let Some(str) = other.unpack_str() else {
             return Err(ValueError::IncorrectParameterTypeWithExpected(
@@ -386,6 +390,19 @@ mod test {
         PathTest::new("normal-unix")
             .path("src/main.rs")
             .run("check['eq'](path.num_components(), 2)");
+    }
+
+    #[test]
+    fn len() {
+        PathTest::new("absolute-unix")
+            .path("/")
+            .run("check['eq'](len(path), 1)");
+        PathTest::new("absolute-windows")
+            .path("A:")
+            .run("check['eq'](len(path), 2)");
+        PathTest::new("normal-unix")
+            .path("src/main.rs")
+            .run("check['eq'](len(path), 11)");
     }
 
     #[test]
