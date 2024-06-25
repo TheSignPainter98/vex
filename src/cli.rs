@@ -244,6 +244,11 @@ pub struct ParseCmd {
     #[arg(value_name = "file")]
     pub path: Utf8PathBuf,
 
+    /// Pretty-print structure and include location info
+    #[arg(long)]
+    pub expanded: bool,
+
+    /// Override language detection
     #[arg(long = "as", value_name = "language")]
     pub language: Option<SupportedLanguage>,
 }

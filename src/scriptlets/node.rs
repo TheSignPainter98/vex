@@ -1,6 +1,6 @@
 use std::{
     cell::{Cell, RefCell},
-    fmt::Display,
+    fmt::{Display, Write},
     hash::Hasher,
     ops::Deref,
 };
@@ -20,9 +20,10 @@ use starlark::{
     },
 };
 use starlark_derive::{starlark_attrs, starlark_module, starlark_value, StarlarkAttrs};
+use strum::EnumIs;
 use tree_sitter::{Node as TSNode, Point, TreeCursor};
 
-use crate::{error::Error, source_file::ParsedSourceFile};
+use crate::{error::Error, result::Result, source_file::ParsedSourceFile};
 
 #[derive(new, Clone, Debug, PartialEq, Eq, ProvidesStaticType, NoSerialize, Allocative)]
 pub struct Node<'v> {
@@ -237,8 +238,15 @@ impl<'v> AllocValue<'v> for Node<'v> {
 }
 
 impl Display for Node<'_> {
+    #[allow(clippy::print_in_format_impl)]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.to_sexp().fmt(f)
+        let mut buf = String::new();
+        if let Err(err) =
+            NodePrinter::new(&mut buf, WhitespaceStyle::Compact).write(self.source_file)
+        {
+            eprintln!("node formatter failed: {err}");
+        }
+        f.write_str(&buf)
     }
 }
 
@@ -368,6 +376,94 @@ impl<'v> AllocValue<'v> for ChildrenIterator<'v> {
     }
 }
 
+pub struct NodePrinter<'w, W> {
+    whitespace_style: WhitespaceStyle, // TODO(kcza): what's the idiomatic name here?
+    curr_indent: u32,
+    out: &'w mut W,
+}
+
+impl<'w, W: Write> NodePrinter<'w, W> {
+    pub fn new(out: &'w mut W, format: WhitespaceStyle) -> Self {
+        let curr_indent = 0;
+        Self {
+            whitespace_style: format,
+            curr_indent,
+            out,
+        }
+    }
+
+    pub fn write(&mut self, src_file: &ParsedSourceFile) -> Result<()> {
+        let root = Node::new(src_file.tree.root_node(), src_file);
+        self.write_node(root, None)
+    }
+
+    fn write_node(&mut self, node: Node<'_>, field_name: Option<&'static str>) -> Result<()> {
+        let expandable_separator = self.whitespace_style.expandable_separator();
+
+        self.write_indent()?;
+        if let Some(field_name) = field_name {
+            write!(self.out, "{field_name}: ")?;
+        }
+        write!(self.out, "(")?;
+        if node.is_named() {
+            write!(self.out, "{}", node.grammar_name())?;
+        } else {
+            write!(self.out, "{:?}", node.grammar_name())?;
+        }
+
+        self.curr_indent += 1;
+        node.children(&mut node.walk())
+            .enumerate()
+            .try_for_each(|(i, child)| {
+                write!(self.out, "{expandable_separator}")?;
+                let field_name = node.field_name_for_child(i as u32);
+                self.write_node(child, field_name)
+            })?;
+        self.curr_indent -= 1;
+
+        if self.whitespace_style.is_expanded() && node.child_count() != 0 {
+            write!(self.out, "{expandable_separator}")?;
+            self.write_indent()?;
+        }
+        write!(self.out, ")")?;
+        self.write_location(&Location::of(&node))?;
+        Ok(())
+    }
+
+    fn write_indent(&mut self) -> Result<()> {
+        if self.whitespace_style.is_compact() {
+            return Ok(());
+        }
+
+        (0..self.curr_indent).try_for_each(|_| write!(self.out, "  "))?;
+        Ok(())
+    }
+
+    fn write_location(&mut self, loc: &Location) -> Result<()> {
+        if self.whitespace_style.is_compact() {
+            return Ok(());
+        }
+
+        write!(self.out, " ; {loc}")?;
+        Ok(())
+    }
+}
+
+#[derive(EnumIs)]
+pub enum WhitespaceStyle {
+    Expanded,
+    Compact,
+}
+
+impl WhitespaceStyle {
+    fn expandable_separator(&self) -> char {
+        match self {
+            Self::Expanded => '\n',
+            Self::Compact => ' ',
+        }
+    }
+}
+
 #[derive(
     Clone,
     Debug,
@@ -422,10 +518,16 @@ impl Display for Location {
             end_row,
             end_column,
         } = self;
-        write!(
-            f,
-            "[{start_row}, {start_column}] - [{end_row}, {end_column}]"
-        )
+        if start_row == end_row {
+            write!(f, "{}:{start_column}-{end_column}", start_row + 1)
+        } else {
+            write!(
+                f,
+                "{}:{start_column} - {}:{end_column}",
+                start_row + 1,
+                end_row + 1
+            )
+        }
     }
 }
 
@@ -497,6 +599,7 @@ mod test {
                             check['true'](str(bin_expr).startswith('(')) # Looks like an s-expression
                             check['true'](str(bin_expr).endswith(')'))   # Looks like an s-expression
                             check['eq'](str(bin_expr), repr(bin_expr))
+                            check['in']('("+")', str(bin_expr))
                     "#,
                     check_path = VexTest::CHECK_STARLARK_PATH,
                 },
@@ -831,15 +934,17 @@ mod test {
                             )
 
                         def on_match(event):
-                            location = event.captures['bin_expr'].location
+                            location_1 = event.captures['l_int'].location
+                            check['type'](location_1, 'Location')
+                            check['eq'](str(location_1), '2:12-13')
+                            check['eq'](str(location_1), repr(location_1))
+                            check['eq'](location_1.start_row, 1)
+                            check['eq'](location_1.start_column, 12)
+                            check['eq'](location_1.end_row, 1)
+                            check['eq'](location_1.end_column, 13)
 
-                            check['type'](location, 'Location')
-                            check['eq'](str(location), '[1, 12] - [1, 23]')
-                            check['eq'](str(location), repr(location))
-                            check['eq'](location.start_row, 1)
-                            check['eq'](location.start_column, 12)
-                            check['eq'](location.end_row, 1)
-                            check['eq'](location.end_column, 23)
+                            location_2 = event.captures['bin_expr'].location
+                            check['eq'](str(location_2), '2:12 - 3:15')
                     "#,
                     check_path = VexTest::CHECK_STARLARK_PATH,
                 },
@@ -848,7 +953,8 @@ mod test {
                 "src/main.rs",
                 indoc! {r#"
                     fn main() {
-                        let x = 1 + (2 + 3);
+                        let x = 1 +
+                            (2 + 3);
                         println!("{x}");
                     }
                 "#},

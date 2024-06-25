@@ -1,4 +1,4 @@
-use std::{io, num, path, str::Utf8Error};
+use std::{fmt, io, num, path, str::Utf8Error};
 
 use camino::Utf8PathBuf;
 use derive_more::Display;
@@ -35,6 +35,9 @@ pub enum Error {
 
     #[error("query is empty")]
     EmptyQuery,
+
+    #[error(transparent)]
+    Fmt(#[from] fmt::Error),
 
     #[error(transparent)]
     FromPathBuf(#[from] camino::FromPathBufError),
