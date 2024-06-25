@@ -30,7 +30,6 @@ mod vextest;
 use std::{env, fs, process::ExitCode};
 
 use camino::{Utf8Path, Utf8PathBuf};
-use clap::Parser as _;
 use cli::{InitCmd, ListCmd, MaxProblems, ParseCmd, ToList};
 use dupe::Dupe;
 use indoc::printdoc;
@@ -446,6 +445,7 @@ fn init(init_args: InitCmd) -> Result<()> {
 mod test {
     use std::{fs::File, io::Write, path};
 
+    use clap::Parser as _;
     use indoc::indoc;
     use insta::assert_yaml_snapshot;
     use joinery::JoinableIterator;
