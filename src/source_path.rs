@@ -94,7 +94,7 @@ impl PrettyPath {
         return self.sanitised_path.as_ref();
     }
 
-    pub fn component_count(&self) -> usize {
+    pub fn num_components(&self) -> usize {
         self.path.components().count()
     }
 
@@ -115,8 +115,8 @@ impl PrettyPath {
         }
 
         #[allow(clippy::needless_lifetimes)]
-        fn component_count(this: &PrettyPath) -> starlark::Result<i32> {
-            Ok(this.component_count() as i32)
+        fn num_components(this: &PrettyPath) -> starlark::Result<i32> {
+            Ok(this.num_components() as i32)
         }
     }
 }
@@ -187,7 +187,7 @@ impl<'v> StarlarkValue<'v> for PrettyPath {
         let Some(mut index) = index.unpack_i32() else {
             return ValueError::unsupported_with(self, "[]", index)?;
         };
-        let n = self.component_count() as i32;
+        let n = self.num_components() as i32;
         if index >= n || index < -n {
             return Err(ValueError::IndexOutOfBound(index).into());
         }
@@ -212,7 +212,7 @@ impl<'v> StarlarkValue<'v> for PrettyPath {
         stride: Option<Value<'v>>,
         heap: &'v Heap,
     ) -> starlark::Result<Value<'v>> {
-        let n = self.component_count() as i32;
+        let n = self.num_components() as i32;
         let start = start.and_then(Value::unpack_i32);
         let stop = stop.and_then(Value::unpack_i32);
         let stride = stride.and_then(Value::unpack_i32).unwrap_or(1);
@@ -376,16 +376,16 @@ mod test {
     }
 
     #[test]
-    fn component_count() {
+    fn num_components() {
         PathTest::new("absolute-unix")
             .path("/")
-            .run("check['eq'](path.component_count(), 1)");
+            .run("check['eq'](path.num_components(), 1)");
         PathTest::new("absolute-windows")
             .path("A:")
-            .run("check['eq'](path.component_count(), 1)");
+            .run("check['eq'](path.num_components(), 1)");
         PathTest::new("normal-unix")
             .path("src/main.rs")
-            .run("check['eq'](path.component_count(), 2)");
+            .run("check['eq'](path.num_components(), 2)");
     }
 
     #[test]
