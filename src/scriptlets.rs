@@ -13,7 +13,7 @@ mod scriptlet;
 mod store;
 
 pub use intents::{Intent, Intents};
-pub use node::{Node, NodeFormat, NodeFormatter};
+pub use node::{Location, Node, NodeFormat, NodeFormatter};
 pub use observers::{Observable, ObserveOptions, Observer, ObserverData};
 pub use query_captures::QueryCaptures;
 pub use scriptlet::LoadStatementModule;

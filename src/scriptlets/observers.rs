@@ -14,7 +14,7 @@ use crate::{
         action::Action, event::EventKind, extra_data::TempData, handler_module::HandlerModule,
         print_handler::PrintHandler, query_cache::QueryCache,
     },
-    source_path::PrettyPath,
+    vex::id::VexId,
 };
 
 #[derive(Debug, derive_more::Display, NoSerialize, ProvidesStaticType, Allocative)]
@@ -78,7 +78,7 @@ impl<'v> StarlarkValue<'v> for ObserverData {}
 
 #[derive(new, Debug, Trace, Allocative)]
 pub struct UnfrozenObserver<'v> {
-    vex_path: PrettyPath,
+    vex_id: VexId,
     callback: Value<'v>,
 }
 
@@ -86,15 +86,15 @@ impl<'v> Freeze for UnfrozenObserver<'v> {
     type Frozen = Observer;
 
     fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
-        let Self { vex_path, callback } = self;
+        let Self { vex_id, callback } = self;
         let callback = callback.freeze(freezer)?;
-        Ok(Observer { vex_path, callback })
+        Ok(Observer { vex_id, callback })
     }
 }
 
 #[derive(new, Debug, Clone, Dupe, Allocative)]
 pub struct Observer {
-    vex_path: PrettyPath,
+    vex_id: VexId,
     callback: FrozenValue,
 }
 
@@ -124,7 +124,7 @@ impl Observable for Observer {
         let temp_data = TempData {
             action: opts.action,
             query_cache: opts.query_cache,
-            vex_path: self.vex_path.dupe(),
+            vex_id: self.vex_id.dupe(),
             ignore_markers: opts.ignore_markers,
         };
 

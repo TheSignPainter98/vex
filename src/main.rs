@@ -5,7 +5,6 @@
 extern crate pretty_assertions;
 
 mod associations;
-mod check_id;
 mod cli;
 mod context;
 mod error;
@@ -14,10 +13,12 @@ mod irritation;
 mod logger;
 mod parse;
 mod plural;
+mod query;
 mod result;
 mod scriptlets;
 mod source_file;
 mod source_path;
+mod suggestion;
 mod supported_language;
 mod trigger;
 mod verbosity;
@@ -29,7 +30,6 @@ mod vextest;
 use std::{env, fs, process::ExitCode};
 
 use camino::{Utf8Path, Utf8PathBuf};
-use clap::Parser as _;
 use cli::{InitCmd, ListCmd, MaxProblems, ToList};
 use dupe::Dupe;
 use indoc::printdoc;
@@ -44,7 +44,6 @@ use strum::IntoEnumIterator;
 use tree_sitter::QueryCursor;
 
 use crate::{
-    check_id::CheckId,
     cli::{Args, CheckCmd, Command},
     context::{Context, EXAMPLE_VEX_FILE},
     error::{Error, IOAction},
@@ -96,7 +95,7 @@ fn list(list_args: ListCmd) -> Result<()> {
             let store = PreinitingStore::new(&ctx)?.preinit(PreinitOptions::default())?;
             store
                 .vexes()
-                .flat_map(|vex| CheckId::try_from(&vex.path.pretty_path))
+                .map(|vex| &vex.vex_id)
                 .for_each(|id| println!("{}", id));
         }
         ToList::Languages => SupportedLanguage::iter().for_each(|lang| println!("{}", lang)),
@@ -275,7 +274,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
             continue; // No need to parse, the user will never search this.
         }
         let parsed_file = file.parse()?;
-        let ignore_markers = parsed_file.ignore_markers();
+        let ignore_markers = parsed_file.ignore_markers()?;
         project_queries
             .iter()
             .chain(file_queries.iter())

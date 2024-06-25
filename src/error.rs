@@ -6,7 +6,8 @@ use joinery::JoinableIterator;
 use strum::IntoEnumIterator;
 
 use crate::{
-    scriptlets::{action::Action, event::EventKind, LoadStatementModule},
+    query::Query,
+    scriptlets::{action::Action, event::EventKind, LoadStatementModule, Location},
     source_path::PrettyPath,
     supported_language::SupportedLanguage,
 };
@@ -82,6 +83,12 @@ pub enum Error {
     #[error("cannot find vexes directory at {0}")]
     NoVexesDir(Utf8PathBuf),
 
+    #[error("{file}:{location}: no vex ids specified")]
+    NoVexIds {
+        file: PrettyPath,
+        location: Location,
+    },
+
     #[error("{0} is not a check path")]
     NotACheckPath(PrettyPath),
 
@@ -117,6 +124,17 @@ pub enum Error {
     )]
     UnknownEvent {
         name: String,
+        suggestion: Option<&'static str>,
+    },
+
+    #[error(
+        "unknown operator '{operator_name}' in '#{operator}'{}, expected one of {}",
+        suggestion.map(|suggestion| format!(" (did you mean '{suggestion}'?)")).unwrap_or_default(),
+        Query::KNOWN_OPERATORS.iter().join_with(", ")
+    )]
+    UnknownOperator {
+        operator: String,
+        operator_name: String,
         suggestion: Option<&'static str>,
     },
 
