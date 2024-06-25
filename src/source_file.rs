@@ -7,7 +7,7 @@ use tree_sitter::{Parser, QueryCursor, Tree};
 
 use crate::{
     error::{Error, IOAction},
-    ignore_markers::{IgnoreMarkers, NewVexIdFilterOpts, VexIdFilter},
+    ignore_markers::{IgnoreMarkers, VexIdFilter, VexIdFilterOpts},
     result::Result,
     scriptlets::{Location, Node},
     source_path::SourcePath,
@@ -141,7 +141,7 @@ impl ParsedSourceFile {
                     };
                     VexIdFilter::new(
                         raw,
-                        NewVexIdFilterOpts {
+                        VexIdFilterOpts {
                             path: &self.path.pretty_path,
                             location: Location::of(&Node::new(node, self)),
                         },

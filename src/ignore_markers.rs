@@ -77,10 +77,10 @@ pub enum VexIdFilter {
 }
 
 impl VexIdFilter {
-    // This function created a new `VexIdFilter` from a comma-separated list of stringified
+    // This function creates a new `VexIdFilter` from a comma-separated list of stringified
     // pretty vex ids. If any vex ids are unknown, the first unknown one will be returned as an
     // error.
-    pub fn new(raw: &str, opts: NewVexIdFilterOpts<'_>) -> Self {
+    pub fn new(raw: &str, opts: VexIdFilterOpts<'_>) -> Self {
         if raw == "*" {
             return Self::All;
         }
@@ -106,7 +106,7 @@ impl VexIdFilter {
 }
 
 #[derive(Debug)]
-pub struct NewVexIdFilterOpts<'path> {
+pub struct VexIdFilterOpts<'path> {
     pub path: &'path PrettyPath,
     pub location: Location,
 }
