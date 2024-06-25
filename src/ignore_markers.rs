@@ -8,6 +8,7 @@ use crate::{scriptlets::Location, source_path::PrettyPath, vex::id::VexId};
 #[derive(Debug)]
 pub struct IgnoreMarkers {
     markers: Vec<IgnoreMarker>,
+    marker_ends: Vec<MarkerEnd>,
 }
 
 impl IgnoreMarkers {
@@ -16,12 +17,30 @@ impl IgnoreMarkers {
     }
 
     pub fn marked(&self, byte_index: usize, vex_id: VexId) -> bool {
-        let relevant_range_cap = self
-            .markers
-            .partition_point(|marker| marker.byte_range.start <= byte_index);
-        self.markers[..relevant_range_cap]
+        if self.markers.is_empty() {
+            return false;
+        }
+
+        let last_marker_end_boundary = self.marker_ends[self.marker_ends.len() - 1].byte_index;
+        if last_marker_end_boundary <= byte_index {
+            return false;
+        }
+        if byte_index < self.markers[0].byte_range.start {
+            return false;
+        }
+
+        let first_possible_index = {
+            let end_index = self
+                .marker_ends
+                .partition_point(|end| end.byte_index < byte_index);
+            self.marker_ends[end_index].marker_index
+        };
+        let last_possible_index = first_possible_index
+            + self.markers[first_possible_index..]
+                .partition_point(|marker| marker.byte_range.start <= byte_index);
+        self.markers[first_possible_index..last_possible_index]
             .iter()
-            .filter(|marker| byte_index < marker.byte_range.end)
+            .filter(|marker| marker.byte_range.contains(&byte_index))
             .any(|marker| marker.filter.covers(vex_id))
     }
 
@@ -52,8 +71,33 @@ impl IgnoreMarkersBuilder {
 
     pub fn build(self) -> IgnoreMarkers {
         let Self { mut markers } = self;
-        markers.sort_by_key(|range| range.byte_range.start);
-        IgnoreMarkers { markers }
+        markers.sort_by_key(|range| (range.byte_range.start, range.byte_range.end));
+
+        let marker_ends = {
+            let mut marker_ends: Vec<_> = markers
+                .iter()
+                .enumerate()
+                .map(|(i, range)| MarkerEnd {
+                    byte_index: range.byte_range.end,
+                    marker_index: i,
+                })
+                .collect();
+            marker_ends.sort();
+            if !marker_ends.is_empty() {
+                for i in 0..marker_ends.len() - 1 {
+                    if marker_ends[i].marker_index > marker_ends[i + 1].marker_index {
+                        marker_ends[i].marker_index = marker_ends[i + 1].marker_index;
+                    }
+                }
+            }
+            marker_ends
+        };
+        debug_assert_eq!(markers.len(), marker_ends.len());
+
+        IgnoreMarkers {
+            markers,
+            marker_ends,
+        }
     }
 }
 
@@ -109,6 +153,12 @@ impl VexIdFilter {
 pub struct VexIdFilterOpts<'path> {
     pub path: &'path PrettyPath,
     pub location: Location,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct MarkerEnd {
+    byte_index: usize,
+    marker_index: usize,
 }
 
 #[cfg(test)]
