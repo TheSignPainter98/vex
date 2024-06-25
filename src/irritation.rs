@@ -5,13 +5,13 @@ use annotate_snippets::{Annotation, AnnotationType, Slice, Snippet, SourceAnnota
 use dupe::Dupe;
 use serde::Serialize;
 
-use crate::{check_id::CheckId, logger, scriptlets::Node, source_path::PrettyPath};
+use crate::{logger, scriptlets::Node, source_path::PrettyPath, vex::id::PrettyVexId};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Allocative, Serialize)]
 #[non_exhaustive]
 pub struct Irritation {
     code_source: Option<IrritationSource>,
-    vex_path: PrettyPath,
+    pretty_vex_id: PrettyVexId,
     other_code_sources: Vec<IrritationSource>,
     extra_info_present: bool,
     pub(crate) rendered: String,
@@ -56,7 +56,7 @@ impl Display for Irritation {
 }
 
 pub struct IrritationRenderer<'v> {
-    vex_path: PrettyPath,
+    pretty_vex_id: PrettyVexId,
     message: &'v str,
     source: Option<(Node<'v>, &'v str)>,
     show_also: Vec<(Node<'v>, &'v str)>,
@@ -64,9 +64,9 @@ pub struct IrritationRenderer<'v> {
 }
 
 impl<'v> IrritationRenderer<'v> {
-    pub fn new(vex_path: PrettyPath, message: &'v str) -> Self {
+    pub fn new(pretty_vex_id: PrettyVexId, message: &'v str) -> Self {
         Self {
-            vex_path,
+            pretty_vex_id,
             message,
             source: None,
             show_also: Vec::with_capacity(0),
@@ -88,7 +88,7 @@ impl<'v> IrritationRenderer<'v> {
 
     pub fn render(self) -> Irritation {
         let Self {
-            vex_path,
+            pretty_vex_id,
             source,
             message,
             show_also,
@@ -102,11 +102,7 @@ impl<'v> IrritationRenderer<'v> {
             .map(|source| source.0.source_file.path.pretty_path.as_str());
         let snippet = Snippet {
             title: Some(Annotation {
-                id: Some(
-                    CheckId::try_from(&vex_path)
-                        .expect("internal error: failed to make CheckId")
-                        .as_str(),
-                ),
+                id: Some(pretty_vex_id.as_str()),
                 label: Some(message),
                 annotation_type: AnnotationType::Warning,
             }),
@@ -159,7 +155,7 @@ impl<'v> IrritationRenderer<'v> {
         let extra_info_present = extra_info.is_some();
         let rendered = logger::render_snippet(snippet);
         Irritation {
-            vex_path,
+            pretty_vex_id,
             code_source,
             other_code_sources,
             extra_info_present,

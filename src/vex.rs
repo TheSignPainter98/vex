@@ -1,14 +1,12 @@
-mod id;
-
-// use crate::scriptlets::ScriptletRef;
+pub mod id;
 
 use std::marker::PhantomData;
 
-pub use self::id::Id;
+use self::id::VexId;
 
 #[allow(unused)]
 pub struct Vex<'s> {
-    pub id: Id,
+    pub id: VexId,
     _marker: PhantomData<&'s ()>,
     // pub scriptlet: ScriptletRef<'s>,
 }

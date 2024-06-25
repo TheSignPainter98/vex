@@ -5,7 +5,6 @@
 extern crate pretty_assertions;
 
 mod associations;
-mod check_id;
 mod cli;
 mod context;
 mod error;
@@ -45,7 +44,6 @@ use tree_sitter::QueryCursor;
 
 use crate::{
     associations::Associations,
-    check_id::CheckId,
     cli::{Args, CheckCmd, Command},
     context::{Context, EXAMPLE_VEX_FILE},
     error::{Error, IOAction},
@@ -97,7 +95,7 @@ fn list(list_args: ListCmd) -> Result<()> {
             let store = PreinitingStore::new(&ctx)?.preinit(PreinitOptions::default())?;
             store
                 .vexes()
-                .flat_map(|vex| CheckId::try_from(&vex.path.pretty_path))
+                .map(|vex| &vex.vex_id)
                 .for_each(|id| println!("{}", id));
         }
         ToList::Languages => SupportedLanguage::iter().for_each(|lang| println!("{}", lang)),
@@ -276,7 +274,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
             continue; // No need to parse, the user will never search this.
         }
         let parsed_file = file.parse()?;
-        let ignore_markers = parsed_file.ignore_markers();
+        let ignore_markers = parsed_file.ignore_markers()?;
         project_queries
             .iter()
             .chain(file_queries.iter())

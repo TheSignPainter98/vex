@@ -7,7 +7,7 @@ use strum::IntoEnumIterator;
 
 use crate::{
     query::Query,
-    scriptlets::{action::Action, event::EventKind, LoadStatementModule},
+    scriptlets::{action::Action, event::EventKind, LoadStatementModule, Location},
     source_path::PrettyPath,
     supported_language::SupportedLanguage,
 };
@@ -79,6 +79,12 @@ pub enum Error {
 
     #[error("cannot find vexes directory at {0}")]
     NoVexesDir(Utf8PathBuf),
+
+    #[error("{file}:{location}: no vex ids specified")]
+    NoVexIds {
+        file: PrettyPath,
+        location: Location,
+    },
 
     #[error("{0} is not a check path")]
     NotACheckPath(PrettyPath),

@@ -29,11 +29,13 @@ use crate::{
         Intent, ObserverData, PreinitOptions,
     },
     source_path::{PrettyPath, SourcePath},
+    vex::id::VexId,
 };
 
 #[derive(Debug)]
 pub struct PreinitingScriptlet {
     pub path: SourcePath,
+    vex_id: VexId,
     toplevel: bool,
     ast: AstModule,
     loads_files: HashSet<PrettyPath>,
@@ -51,6 +53,8 @@ impl PreinitingScriptlet {
 
     fn new_from_str(path: SourcePath, code: impl Into<String>, toplevel: bool) -> Result<Self> {
         let code = code.into();
+
+        let vex_id = VexId::new(path.pretty_path.dupe());
         let ast = AstModule::parse(path.as_str(), code, &Dialect::Standard)?;
         Self::validate_loads(&ast, &path.pretty_path)?;
         let loads_files = ast
@@ -60,6 +64,7 @@ impl PreinitingScriptlet {
             .collect();
         Ok(Self {
             path,
+            vex_id,
             toplevel,
             ast,
             loads_files,
@@ -91,6 +96,7 @@ impl PreinitingScriptlet {
     ) -> Result<InitingScriptlet> {
         let Self {
             path,
+            vex_id,
             ast,
             toplevel,
             loads_files: _,
@@ -104,7 +110,7 @@ impl PreinitingScriptlet {
             {
                 let temp_data = TempData {
                     action: Action::Preiniting,
-                    vex_path: path.pretty_path.dupe(),
+                    vex_id: vex_id.dupe(),
                     query_cache: &QueryCache::new(),
                     ignore_markers: None,
                 };
@@ -120,6 +126,7 @@ impl PreinitingScriptlet {
 
         Ok(InitingScriptlet {
             path,
+            vex_id,
             toplevel,
             preinited_module,
         })
@@ -296,6 +303,7 @@ impl LoadStatementModule<'_> {
 #[derive(Debug)]
 pub struct InitingScriptlet {
     pub path: SourcePath,
+    pub vex_id: VexId,
     toplevel: bool,
     pub preinited_module: FrozenModule,
 }
@@ -304,6 +312,7 @@ impl InitingScriptlet {
     pub fn init(self, frozen_heap: &FrozenHeap) -> Result<ObserverData> {
         let Self {
             path,
+            vex_id,
             toplevel,
             preinited_module,
         } = self;
@@ -323,7 +332,7 @@ impl InitingScriptlet {
                 let temp_data = TempData {
                     action: Action::Initing,
                     query_cache: &QueryCache::new(),
-                    vex_path: path.pretty_path.dupe(),
+                    vex_id: vex_id.dupe(),
                     ignore_markers: None,
                 };
                 let mut eval = Evaluator::new(&module);

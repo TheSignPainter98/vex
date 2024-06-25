@@ -1,8 +1,13 @@
 use std::ops::Range;
 
+use log::{log_enabled, warn};
+use smallvec::SmallVec;
+
+use crate::{scriptlets::Location, source_path::PrettyPath, vex::id::VexId};
+
 #[derive(Debug)]
 pub struct IgnoreMarkers {
-    ignore_ranges: Vec<Range<usize>>,
+    markers: Vec<IgnoreMarker>,
 }
 
 impl IgnoreMarkers {
@@ -10,55 +15,121 @@ impl IgnoreMarkers {
         IgnoreMarkersBuilder::new()
     }
 
-    pub fn check_marked(&self, index: usize) -> bool {
+    pub fn marked(&self, byte_index: usize, vex_id: VexId) -> bool {
         let relevant_range_cap = self
-            .ignore_ranges
-            .partition_point(|range| range.start <= index);
-        self.ignore_ranges[..relevant_range_cap]
+            .markers
+            .partition_point(|marker| marker.byte_range.start <= byte_index);
+        self.markers[..relevant_range_cap]
             .iter()
-            .any(|range| index < range.end)
+            .filter(|marker| byte_index < marker.byte_range.end)
+            .any(|marker| marker.filter.covers(vex_id))
     }
 
     #[cfg(test)]
-    pub fn ignore_ranges(&self) -> &[Range<usize>] {
-        &self.ignore_ranges
+    pub fn markers(&self) -> impl Iterator<Item = &IgnoreMarker> {
+        self.markers.iter()
+    }
+
+    #[cfg(test)]
+    pub fn ignore_ranges(&self) -> impl Iterator<Item = Range<usize>> + '_ {
+        self.markers.iter().map(|marker| marker.byte_range.clone())
     }
 }
 
+#[derive(Debug, Default)]
 pub struct IgnoreMarkersBuilder {
-    ignore_ranges: Vec<Range<usize>>,
+    markers: Vec<IgnoreMarker>,
 }
 
 impl IgnoreMarkersBuilder {
     pub fn new() -> Self {
-        Self {
-            ignore_ranges: Vec::new(),
-        }
+        Self::default()
     }
 
-    pub fn add(&mut self, range: Range<usize>) {
-        self.ignore_ranges.push(range)
+    pub fn add(&mut self, byte_range: Range<usize>, filter: VexIdFilter) {
+        self.markers.push(IgnoreMarker { byte_range, filter })
     }
 
     pub fn build(self) -> IgnoreMarkers {
-        let Self { mut ignore_ranges } = self;
-        ignore_ranges.sort_by_key(|range| range.start);
-        IgnoreMarkers { ignore_ranges }
+        let Self { mut markers } = self;
+        markers.sort_by_key(|range| range.byte_range.start);
+        IgnoreMarkers { markers }
     }
+}
+
+#[derive(Debug)]
+pub struct IgnoreMarker {
+    byte_range: Range<usize>,
+    filter: VexIdFilter,
+}
+
+#[cfg(test)]
+impl IgnoreMarker {
+    pub fn filter(&self) -> &VexIdFilter {
+        &self.filter
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum VexIdFilter {
+    All,
+    Specific(SmallVec<[VexId; 2]>),
+}
+
+impl VexIdFilter {
+    // This function creates a new `VexIdFilter` from a comma-separated list of stringified
+    // pretty vex ids. If any vex ids are unknown, the first unknown one will be returned as an
+    // error.
+    pub fn new(raw: &str, opts: VexIdFilterOpts<'_>) -> Self {
+        if raw == "*" {
+            return Self::All;
+        }
+        Self::Specific(
+            raw.split(',')
+                .flat_map(|raw_id| {
+                    let id = VexId::retrieve_str(raw_id);
+                    if id.is_none() && log_enabled!(log::Level::Warn) {
+                        warn!("{}:{}: unknown vex '{raw_id}'", opts.path, opts.location)
+                    }
+                    id
+                })
+                .collect(),
+        )
+    }
+
+    fn covers(&self, vex_id: VexId) -> bool {
+        match self {
+            Self::All => true,
+            Self::Specific(ids) => ids.contains(&vex_id),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct VexIdFilterOpts<'path> {
+    pub path: &'path PrettyPath,
+    pub location: Location,
 }
 
 #[cfg(test)]
 mod test {
+    use dupe::Dupe;
+    use smallvec::smallvec;
+
+    use crate::source_path::PrettyPath;
+
     use super::*;
 
     #[test]
-    fn ignore_markers() {
+    fn ignore_ranges() {
+        let vex_id = VexId::new(PrettyPath::new("foo/bar.star".into()));
         let ignore_markers = {
+            let filter = VexIdFilter::Specific(smallvec![vex_id.dupe()]);
             let mut builder = IgnoreMarkers::builder();
-            builder.add(3..10);
-            builder.add(4..9);
-            builder.add(4..10);
-            builder.add(11..13);
+            builder.add(3..10, filter.clone());
+            builder.add(4..9, filter.clone());
+            builder.add(4..10, filter.clone());
+            builder.add(11..13, filter.clone());
             builder.build()
         };
 
@@ -79,10 +150,10 @@ mod test {
         ];
         tests.into_iter().for_each(|(index, expected)| {
             assert_eq!(
-                ignore_markers.check_marked(index),
+                ignore_markers.marked(index, vex_id),
                 expected,
                 "index {index}: expected {expected}, got {}",
-                ignore_markers.check_marked(index)
+                ignore_markers.marked(index, vex_id)
             );
         });
     }
