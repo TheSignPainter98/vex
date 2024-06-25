@@ -269,7 +269,7 @@ fn parse_overrides() {
     let cmd_buf = {
         let mut buf = [0u8; MAX_OVERRIDE_NAME_LEN];
         buf[..cmd.len()].copy_from_slice(cmd.as_bytes());
-        buf.iter_mut().for_each(|b| *b = !*b);
+        buf[..cmd.len()].iter_mut().for_each(|b| *b = !*b);
         buf
     };
     let Some((_, r#override)) = OVERRIDES
