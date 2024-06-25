@@ -94,7 +94,7 @@ impl PrettyPath {
         return self.sanitised_path.as_ref();
     }
 
-    pub fn len(&self) -> usize {
+    pub fn component_count(&self) -> usize {
         self.path.components().count()
     }
 
@@ -112,6 +112,11 @@ impl PrettyPath {
             Ok(other
                 .unpack_str()
                 .is_some_and(|other| this.as_str() == other))
+        }
+
+        #[allow(clippy::needless_lifetimes)]
+        fn component_count(this: &PrettyPath) -> starlark::Result<i32> {
+            Ok(this.component_count() as i32)
         }
     }
 }
@@ -163,10 +168,6 @@ impl<'v> StarlarkValue<'v> for PrettyPath {
             .unwrap_or_default())
     }
 
-    fn length(&self) -> starlark::Result<i32> {
-        Ok(self.len() as i32)
-    }
-
     fn is_in(&self, other: Value<'v>) -> starlark::Result<bool> {
         let Some(str) = other.unpack_str() else {
             return Err(ValueError::IncorrectParameterTypeWithExpected(
@@ -186,7 +187,7 @@ impl<'v> StarlarkValue<'v> for PrettyPath {
         let Some(mut index) = index.unpack_i32() else {
             return ValueError::unsupported_with(self, "[]", index)?;
         };
-        let n = self.len() as i32;
+        let n = self.component_count() as i32;
         if index >= n || index < -n {
             return Err(ValueError::IndexOutOfBound(index).into());
         }
@@ -211,7 +212,7 @@ impl<'v> StarlarkValue<'v> for PrettyPath {
         stride: Option<Value<'v>>,
         heap: &'v Heap,
     ) -> starlark::Result<Value<'v>> {
-        let n = self.len() as i32;
+        let n = self.component_count() as i32;
         let start = start.and_then(Value::unpack_i32);
         let stop = stop.and_then(Value::unpack_i32);
         let stride = stride.and_then(Value::unpack_i32).unwrap_or(1);
@@ -375,16 +376,16 @@ mod test {
     }
 
     #[test]
-    fn len() {
+    fn component_count() {
         PathTest::new("absolute-unix")
             .path("/")
-            .run("check['eq'](len(path), 1)");
+            .run("check['eq'](path.component_count(), 1)");
         PathTest::new("absolute-windows")
             .path("A:")
-            .run("check['eq'](len(path), 1)");
+            .run("check['eq'](path.component_count(), 1)");
         PathTest::new("normal-unix")
             .path("src/main.rs")
-            .run("check['eq'](len(path), 2)");
+            .run("check['eq'](path.component_count(), 2)");
     }
 
     #[test]
