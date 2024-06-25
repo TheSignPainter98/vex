@@ -8,7 +8,7 @@ use crate::{
     context::Context,
     error::{Error, IOAction},
     result::Result,
-    scriptlets::{NodeFormat, NodeFormatter},
+    scriptlets::{NodePrinter, WhitespaceStyle},
     source_file::SourceFile,
     source_path::{PrettyPath, SourcePath},
 };
@@ -34,11 +34,11 @@ pub fn parse(cmd: ParseCmd) -> Result<()> {
     let capacity_estimate = 20 * src_file.tree.root_node().descendant_count();
     let mut buf = String::with_capacity(capacity_estimate);
     let format = if cmd.expanded {
-        NodeFormat::Expanded
+        WhitespaceStyle::Expanded
     } else {
-        NodeFormat::Compact
+        WhitespaceStyle::Compact
     };
-    NodeFormatter::new(format).write(&mut buf, &src_file)?;
+    NodePrinter::new(&mut buf, format).write(&src_file)?;
     println!("{buf}");
 
     Ok(())
@@ -184,15 +184,15 @@ mod test {
 
         let compact_fmt = {
             let mut compact_fmt = String::new();
-            NodeFormatter::new(NodeFormat::Compact)
-                .write(&mut compact_fmt, &test_file)
+            NodePrinter::new(&mut compact_fmt, WhitespaceStyle::Compact)
+                .write(&test_file)
                 .unwrap();
             compact_fmt
         };
         let pretty_fmt = {
             let mut pretty_fmt = String::new();
-            NodeFormatter::new(NodeFormat::Expanded)
-                .write(&mut pretty_fmt, &test_file)
+            NodePrinter::new(&mut pretty_fmt, WhitespaceStyle::Expanded)
+                .write(&test_file)
                 .unwrap();
             pretty_fmt
         };
