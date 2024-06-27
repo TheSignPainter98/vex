@@ -22,6 +22,7 @@ use crate::{
 pub struct ObserverData {
     on_open_project: Vec<Observer>,
     on_open_file: Vec<Observer>,
+    on_test: Vec<Observer>,
 }
 
 impl ObserverData {
@@ -29,6 +30,7 @@ impl ObserverData {
         Self {
             on_open_project: Vec::with_capacity(capacity),
             on_open_file: Vec::with_capacity(capacity),
+            on_test: Vec::with_capacity(capacity),
         }
     }
 
@@ -36,6 +38,7 @@ impl ObserverData {
         Self {
             on_open_project: Vec::with_capacity(0),
             on_open_file: Vec::with_capacity(0),
+            on_test: Vec::with_capacity(0),
         }
     }
 
@@ -43,8 +46,9 @@ impl ObserverData {
         let Self {
             on_open_project,
             on_open_file,
+            on_test,
         } = self;
-        on_open_project.len() + on_open_file.len()
+        on_open_project.len() + on_open_file.len() + on_test.len()
     }
 
     pub fn add_open_project_observer(&mut self, observer: Observer) {
@@ -55,13 +59,19 @@ impl ObserverData {
         self.on_open_file.push(observer)
     }
 
+    pub fn add_test_observer(&mut self, observer: Observer) {
+        self.on_test.push(observer)
+    }
+
     pub fn extend(&mut self, other: Self) {
         let Self {
             on_open_project,
             on_open_file,
+            on_test,
         } = self;
         on_open_project.extend(other.on_open_project);
         on_open_file.extend(other.on_open_file);
+        on_test.extend(other.on_test);
     }
 
     pub fn observers_for(&self, event_kind: EventKind) -> &[Observer] {
@@ -69,6 +79,7 @@ impl ObserverData {
             EventKind::OpenProject => &self.on_open_project,
             EventKind::OpenFile => &self.on_open_file,
             EventKind::Match => panic!("internal error: query_match not observable"),
+            EventKind::Test => &self.on_test,
         }
     }
 }

@@ -23,12 +23,13 @@ pub enum EventKind {
     OpenProject,
     OpenFile,
     Match,
+    Test,
 }
 
 impl EventKind {
     pub fn parseable(&self) -> bool {
         match self {
-            Self::OpenProject | Self::OpenFile => true,
+            Self::OpenProject | Self::OpenFile | Self::Test => true,
             Self::Match => false,
         }
     }
@@ -38,6 +39,7 @@ impl EventKind {
             Self::OpenProject => "open_project",
             Self::OpenFile => "open_file",
             Self::Match => "match",
+            Self::Test => "test",
         }
     }
 
@@ -46,6 +48,7 @@ impl EventKind {
             Self::OpenProject => "opening project",
             Self::OpenFile => "opening file",
             Self::Match => "handling match",
+            Self::Test => "testing",
         }
     }
 }
@@ -57,6 +60,7 @@ impl FromStr for EventKind {
         match s {
             "open_project" => Ok(Self::OpenProject),
             "open_file" => Ok(Self::OpenFile),
+            "test" => Ok(Self::Test),
             _ => Err(Error::UnknownEvent {
                 name: s.to_owned(),
                 suggestion: {
