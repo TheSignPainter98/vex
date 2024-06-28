@@ -356,7 +356,7 @@ struct ChildrenIterator<'v> {
 impl<'v> StarlarkValue<'v> for ChildrenIterator<'v> {
     unsafe fn iter_next(&self, _: usize, heap: &'v Heap) -> Option<Value<'v>> {
         let next = if self.root.get() {
-            self.root.set(true);
+            self.root.set(false);
             self.current.borrow().child(0)
         } else {
             self.current.borrow().next_sibling()
@@ -892,8 +892,9 @@ mod test {
                             check['eq'](curr.previous_sibling(), None)
 
                             check['type'](bin_expr.children(), 'Children')
-                            children = [ bin_expr[i] for i in range(len(list(bin_expr.children()))) ]
+                            children = [ bin_expr[i] for i in range(bin_expr.num_children()) ]
                             check['eq'](children, list(bin_expr.children()))
+                            check['eq'](len(list(bin_expr.children())), bin_expr.num_children())
                     "#,
                     check_path = VexTest::CHECK_STARLARK_PATH,
                 },
