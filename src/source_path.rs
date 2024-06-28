@@ -4,13 +4,13 @@ use std::{fmt::Display, ops::Deref, sync::Arc};
 use std::path;
 
 use allocative::Allocative;
-use camino::Utf8Path;
+use camino::{Utf8Path, Utf8PathBuf};
 use dupe::Dupe;
 use serde::Serialize;
 use starlark::{
     environment::{Methods, MethodsBuilder, MethodsStatic},
     starlark_module, starlark_simple_value,
-    values::{list::AllocList, Demand, Heap, StarlarkValue, Value, ValueError},
+    values::{Demand, Heap, StarlarkValue, Value, ValueError},
 };
 use starlark_derive::{starlark_value, ProvidesStaticType};
 
@@ -94,7 +94,7 @@ impl PrettyPath {
         return self.sanitised_path.as_ref();
     }
 
-    pub fn len(&self) -> usize {
+    pub fn num_components(&self) -> usize {
         self.path.components().count()
     }
 
@@ -112,6 +112,11 @@ impl PrettyPath {
             Ok(other
                 .unpack_str()
                 .is_some_and(|other| this.as_str() == other))
+        }
+
+        #[allow(clippy::needless_lifetimes)]
+        fn num_components(this: &PrettyPath) -> starlark::Result<i32> {
+            Ok(this.num_components() as i32)
         }
     }
 }
@@ -164,7 +169,7 @@ impl<'v> StarlarkValue<'v> for PrettyPath {
     }
 
     fn length(&self) -> starlark::Result<i32> {
-        Ok(self.len() as i32)
+        Ok(self.as_str().len() as i32)
     }
 
     fn is_in(&self, other: Value<'v>) -> starlark::Result<bool> {
@@ -186,7 +191,7 @@ impl<'v> StarlarkValue<'v> for PrettyPath {
         let Some(mut index) = index.unpack_i32() else {
             return ValueError::unsupported_with(self, "[]", index)?;
         };
-        let n = self.len() as i32;
+        let n = self.num_components() as i32;
         if index >= n || index < -n {
             return Err(ValueError::IndexOutOfBound(index).into());
         }
@@ -211,7 +216,7 @@ impl<'v> StarlarkValue<'v> for PrettyPath {
         stride: Option<Value<'v>>,
         heap: &'v Heap,
     ) -> starlark::Result<Value<'v>> {
-        let n = self.len() as i32;
+        let n = self.num_components() as i32;
         let start = start.and_then(Value::unpack_i32);
         let stop = stop.and_then(Value::unpack_i32);
         let stride = stride.and_then(Value::unpack_i32).unwrap_or(1);
@@ -225,26 +230,26 @@ impl<'v> StarlarkValue<'v> for PrettyPath {
             let high = stop.map(normalise_index).unwrap_or(n);
             if high <= low {
                 // Empty result fast path.
-                return Ok(heap.alloc(AllocList::<[i32; 0]>([])));
+                return Ok(heap.alloc(PrettyPath::new(Utf8Path::new(""))));
             }
-            Ok(heap.alloc(AllocList(
+            Ok(heap.alloc(PrettyPath::new(&Utf8PathBuf::from_iter(
                 self.components()
                     .enumerate()
                     .map(|(i, c)| (i as i32, c))
                     .skip_while(|(i, _)| *i < low)
                     .take_while(|(i, _)| *i < high)
                     .filter(|(i, _)| (i - low) % stride == 0)
-                    .map(|(_, c)| c.as_str()),
-            )))
+                    .map(|(_, c)| c),
+            ))))
         } else {
             let normalise_index = |idx: i32| if idx < 0 { idx + n } else { idx }.clamp(-1, n - 1);
             let high = start.map(normalise_index).unwrap_or(n - 1);
             let low = stop.map(normalise_index).unwrap_or(-1);
             if high <= low {
                 // Empty result fast path.
-                return Ok(heap.alloc(AllocList::<[i32; 0]>([])));
+                return Ok(heap.alloc(PrettyPath::new(Utf8Path::new(""))));
             }
-            Ok(heap.alloc(AllocList(
+            Ok(heap.alloc(PrettyPath::new(&Utf8PathBuf::from_iter(
                 self.components()
                     .rev()
                     .enumerate()
@@ -252,8 +257,8 @@ impl<'v> StarlarkValue<'v> for PrettyPath {
                     .skip_while(|(i, _)| *i > high)
                     .take_while(|(i, _)| *i > low)
                     .filter(|(i, _)| (*i - high) % -stride == 0)
-                    .map(|(_, c)| c.as_str()),
-            )))
+                    .map(|(_, c)| c),
+            ))))
         }
     }
 }
@@ -375,16 +380,29 @@ mod test {
     }
 
     #[test]
+    fn num_components() {
+        PathTest::new("absolute-unix")
+            .path("/")
+            .run("check['eq'](path.num_components(), 1)");
+        PathTest::new("absolute-windows")
+            .path("A:")
+            .run("check['eq'](path.num_components(), 1)");
+        PathTest::new("normal-unix")
+            .path("src/main.rs")
+            .run("check['eq'](path.num_components(), 2)");
+    }
+
+    #[test]
     fn len() {
         PathTest::new("absolute-unix")
             .path("/")
             .run("check['eq'](len(path), 1)");
         PathTest::new("absolute-windows")
             .path("A:")
-            .run("check['eq'](len(path), 1)");
+            .run("check['eq'](len(path), 2)");
         PathTest::new("normal-unix")
             .path("src/main.rs")
-            .run("check['eq'](len(path), 2)");
+            .run("check['eq'](len(path), 11)");
     }
 
     #[test]
@@ -461,9 +479,15 @@ mod test {
 
                 errs = []
                 def eq(start, stop, stride, a, b):
-                    if a != b:
-                        errs.append(('[%r:%r:%r]' % (start, stop, stride), a, b))
-                        print('%r, %r, %r' % (start, stop, stride), a, b)
+                    print('%r, %r, %r...' % (start, stop, stride))
+
+                    if type(a) != 'Path':
+                        fail('expected path, got %s' % type(a))
+
+                    A = str(a)
+                    B = '/'.join(b)
+                    if A != B:
+                        errs.append('[%r:%r:%r]: "%s" %r' % (start, stop, stride, A, B))
                 def test(start, stop, stride):
                     if stride == 0:
                         return
@@ -494,7 +518,7 @@ mod test {
                 for (start, stop, stride) in tests:
                     test(start, stop, stride)
                 for err in errs:
-                    print(*err)
+                    print(err)
                 if len(errs):
                     fail('encountered %d problems' % len(errs))
             "#});
