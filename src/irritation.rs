@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, fmt::Display, ops::Range};
+use std::{cmp::Ordering, fmt::Display, iter, ops::Range};
 
 use allocative::Allocative;
 use annotate_snippets::{Annotation, AnnotationType, Slice, Snippet, SourceAnnotation};
@@ -109,10 +109,21 @@ impl<'v> IrritationRenderer<'v> {
             slices: source
                 .iter()
                 .map(|(node, label)| {
-                    let range = Self::relevant_range(node);
+                    let range = {
+                        let start = iter::once(&(node.dupe(), *label))
+                            .chain(show_also.iter())
+                            .map(|(node, _)| node.byte_range().start)
+                            .min()
+                            .unwrap();
+                        let end = iter::once(&(node.dupe(), *label))
+                            .chain(show_also.iter())
+                            .map(|(node, _)| node.byte_range().end)
+                            .max()
+                            .unwrap();
+                        node.source_file.full_lines_range(start..end)
+                    };
                     Slice {
                         source: &node.source_file.content[range.start..range.end],
-                        // overhead!
                         line_start: 1 + node.start_position().row,
                         origin: Some(file_name.as_ref().unwrap()),
                         annotations: [SourceAnnotation {
@@ -161,19 +172,5 @@ impl<'v> IrritationRenderer<'v> {
             extra_info_present,
             rendered,
         }
-    }
-
-    fn relevant_range(node: &Node<'v>) -> Range<usize> {
-        let Range { start, end } = node.byte_range();
-        let content = &node.source_file.content;
-        let start = content[..start]
-            .rfind(['\n', '\r'])
-            .map(|i| i + 1)
-            .unwrap_or_default();
-        let end = content[end..]
-            .find(['\n', '\r'])
-            .map(|i| i + end)
-            .unwrap_or(content.len());
-        start..end
     }
 }
