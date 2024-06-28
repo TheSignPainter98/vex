@@ -1,4 +1,4 @@
-use std::fs;
+use std::{fs, ops::Range};
 
 use allocative::Allocative;
 use dupe::Dupe;
@@ -156,6 +156,20 @@ impl ParsedSourceFile {
             })?;
 
         Ok(builder.build())
+    }
+
+    pub fn full_lines_range(&self, range: Range<usize>) -> Range<usize> {
+        let (start, end) = (range.start, range.end);
+
+        let start = self.content[..start]
+            .rfind(['\n', '\r'])
+            .map(|i| i + 1)
+            .unwrap_or_default();
+        let end = self.content[end..]
+            .find(['\n', '\r'])
+            .map(|i| i + end)
+            .unwrap_or(self.content.len());
+        start..end
     }
 }
 
