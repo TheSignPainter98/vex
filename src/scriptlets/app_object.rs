@@ -105,7 +105,7 @@ impl AppObject {
             #[starlark(require=pos)] message: &'v str,
             #[starlark(require=named)] at: Option<StarlarkSourceAnnotation<'v>>,
             #[starlark(require=named)] show_also: Option<UnpackList<StarlarkSourceAnnotation<'v>>>,
-            #[starlark(require=named)] extra_info: Option<&'v str>,
+            #[starlark(require=named)] info: Option<&'v str>,
             eval: &mut Evaluator<'v, '_>,
         ) -> anyhow::Result<NoneType> {
             AppObject::check_attr_available(
@@ -141,8 +141,8 @@ impl AppObject {
             if let Some(show_also) = show_also {
                 irritation_renderer.set_show_also(show_also.items);
             }
-            if let Some(extra_info) = extra_info {
-                irritation_renderer.set_extra_info(extra_info);
+            if let Some(info) = info {
+                irritation_renderer.set_info(info);
             }
             ret_data.declare_intent(UnfrozenIntent::Warn(irritation_renderer.render()));
 
@@ -212,7 +212,7 @@ mod test {
         const AT: &str = "node bin_expr found here";
         const SHOW_ALSO_L: &str = "node l found here";
         const SHOW_ALSO_R: &str = "node r found here";
-        const EXTRA_INFO: &str = "some hopefully useful extra info";
+        const INFO: &str = "some hopefully useful extra info";
 
         let irritations = VexTest::new("arg-combinations")
             .with_scriptlet(
@@ -235,13 +235,13 @@ mod test {
 
                         at = (bin_expr, '{AT}')
                         show_also = [(l, '{SHOW_ALSO_L}'), (r, '{SHOW_ALSO_R}')]
-                        extra_info = '{EXTRA_INFO}'
+                        info = '{INFO}'
 
                         vex.warn('test-0')
-                        vex.warn('test-1', extra_info=extra_info)
+                        vex.warn('test-1', info=info)
                         vex.warn('test-2', at=at)
                         vex.warn('test-3', at=at, show_also=show_also)
-                        vex.warn('test-4', at=at, show_also=show_also, extra_info=extra_info)
+                        vex.warn('test-4', at=at, show_also=show_also, info=info)
                 "#},
             )
             .with_source_file(
@@ -274,7 +274,7 @@ mod test {
                 })
         };
         assert_contains(&irritations[0], &[VEX_NAME, "test-0"]);
-        assert_contains(&irritations[1], &[VEX_NAME, "test-1", EXTRA_INFO]);
+        assert_contains(&irritations[1], &[VEX_NAME, "test-1", INFO]);
         assert_contains(&irritations[2], &[VEX_NAME, "test-2", AT]);
         assert_contains(
             &irritations[3],
@@ -282,7 +282,7 @@ mod test {
         );
         assert_contains(
             &irritations[4],
-            &[VEX_NAME, "test-4", AT, SHOW_ALSO_L, SHOW_ALSO_R, EXTRA_INFO],
+            &[VEX_NAME, "test-4", AT, SHOW_ALSO_L, SHOW_ALSO_R, INFO],
         );
 
         assert_yaml_snapshot!(irritations);
@@ -335,7 +335,7 @@ mod test {
         const AT: &str = "node bin_expr found here";
         const SHOW_ALSO_L: &str = "node l found here";
         const SHOW_ALSO_R: &str = "node r found here";
-        const EXTRA_INFO: &str = "some hopefully useful extra info";
+        const INFO: &str = "some hopefully useful extra info";
 
         let vex_source = formatdoc! {r#"
             def init():
@@ -355,13 +355,13 @@ mod test {
 
                 at = (bin_expr, '{AT}')
                 show_also = [(l, '{SHOW_ALSO_L}'), (r, '{SHOW_ALSO_R}')]
-                extra_info = '{EXTRA_INFO}'
+                info = '{INFO}'
 
                 # Emit warnings in opposite order to expected.
                 vex.warn('message-six', at=(bin_expr, 'bin_expr'), show_also=[(r, 'r')])
                 vex.warn('message-four', at=(bin_expr, 'bin_expr'), show_also=[(l, 'l')])
-                vex.warn('message-seven', at=(bin_expr, 'bin_expr'), show_also=[(r, 'r')], extra_info=extra_info)
-                vex.warn('message-five', at=(bin_expr, 'bin_expr'), show_also=[(l, 'l')], extra_info=extra_info)
+                vex.warn('message-seven', at=(bin_expr, 'bin_expr'), show_also=[(r, 'r')], info=info)
+                vex.warn('message-five', at=(bin_expr, 'bin_expr'), show_also=[(l, 'l')], info=info)
                 vex.warn('message-eight', at=(r, 'r'))
                 vex.warn('message-three', at=(l, 'l'))
                 vex.warn('message-one')
