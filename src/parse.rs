@@ -33,10 +33,10 @@ pub fn parse(cmd: ParseCmd) -> Result<()> {
 
     let capacity_estimate = 20 * src_file.tree.root_node().descendant_count();
     let mut buf = String::with_capacity(capacity_estimate);
-    let format = if cmd.expanded {
-        WhitespaceStyle::Expanded
-    } else {
+    let format = if cmd.compact {
         WhitespaceStyle::Compact
+    } else {
+        WhitespaceStyle::Expanded
     };
     NodePrinter::new(&mut buf, format).write(&src_file)?;
     println!("{buf}");
