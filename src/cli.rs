@@ -50,6 +50,9 @@ pub enum Command {
 
     /// Print the syntax tree of the given file
     Parse(ParseCmd),
+
+    /// Test available lints
+    Test,
 }
 
 #[cfg(test)]

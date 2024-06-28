@@ -20,6 +20,7 @@ mod source_file;
 mod source_path;
 mod suggestion;
 mod supported_language;
+mod test;
 mod trigger;
 mod verbosity;
 mod vex;
@@ -87,6 +88,7 @@ fn run() -> Result<ExitCode> {
         Command::List(list_args) => list(list_args),
         Command::Init(init_args) => init(init_args),
         Command::Parse(parse_args) => parse::parse(parse_args),
+        Command::Test => test::test(),
     }?;
 
     Ok(logger::exit_code())
@@ -442,7 +444,7 @@ fn init(init_args: InitCmd) -> Result<()> {
 }
 
 #[cfg(test)]
-mod test {
+mod test_ {
     use indoc::indoc;
     use insta::assert_yaml_snapshot;
     use joinery::JoinableIterator;
