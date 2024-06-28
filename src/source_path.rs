@@ -4,13 +4,13 @@ use std::{fmt::Display, ops::Deref, sync::Arc};
 use std::path;
 
 use allocative::Allocative;
-use camino::Utf8Path;
+use camino::{Utf8Path, Utf8PathBuf};
 use dupe::Dupe;
 use serde::Serialize;
 use starlark::{
     environment::{Methods, MethodsBuilder, MethodsStatic},
     starlark_module, starlark_simple_value,
-    values::{list::AllocList, Demand, Heap, StarlarkValue, Value, ValueError},
+    values::{Demand, Heap, StarlarkValue, Value, ValueError},
 };
 use starlark_derive::{starlark_value, ProvidesStaticType};
 
@@ -230,26 +230,26 @@ impl<'v> StarlarkValue<'v> for PrettyPath {
             let high = stop.map(normalise_index).unwrap_or(n);
             if high <= low {
                 // Empty result fast path.
-                return Ok(heap.alloc(AllocList::<[i32; 0]>([])));
+                return Ok(heap.alloc(PrettyPath::new(Utf8Path::new(""))));
             }
-            Ok(heap.alloc(AllocList(
+            Ok(heap.alloc(PrettyPath::new(&Utf8PathBuf::from_iter(
                 self.components()
                     .enumerate()
                     .map(|(i, c)| (i as i32, c))
                     .skip_while(|(i, _)| *i < low)
                     .take_while(|(i, _)| *i < high)
                     .filter(|(i, _)| (i - low) % stride == 0)
-                    .map(|(_, c)| c.as_str()),
-            )))
+                    .map(|(_, c)| c),
+            ))))
         } else {
             let normalise_index = |idx: i32| if idx < 0 { idx + n } else { idx }.clamp(-1, n - 1);
             let high = start.map(normalise_index).unwrap_or(n - 1);
             let low = stop.map(normalise_index).unwrap_or(-1);
             if high <= low {
                 // Empty result fast path.
-                return Ok(heap.alloc(AllocList::<[i32; 0]>([])));
+                return Ok(heap.alloc(PrettyPath::new(Utf8Path::new(""))));
             }
-            Ok(heap.alloc(AllocList(
+            Ok(heap.alloc(PrettyPath::new(&Utf8PathBuf::from_iter(
                 self.components()
                     .rev()
                     .enumerate()
@@ -257,8 +257,8 @@ impl<'v> StarlarkValue<'v> for PrettyPath {
                     .skip_while(|(i, _)| *i > high)
                     .take_while(|(i, _)| *i > low)
                     .filter(|(i, _)| (*i - high) % -stride == 0)
-                    .map(|(_, c)| c.as_str()),
-            )))
+                    .map(|(_, c)| c),
+            ))))
         }
     }
 }
@@ -479,9 +479,15 @@ mod test {
 
                 errs = []
                 def eq(start, stop, stride, a, b):
-                    if a != b:
-                        errs.append(('[%r:%r:%r]' % (start, stop, stride), a, b))
-                        print('%r, %r, %r' % (start, stop, stride), a, b)
+                    print('%r, %r, %r...' % (start, stop, stride))
+
+                    if type(a) != 'Path':
+                        fail('expected path, got %s' % type(a))
+
+                    A = str(a)
+                    B = '/'.join(b)
+                    if A != B:
+                        errs.append('[%r:%r:%r]: "%s" %r' % (start, stop, stride, A, B))
                 def test(start, stop, stride):
                     if stride == 0:
                         return
@@ -512,7 +518,7 @@ mod test {
                 for (start, stop, stride) in tests:
                     test(start, stop, stride)
                 for err in errs:
-                    print(*err)
+                    print(err)
                 if len(errs):
                     fail('encountered %d problems' % len(errs))
             "#});
