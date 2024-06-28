@@ -72,7 +72,7 @@ def on_match(event):
         vex.warn(
             'large operands should come later',
             at=(left_operand, 'number too large'),
-            extra_info='large numbers can hide smaller ones',
+            info='large numbers can hide smaller ones',
         )
 ```
 Et voilà, you now have a lint!

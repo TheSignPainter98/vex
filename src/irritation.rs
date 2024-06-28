@@ -13,7 +13,7 @@ pub struct Irritation {
     code_source: Option<IrritationSource>,
     pretty_vex_id: PrettyVexId,
     other_code_sources: Vec<IrritationSource>,
-    extra_info_present: bool,
+    info_present: bool,
     pub(crate) rendered: String,
 }
 
@@ -60,7 +60,7 @@ pub struct IrritationRenderer<'v> {
     message: &'v str,
     source: Option<(Node<'v>, &'v str)>,
     show_also: Vec<(Node<'v>, &'v str)>,
-    extra_info: Option<&'v str>,
+    info: Option<&'v str>,
 }
 
 impl<'v> IrritationRenderer<'v> {
@@ -70,7 +70,7 @@ impl<'v> IrritationRenderer<'v> {
             message,
             source: None,
             show_also: Vec::with_capacity(0),
-            extra_info: None,
+            info: None,
         }
     }
 
@@ -82,8 +82,8 @@ impl<'v> IrritationRenderer<'v> {
         self.show_also = show_also;
     }
 
-    pub fn set_extra_info(&mut self, extra_info: &'v str) {
-        self.extra_info = Some(extra_info);
+    pub fn set_info(&mut self, info: &'v str) {
+        self.info = Some(info);
     }
 
     pub fn render(self) -> Irritation {
@@ -92,7 +92,7 @@ impl<'v> IrritationRenderer<'v> {
             source,
             message,
             show_also,
-            extra_info,
+            info,
         } = self;
 
         // TODO(kcza): allow source and show_alsos to be in separate files.
@@ -148,11 +148,11 @@ impl<'v> IrritationRenderer<'v> {
                     }
                 })
                 .collect(),
-            footer: extra_info
+            footer: info
                 .into_iter()
-                .map(|extra_info| Annotation {
+                .map(|info| Annotation {
                     id: None,
-                    label: Some(extra_info),
+                    label: Some(info),
                     annotation_type: AnnotationType::Info,
                 })
                 .collect(),
@@ -163,13 +163,13 @@ impl<'v> IrritationRenderer<'v> {
             .iter()
             .map(|(node, _)| IrritationSource::at(node))
             .collect();
-        let extra_info_present = extra_info.is_some();
+        let info_present = info.is_some();
         let rendered = logger::render_snippet(snippet);
         Irritation {
             pretty_vex_id,
             code_source,
             other_code_sources,
-            extra_info_present,
+            info_present,
             rendered,
         }
     }
