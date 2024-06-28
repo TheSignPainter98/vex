@@ -125,6 +125,10 @@ impl<'v> Node<'v> {
             Ok(ChildrenIterable::new(this))
         }
 
+        fn num_children<'v>(this: Node<'v>) -> starlark::Result<usize> {
+            Ok(this.child_count())
+        }
+
         fn text<'v>(this: Node<'v>) -> starlark::Result<&'v str> {
             this.utf8_text(this.source_file.content.as_bytes())
                 .map_err(Error::Utf8)
@@ -167,10 +171,6 @@ impl<'v> StarlarkValue<'v> for Node<'v> {
             false
         };
         Ok(ret)
-    }
-
-    fn length(&self) -> starlark::Result<i32> {
-        Ok(self.child_count() as i32)
     }
 
     fn at(&self, index: Value<'v>, heap: &'v Heap) -> starlark::Result<Value<'v>> {
@@ -643,6 +643,7 @@ mod test {
                                 'location',
                                 'next_sibling',
                                 'next_siblings',
+                                'num_children',
                                 'parent',
                                 'parents',
                                 'previous_sibling',
@@ -821,7 +822,7 @@ mod test {
 
                         def on_match(event):
                             expr = event.captures['expr']
-                            check['true'](len(expr) > 1)
+                            check['true'](expr.num_children() > 1)
 
                             parent = expr.parent()
                             check['neq'](parent, None)
