@@ -39,8 +39,8 @@ impl IgnoreMarkers {
                 .partition_point(|marker| marker.byte_range.start <= byte_index);
         self.markers[first_possible_index..last_possible_index]
             .iter()
-            .filter(|marker| marker.byte_range.contains(&byte_index))
-            .any(|marker| marker.filter.covers(vex_id))
+            .filter(|marker| marker.filter.covers(vex_id))
+            .any(|marker| marker.byte_range.contains(&byte_index))
     }
 
     #[cfg(test)]
