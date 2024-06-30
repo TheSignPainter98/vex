@@ -127,11 +127,13 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
             Plural::new(num_files_scanned, "file", "files"),
         );
     }
-    if !irritations.is_empty() {
-        warn!(
-            "found {}",
-            Plural::new(irritations.len(), "problem", "problems"),
-        );
+    let num_problems = irritations.len()
+        + *logger::NUM_ERRS.lock().expect("failed to lock NUM_ERRS") as usize
+        + *logger::NUM_WARNINGS
+            .lock()
+            .expect("failed to lock NUM_WARNINGS") as usize;
+    if num_problems != 0 {
+        warn!("found {}", Plural::new(num_problems, "problem", "problems"),);
     } else {
         println!(
             "{}: no problems found",

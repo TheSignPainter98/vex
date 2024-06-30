@@ -5,8 +5,8 @@ use log::{kv::Key, Level, Log, Metadata, Record};
 
 use crate::{result::Result, verbosity::Verbosity};
 
-static NUM_ERRS: Mutex<u32> = Mutex::new(0);
-static NUM_WARNINGS: Mutex<u32> = Mutex::new(0);
+pub static NUM_ERRS: Mutex<u32> = Mutex::new(0);
+pub static NUM_WARNINGS: Mutex<u32> = Mutex::new(0);
 
 pub fn init(level: Verbosity) -> Result<()> {
     let level = level.into();
