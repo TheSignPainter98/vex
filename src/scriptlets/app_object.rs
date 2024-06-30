@@ -130,25 +130,26 @@ impl AppObject {
             let mut irritation_renderer =
                 IrritationRenderer::new(temp_data.vex_id.to_pretty(), message);
             if let Some(at) = at {
-                let at = if let Some((node, annot)) = StarlarkSourceAnnotation::unpack_value(at) {
-                    (node, annot)
-                } else if let Some(node) = Node::unpack_value(at) {
-                    (node, "")
-                } else {
-                    return Err(ValueError::IncorrectParameterTypeNamedWithExpected(
-                        "at".into(),
-                        "Node|(Node, str)".into(),
-                        at.get_type().into(),
-                    )
-                    .into());
-                };
+                let (node, annot) =
+                    if let Some((node, annot)) = StarlarkSourceAnnotation::unpack_value(at) {
+                        (node, annot)
+                    } else if let Some(node) = Node::unpack_value(at) {
+                        (node, "")
+                    } else {
+                        return Err(ValueError::IncorrectParameterTypeNamedWithExpected(
+                            "at".into(),
+                            "Node|(Node, str)".into(),
+                            at.get_type().into(),
+                        )
+                        .into());
+                    };
                 if let Some(ignore_markers) = temp_data.ignore_markers {
-                    if ignore_markers.marked(at.0.byte_range().start, temp_data.vex_id) {
+                    if ignore_markers.marked(node.byte_range().start, temp_data.vex_id) {
                         return Ok(NoneType);
                     }
                 }
 
-                irritation_renderer.set_source(at)
+                irritation_renderer.set_source((node, annot))
             }
             if let Some(show_also) = show_also {
                 irritation_renderer.set_show_also(show_also.items);
