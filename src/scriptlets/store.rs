@@ -32,11 +32,11 @@ impl PreinitingStore {
             path_indices: BTreeMap::new(),
             store: Vec::new(),
         };
-        ret.load_dir(ctx, ctx.vex_dir(), true)?;
+        ret.load_dir(ctx, ctx.vex_dir())?;
         Ok(ret)
     }
 
-    fn load_dir(&mut self, ctx: &Context, path: Utf8PathBuf, toplevel: bool) -> Result<()> {
+    fn load_dir(&mut self, ctx: &Context, path: Utf8PathBuf) -> Result<()> {
         let dir = fs::read_dir(&path).map_err(|err| match err.kind() {
             ErrorKind::NotFound => Error::NoVexesDir(path.clone()),
             _ => Error::IO {
@@ -67,7 +67,7 @@ impl PreinitingStore {
             }
 
             if metadata.is_dir() {
-                self.load_dir(ctx, entry_path, false)?;
+                self.load_dir(ctx, entry_path)?;
                 continue;
             }
 
@@ -82,18 +82,18 @@ impl PreinitingStore {
                 continue;
             }
             let scriptlet_path = SourcePath::new(&entry_path, &self.vex_dir);
-            self.load_file(scriptlet_path, toplevel)?;
+            self.load_file(scriptlet_path)?;
         }
 
         Ok(())
     }
 
-    fn load_file(&mut self, path: SourcePath, toplevel: bool) -> Result<()> {
+    fn load_file(&mut self, path: SourcePath) -> Result<()> {
         if self.path_indices.get(&path.pretty_path).is_some() {
             return Ok(());
         }
 
-        let scriptlet = PreinitingScriptlet::new(path.dupe(), toplevel)?;
+        let scriptlet = PreinitingScriptlet::new(path.dupe())?;
         self.store.push(scriptlet);
         self.path_indices
             .insert(path.pretty_path.dupe(), self.store.len() - 1);

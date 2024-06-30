@@ -68,14 +68,8 @@ pub enum Error {
     #[error("cannot find manifest, try running `vex init` in the project’s root")]
     ManifestNotFound,
 
-    #[error("{0} declares no init function")]
-    NoInit(PrettyPath),
-
     #[error("cannot discern language of {0}")]
     NoKnownLanguage(PrettyPath),
-
-    #[error("{0} observes no events")]
-    NoObservers(PrettyPath),
 
     #[error("cannot find module '{0}'")]
     NoSuchModule(PrettyPath),

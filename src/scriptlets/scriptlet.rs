@@ -4,6 +4,7 @@ use camino::{Utf8Component, Utf8Path};
 use const_format::formatcp;
 use dupe::Dupe;
 use lazy_static::lazy_static;
+use log::{log_enabled, warn};
 use regex::Regex;
 use starlark::{
     analysis::AstModuleLint,
@@ -36,22 +37,21 @@ use crate::{
 pub struct PreinitingScriptlet {
     pub path: SourcePath,
     vex_id: VexId,
-    toplevel: bool,
     ast: AstModule,
     loads_files: HashSet<PrettyPath>,
 }
 
 impl PreinitingScriptlet {
-    pub fn new(path: SourcePath, toplevel: bool) -> Result<Self> {
+    pub fn new(path: SourcePath) -> Result<Self> {
         let code = fs::read_to_string(path.abs_path.as_str()).map_err(|cause| Error::IO {
             path: path.pretty_path.dupe(),
             action: IOAction::Read,
             cause,
         })?;
-        Self::new_from_str(path, code, toplevel)
+        Self::new_from_str(path, code)
     }
 
-    fn new_from_str(path: SourcePath, code: impl Into<String>, toplevel: bool) -> Result<Self> {
+    fn new_from_str(path: SourcePath, code: impl Into<String>) -> Result<Self> {
         let code = code.into();
 
         let vex_id = VexId::new(path.pretty_path.dupe());
@@ -65,7 +65,6 @@ impl PreinitingScriptlet {
         Ok(Self {
             path,
             vex_id,
-            toplevel,
             ast,
             loads_files,
         })
@@ -98,7 +97,6 @@ impl PreinitingScriptlet {
             path,
             vex_id,
             ast,
-            toplevel,
             loads_files: _,
         } = self;
         let PreinitOptions { lenient } = opts;
@@ -127,7 +125,6 @@ impl PreinitingScriptlet {
         Ok(InitingScriptlet {
             path,
             vex_id,
-            toplevel,
             preinited_module,
         })
     }
@@ -304,7 +301,6 @@ impl LoadStatementModule<'_> {
 pub struct InitingScriptlet {
     pub path: SourcePath,
     pub vex_id: VexId,
-    toplevel: bool,
     pub preinited_module: FrozenModule,
 }
 
@@ -313,17 +309,11 @@ impl InitingScriptlet {
         let Self {
             path,
             vex_id,
-            toplevel,
             preinited_module,
         } = self;
 
         let Some(init) = preinited_module.get_option("init")? else {
-            if toplevel {
-                return Err(Error::NoInit(path.pretty_path.dupe()));
-            }
-            // Non-toplevel scriptlets may be helper libraries.
-            let observer_data = ObserverData::empty();
-            return Ok(observer_data);
+            return Ok(ObserverData::empty());
         };
 
         let module = {
@@ -361,8 +351,8 @@ impl InitingScriptlet {
             });
             observer_data
         };
-        if observer_data.len() == 0 {
-            return Err(Error::NoObservers(path.pretty_path));
+        if log_enabled!(log::Level::Warn) && observer_data.len() == 0 {
+            warn!("{} observes no events", path.pretty_path);
         }
         Ok(observer_data)
     }
@@ -417,7 +407,7 @@ mod test {
     fn missing_init() {
         VexTest::new("no-init")
             .with_scriptlet("vexes/test.star", "")
-            .returns_error(r"test\.star declares no init function")
+            .assert_irritation_free();
     }
 
     #[test]
@@ -430,7 +420,7 @@ mod test {
                         pass
                 "#},
             )
-            .returns_error(r"test\.star observes no events");
+            .assert_irritation_free();
     }
 
     #[test]
@@ -737,7 +727,6 @@ mod test {
                         "#,
                         path.quote()
                     },
-                    false,
                 )
                 .map(|_| ())
             }
