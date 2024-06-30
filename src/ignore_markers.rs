@@ -21,11 +21,10 @@ impl IgnoreMarkers {
             return false;
         }
 
-        let last_marker_end_boundary = self.marker_ends[self.marker_ends.len() - 1].byte_index;
-        if last_marker_end_boundary <= byte_index {
+        if byte_index < self.markers[0].byte_range.start {
             return false;
         }
-        if byte_index < self.markers[0].byte_range.start {
+        if byte_index >= self.marker_ends[self.marker_ends.len() - 1].byte_index {
             return false;
         }
 
