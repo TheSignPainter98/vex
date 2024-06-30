@@ -9,7 +9,7 @@ use starlark::{
     starlark_module,
     values::{
         list::UnpackList, none::NoneType, Heap, NoSerialize, ProvidesStaticType, StarlarkValue,
-        StringValue, Value,
+        StringValue, UnpackValue, Value, ValueError,
     },
 };
 use starlark_derive::starlark_value;
@@ -103,7 +103,7 @@ impl AppObject {
         fn warn<'v>(
             #[starlark(this)] _this: Value<'v>,
             #[starlark(require=pos)] message: &'v str,
-            #[starlark(require=named)] at: Option<StarlarkSourceAnnotation<'v>>,
+            #[starlark(require=named)] at: Option<Value<'v>>,
             #[starlark(require=named)] show_also: Option<UnpackList<StarlarkSourceAnnotation<'v>>>,
             #[starlark(require=named)] info: Option<&'v str>,
             eval: &mut Evaluator<'v, '_>,
@@ -130,13 +130,26 @@ impl AppObject {
             let mut irritation_renderer =
                 IrritationRenderer::new(temp_data.vex_id.to_pretty(), message);
             if let Some(at) = at {
+                let (node, annot) =
+                    if let Some((node, annot)) = StarlarkSourceAnnotation::unpack_value(at) {
+                        (node, annot)
+                    } else if let Some(node) = Node::unpack_value(at) {
+                        (node, "")
+                    } else {
+                        return Err(ValueError::IncorrectParameterTypeNamedWithExpected(
+                            "at".into(),
+                            "Node|(Node, str)".into(),
+                            at.get_type().into(),
+                        )
+                        .into());
+                    };
                 if let Some(ignore_markers) = temp_data.ignore_markers {
-                    if ignore_markers.marked(at.0.byte_range().start, temp_data.vex_id) {
+                    if ignore_markers.marked(node.byte_range().start, temp_data.vex_id) {
                         return Ok(NoneType);
                     }
                 }
 
-                irritation_renderer.set_source(at)
+                irritation_renderer.set_source((node, annot))
             }
             if let Some(show_also) = show_also {
                 irritation_renderer.set_show_also(show_also.items);
@@ -209,9 +222,9 @@ mod test {
     #[test]
     fn warn_valid() {
         const VEX_NAME: &str = "name_of_vex";
-        const AT: &str = "node bin_expr found here";
-        const SHOW_ALSO_L: &str = "node l found here";
-        const SHOW_ALSO_R: &str = "node r found here";
+        const AT_LABEL: &str = "node bin_expr";
+        const SHOW_ALSO_L: &str = "node l";
+        const SHOW_ALSO_R: &str = "node r";
         const INFO: &str = "some hopefully useful extra info";
 
         let irritations = VexTest::new("arg-combinations")
@@ -233,15 +246,27 @@ mod test {
                         l = event.captures['l']
                         r = event.captures['r']
 
-                        at = (bin_expr, '{AT}')
+                        at_unlabelled = bin_expr
+                        at_labelled = (bin_expr, '{AT_LABEL}')
                         show_also = [(l, '{SHOW_ALSO_L}'), (r, '{SHOW_ALSO_R}')]
                         info = '{INFO}'
 
-                        vex.warn('test-0')
-                        vex.warn('test-1', info=info)
-                        vex.warn('test-2', at=at)
-                        vex.warn('test-3', at=at, show_also=show_also)
-                        vex.warn('test-4', at=at, show_also=show_also, info=info)
+                        vex.warn('test-01')
+                        vex.warn('test-00')
+                        vex.warn('test-03', info=info)
+                        vex.warn('test-02', info=info)
+                        vex.warn('test-05', at=at_unlabelled)
+                        vex.warn('test-04', at=at_unlabelled)
+                        vex.warn('test-07', at=at_labelled)
+                        vex.warn('test-06', at=at_labelled)
+                        vex.warn('test-09', at=at_unlabelled, show_also=show_also)
+                        vex.warn('test-08', at=at_unlabelled, show_also=show_also)
+                        vex.warn('test-11', at=at_labelled, show_also=show_also)
+                        vex.warn('test-10', at=at_labelled, show_also=show_also)
+                        vex.warn('test-13', at=at_unlabelled, show_also=show_also, info=info)
+                        vex.warn('test-12', at=at_unlabelled, show_also=show_also, info=info)
+                        vex.warn('test-15', at=at_labelled, show_also=show_also, info=info)
+                        vex.warn('test-14', at=at_labelled, show_also=show_also, info=info)
                 "#},
             )
             .with_source_file(
@@ -259,7 +284,7 @@ mod test {
             .into_iter()
             .map(|irr| irr.to_string())
             .collect::<Vec<_>>();
-        assert_eq!(irritations.len(), 5);
+        assert_eq!(irritations.len(), 16);
 
         let assert_contains = |irritation: &str, strings: &[&str]| {
             [VEX_NAME]
@@ -273,16 +298,59 @@ mod test {
                     )
                 })
         };
-        assert_contains(&irritations[0], &[VEX_NAME, "test-0"]);
-        assert_contains(&irritations[1], &[VEX_NAME, "test-1", INFO]);
-        assert_contains(&irritations[2], &[VEX_NAME, "test-2", AT]);
+        assert_contains(&irritations[0], &[VEX_NAME, "test-00"]);
+        assert_contains(&irritations[1], &[VEX_NAME, "test-01"]);
+        assert_contains(&irritations[2], &[VEX_NAME, "test-02", INFO]);
+        assert_contains(&irritations[3], &[VEX_NAME, "test-03", INFO]);
+        assert_contains(&irritations[4], &[VEX_NAME, "test-04"]);
+        assert_contains(&irritations[5], &[VEX_NAME, "test-05"]);
+        assert_contains(&irritations[6], &[VEX_NAME, "test-06", AT_LABEL]);
+        assert_contains(&irritations[7], &[VEX_NAME, "test-07", AT_LABEL]);
         assert_contains(
-            &irritations[3],
-            &[VEX_NAME, "test-3", AT, SHOW_ALSO_L, SHOW_ALSO_R],
+            &irritations[8],
+            &[VEX_NAME, "test-08", SHOW_ALSO_L, SHOW_ALSO_R],
         );
         assert_contains(
-            &irritations[4],
-            &[VEX_NAME, "test-4", AT, SHOW_ALSO_L, SHOW_ALSO_R, INFO],
+            &irritations[9],
+            &[VEX_NAME, "test-09", SHOW_ALSO_L, SHOW_ALSO_R],
+        );
+        assert_contains(
+            &irritations[10],
+            &[VEX_NAME, "test-10", AT_LABEL, SHOW_ALSO_L, SHOW_ALSO_R],
+        );
+        assert_contains(
+            &irritations[11],
+            &[VEX_NAME, "test-11", AT_LABEL, SHOW_ALSO_L, SHOW_ALSO_R],
+        );
+        assert_contains(
+            &irritations[12],
+            &[VEX_NAME, "test-12", SHOW_ALSO_L, SHOW_ALSO_R, INFO],
+        );
+        assert_contains(
+            &irritations[13],
+            &[VEX_NAME, "test-13", SHOW_ALSO_L, SHOW_ALSO_R, INFO],
+        );
+        assert_contains(
+            &irritations[14],
+            &[
+                VEX_NAME,
+                "test-14",
+                AT_LABEL,
+                SHOW_ALSO_L,
+                SHOW_ALSO_R,
+                INFO,
+            ],
+        );
+        assert_contains(
+            &irritations[15],
+            &[
+                VEX_NAME,
+                "test-15",
+                AT_LABEL,
+                SHOW_ALSO_L,
+                SHOW_ALSO_R,
+                INFO,
+            ],
         );
 
         assert_yaml_snapshot!(irritations);
