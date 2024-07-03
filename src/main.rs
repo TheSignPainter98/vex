@@ -94,7 +94,7 @@ fn run() -> Result<ExitCode> {
 
 fn print_banner() {
     printdoc! {
-    r#"
+        r#"
 
             oooooo      oooo
              `888.      .8"
