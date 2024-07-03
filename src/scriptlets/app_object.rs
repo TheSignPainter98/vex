@@ -118,7 +118,10 @@ impl AppObject {
             )?;
 
             if matches!((&at, &show_also), (None, Some(_)))
-                || matches!((&at, &show_also), (Some(MainAnnotation::Path(_)), Some(_)))
+                || matches!(
+                    (&at, &show_also),
+                    (Some(MainAnnotation::Path { .. }), Some(_))
+                )
             {
                 return Err(Error::InvalidWarnCall(
                     "cannot display `show_also` without an `at` argument containing a Node",
@@ -206,7 +209,6 @@ impl Display for AppObject {
 mod test {
     use indoc::{formatdoc, indoc};
     use insta::assert_yaml_snapshot;
-    use joinery::JoinableIterator;
 
     use crate::vextest::VexTest;
 
@@ -214,7 +216,8 @@ mod test {
     fn warn_valid() {
         const VEX_NAME: &str = "name_of_vex";
         const FILE_NAME: &str = "main.rs";
-        const AT_LABEL: &str = "node bin_expr";
+        const AT_PATH_LABEL: &str = "file label";
+        const AT_NODE_LABEL: &str = "node bin_expr";
         const SHOW_ALSO_L: &str = "node l";
         const SHOW_ALSO_R: &str = "node r";
         const INFO: &str = "some hopefully useful extra info";
@@ -238,9 +241,10 @@ mod test {
                         l = event.captures['l']
                         r = event.captures['r']
 
-                        at_file = event.path
-                        at_unlabelled = bin_expr
-                        at_labelled = (bin_expr, '{AT_LABEL}')
+                        at_path_unlabelled = event.path
+                        at_path_labelled = (event.path, '{AT_PATH_LABEL}')
+                        at_node_unlabelled = bin_expr
+                        at_node_labelled = (bin_expr, '{AT_NODE_LABEL}')
                         show_also = [(l, '{SHOW_ALSO_L}'), (r, '{SHOW_ALSO_R}')]
                         info = '{INFO}'
 
@@ -248,19 +252,20 @@ mod test {
                         vex.warn('test-00')
                         vex.warn('test-03', info=info)
                         vex.warn('test-02', info=info)
-                        vex.warn('test-04', at=at_file)
-                        vex.warn('test-06', at=at_unlabelled)
-                        vex.warn('test-05', at=at_unlabelled)
-                        vex.warn('test-08', at=at_labelled)
-                        vex.warn('test-07', at=at_labelled)
-                        vex.warn('test-10', at=at_unlabelled, show_also=show_also)
-                        vex.warn('test-09', at=at_unlabelled, show_also=show_also)
-                        vex.warn('test-12', at=at_labelled, show_also=show_also)
-                        vex.warn('test-11', at=at_labelled, show_also=show_also)
-                        vex.warn('test-14', at=at_unlabelled, show_also=show_also, info=info)
-                        vex.warn('test-13', at=at_unlabelled, show_also=show_also, info=info)
-                        vex.warn('test-16', at=at_labelled, show_also=show_also, info=info)
-                        vex.warn('test-15', at=at_labelled, show_also=show_also, info=info)
+                        vex.warn('test-04', at=at_path_unlabelled)
+                        vex.warn('test-05', at=at_path_labelled)
+                        vex.warn('test-07', at=at_node_unlabelled)
+                        vex.warn('test-06', at=at_node_unlabelled)
+                        vex.warn('test-09', at=at_node_labelled)
+                        vex.warn('test-08', at=at_node_labelled)
+                        vex.warn('test-11', at=at_node_unlabelled, show_also=show_also)
+                        vex.warn('test-10', at=at_node_unlabelled, show_also=show_also)
+                        vex.warn('test-13', at=at_node_labelled, show_also=show_also)
+                        vex.warn('test-12', at=at_node_labelled, show_also=show_also)
+                        vex.warn('test-15', at=at_node_unlabelled, show_also=show_also, info=info)
+                        vex.warn('test-14', at=at_node_unlabelled, show_also=show_also, info=info)
+                        vex.warn('test-17', at=at_node_labelled, show_also=show_also, info=info)
+                        vex.warn('test-16', at=at_node_labelled, show_also=show_also, info=info)
                 "#},
             )
             .with_source_file(
@@ -278,7 +283,7 @@ mod test {
             .into_iter()
             .map(|irr| irr.to_string())
             .collect::<Vec<_>>();
-        assert_eq!(irritations.len(), 17);
+        assert_eq!(irritations.len(), 18);
 
         let assert_contains = |irritation: &str, strings: &[&str]| {
             [VEX_NAME]
@@ -292,34 +297,34 @@ mod test {
                     )
                 })
         };
-        assert_contains(&irritations[00], &[VEX_NAME, "test-00"]);
-        assert_contains(&irritations[01], &[VEX_NAME, "test-01"]);
-        assert_contains(&irritations[02], &[VEX_NAME, "test-02", INFO]);
-        assert_contains(&irritations[03], &[VEX_NAME, "test-03", INFO]);
-        assert_contains(&irritations[04], &[VEX_NAME, "test-04", FILE_NAME]);
-        assert_contains(&irritations[05], &[VEX_NAME, "test-05"]);
-        assert_contains(&irritations[06], &[VEX_NAME, "test-06"]);
-        assert_contains(&irritations[07], &[VEX_NAME, "test-07", AT_LABEL]);
-        assert_contains(&irritations[08], &[VEX_NAME, "test-08", AT_LABEL]);
+        assert_contains(&irritations[0], &[VEX_NAME, "test-00"]);
+        assert_contains(&irritations[1], &[VEX_NAME, "test-01"]);
+        assert_contains(&irritations[2], &[VEX_NAME, "test-02", INFO]);
+        assert_contains(&irritations[3], &[VEX_NAME, "test-03", INFO]);
+        assert_contains(&irritations[4], &[VEX_NAME, "test-04", FILE_NAME]);
         assert_contains(
-            &irritations[09],
-            &[VEX_NAME, "test-09", SHOW_ALSO_L, SHOW_ALSO_R],
+            &irritations[5],
+            &[VEX_NAME, "test-05", FILE_NAME, AT_PATH_LABEL],
         );
+        assert_contains(&irritations[6], &[VEX_NAME, "test-06"]);
+        assert_contains(&irritations[7], &[VEX_NAME, "test-07"]);
+        assert_contains(&irritations[8], &[VEX_NAME, "test-08", AT_NODE_LABEL]);
+        assert_contains(&irritations[9], &[VEX_NAME, "test-09", AT_NODE_LABEL]);
         assert_contains(
             &irritations[10],
             &[VEX_NAME, "test-10", SHOW_ALSO_L, SHOW_ALSO_R],
         );
         assert_contains(
             &irritations[11],
-            &[VEX_NAME, "test-11", AT_LABEL, SHOW_ALSO_L, SHOW_ALSO_R],
+            &[VEX_NAME, "test-11", SHOW_ALSO_L, SHOW_ALSO_R],
         );
         assert_contains(
             &irritations[12],
-            &[VEX_NAME, "test-12", AT_LABEL, SHOW_ALSO_L, SHOW_ALSO_R],
+            &[VEX_NAME, "test-12", AT_NODE_LABEL, SHOW_ALSO_L, SHOW_ALSO_R],
         );
         assert_contains(
             &irritations[13],
-            &[VEX_NAME, "test-13", SHOW_ALSO_L, SHOW_ALSO_R, INFO],
+            &[VEX_NAME, "test-13", AT_NODE_LABEL, SHOW_ALSO_L, SHOW_ALSO_R],
         );
         assert_contains(
             &irritations[14],
@@ -327,21 +332,25 @@ mod test {
         );
         assert_contains(
             &irritations[15],
-            &[
-                VEX_NAME,
-                "test-15",
-                AT_LABEL,
-                SHOW_ALSO_L,
-                SHOW_ALSO_R,
-                INFO,
-            ],
+            &[VEX_NAME, "test-15", SHOW_ALSO_L, SHOW_ALSO_R, INFO],
         );
         assert_contains(
             &irritations[16],
             &[
                 VEX_NAME,
                 "test-16",
-                AT_LABEL,
+                AT_NODE_LABEL,
+                SHOW_ALSO_L,
+                SHOW_ALSO_R,
+                INFO,
+            ],
+        );
+        assert_contains(
+            &irritations[17],
+            &[
+                VEX_NAME,
+                "test-17",
+                AT_NODE_LABEL,
                 SHOW_ALSO_L,
                 SHOW_ALSO_R,
                 INFO,
@@ -377,6 +386,14 @@ mod test {
                         show_also = [(l, '{SHOW_ALSO_L}'), (r, '{SHOW_ALSO_R}')]
 
                         vex.warn('test-2', show_also=show_also)
+
+                    def on_match(event):
+                        l = event.captures['l']
+                        r = event.captures['r']
+
+                        show_also = [(l, '{SHOW_ALSO_L}'), (r, '{SHOW_ALSO_R}')]
+
+                        vex.warn('test-2', at=event.path, show_also=show_also)
                 "#},
             )
             .with_source_file(
@@ -388,7 +405,40 @@ mod test {
                     }
                 "#},
             )
-            .returns_error("cannot display `show_also` without an `at` argument")
+            .returns_error("cannot display `show_also` without an `at` argument");
+        VexTest::new("show-also-with-path-at")
+            .with_scriptlet(
+                format!("vexes/{VEX_NAME}.star"),
+                formatdoc! {r#"
+                    def init():
+                        vex.observe('open_project', on_open_project)
+
+                    def on_open_project(event):
+                        vex.search(
+                            'rust',
+                            '(binary_expression left: (integer_literal) @l right: (integer_literal) @r) @bin_expr',
+                            on_match,
+                        )
+
+                    def on_match(event):
+                        l = event.captures['l']
+                        r = event.captures['r']
+
+                        show_also = [(l, '{SHOW_ALSO_L}'), (r, '{SHOW_ALSO_R}')]
+
+                        vex.warn('test-2', at=event.path, show_also=show_also)
+                "#},
+            )
+            .with_source_file(
+                "src/main.rs",
+                indoc! {r#"
+                    fn main() {
+                        let x = 1 + 2;
+                        println!("{x}");
+                    }
+                "#},
+            )
+            .returns_error("cannot display `show_also` without an `at` argument");
     }
 
     #[test]

@@ -5,12 +5,12 @@ use std::path;
 
 use allocative::Allocative;
 use camino::{Utf8Path, Utf8PathBuf};
-use dupe::Dupe;
+use dupe::{Dupe, OptionDupedExt};
 use serde::Serialize;
 use starlark::{
     environment::{Methods, MethodsBuilder, MethodsStatic},
     starlark_module, starlark_simple_value,
-    values::{Demand, Heap, StarlarkValue, Value, ValueError},
+    values::{Demand, Heap, StarlarkValue, UnpackValue, Value, ValueError},
 };
 use starlark_derive::{starlark_value, ProvidesStaticType};
 
@@ -260,6 +260,12 @@ impl<'v> StarlarkValue<'v> for PrettyPath {
                     .map(|(_, c)| c),
             ))))
         }
+    }
+}
+
+impl<'v> UnpackValue<'v> for PrettyPath {
+    fn unpack_value(value: Value<'v>) -> Option<Self> {
+        value.request_value::<&PrettyPath>().duped()
     }
 }
 

@@ -8,7 +8,7 @@ use std::{
 use allocative::Allocative;
 use derive_more::Display;
 use derive_new::new;
-use dupe::Dupe;
+use dupe::{Dupe, OptionDupedExt};
 use paste::paste;
 use starlark::{
     collections::StarlarkHasher,
@@ -227,7 +227,7 @@ impl<'v> StarlarkValue<'v> for Node<'v> {
 
 impl<'v> UnpackValue<'v> for Node<'v> {
     fn unpack_value(value: Value<'v>) -> Option<Self> {
-        value.request_value::<&Node>().map(Dupe::dupe)
+        value.request_value().duped()
     }
 }
 

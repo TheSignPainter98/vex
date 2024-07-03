@@ -40,7 +40,7 @@ impl IrritationSource {
     fn whole_file(path: PrettyPath) -> Self {
         Self {
             path,
-            byte_range: 0..0,
+            byte_range: 0..1,
         }
     }
 }
@@ -116,55 +116,56 @@ impl<'v> IrritationRenderer<'v> {
             }),
             slices: source
                 .iter()
-                .map(|annot| {
-                    let (node, label) = match annot {
-                        MainAnnotation::Path(path) => {
-                            return Slice {
-                                source: "",
-                                line_start: 1,
-                                origin: Some(path.as_str()),
-                                annotations: vec![],
-                                fold: false,
-                            };
-                        }
-                        MainAnnotation::Node { node, label } => (node, label),
-                    };
-                    let range = {
-                        let start = iter::once(node)
-                            .chain(show_also.iter().map(|(node, _)| node))
-                            .map(|node| node.byte_range().start)
-                            .min()
-                            .unwrap();
-                        let end = iter::once(node)
-                            .chain(show_also.iter().map(|(node, _)| node))
-                            .map(|node| node.byte_range().end)
-                            .max()
-                            .unwrap();
-                        node.source_file.full_lines_range(start..end)
-                    };
-                    Slice {
-                        source: &node.source_file.content[range.start..range.end],
-                        line_start: 1 + node.start_position().row,
-                        origin: file_name,
-                        annotations: [SourceAnnotation {
-                            range: (
-                                node.start_byte() - range.start,
-                                node.end_byte() - range.start,
-                            ),
+                .map(|annot| match annot {
+                    MainAnnotation::Path { path, label } => Slice {
+                        source: "...",
+                        line_start: 1,
+                        origin: Some(path.as_str()),
+                        annotations: vec![SourceAnnotation {
+                            range: (0, 1),
                             label: label.unwrap_or_default(),
                             annotation_type: AnnotationType::Warning,
-                        }]
-                        .into_iter()
-                        .chain(show_also.iter().map(|(node, label)| SourceAnnotation {
-                            range: (
-                                node.start_byte() - range.start,
-                                node.end_byte() - range.start,
-                            ),
-                            label,
-                            annotation_type: AnnotationType::Info,
-                        }))
-                        .collect(),
-                        fold: true,
+                        }],
+                        fold: false,
+                    },
+                    MainAnnotation::Node { node, label } => {
+                        let range = {
+                            let start = iter::once(node)
+                                .chain(show_also.iter().map(|(node, _)| node))
+                                .map(|node| node.byte_range().start)
+                                .min()
+                                .unwrap();
+                            let end = iter::once(node)
+                                .chain(show_also.iter().map(|(node, _)| node))
+                                .map(|node| node.byte_range().end)
+                                .max()
+                                .unwrap();
+                            node.source_file.full_lines_range(start..end)
+                        };
+                        Slice {
+                            source: &node.source_file.content[range.start..range.end],
+                            line_start: 1 + node.start_position().row,
+                            origin: file_name,
+                            annotations: [SourceAnnotation {
+                                range: (
+                                    node.start_byte() - range.start,
+                                    node.end_byte() - range.start,
+                                ),
+                                label: label.unwrap_or_default(),
+                                annotation_type: AnnotationType::Warning,
+                            }]
+                            .into_iter()
+                            .chain(show_also.iter().map(|(node, label)| SourceAnnotation {
+                                range: (
+                                    node.start_byte() - range.start,
+                                    node.end_byte() - range.start,
+                                ),
+                                label,
+                                annotation_type: AnnotationType::Info,
+                            }))
+                            .collect(),
+                            fold: true,
+                        }
                     }
                 })
                 .collect(),
@@ -179,7 +180,7 @@ impl<'v> IrritationRenderer<'v> {
         };
 
         let code_source = source.as_ref().map(|source| match source {
-            MainAnnotation::Path(p) => IrritationSource::whole_file(p.dupe()),
+            MainAnnotation::Path { path, .. } => IrritationSource::whole_file(path.dupe()),
             MainAnnotation::Node { node, .. } => IrritationSource::at(node),
         });
         let other_code_sources = show_also
