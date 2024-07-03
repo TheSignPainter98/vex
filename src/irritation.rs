@@ -5,7 +5,12 @@ use annotate_snippets::{Annotation, AnnotationType, Slice, Snippet, SourceAnnota
 use dupe::Dupe;
 use serde::Serialize;
 
-use crate::{logger, scriptlets::Node, source_path::PrettyPath, vex::id::PrettyVexId};
+use crate::{
+    logger,
+    scriptlets::{main_annotation::MainAnnotation, Node},
+    source_path::PrettyPath,
+    vex::id::PrettyVexId,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Allocative, Serialize)]
 #[non_exhaustive]
@@ -29,6 +34,13 @@ impl IrritationSource {
         Self {
             path: node.source_file.path.pretty_path.dupe(),
             byte_range: node.byte_range(),
+        }
+    }
+
+    fn whole_file(path: PrettyPath) -> Self {
+        Self {
+            path,
+            byte_range: 0..0,
         }
     }
 }
@@ -58,7 +70,7 @@ impl Display for Irritation {
 pub struct IrritationRenderer<'v> {
     pretty_vex_id: PrettyVexId,
     message: &'v str,
-    source: Option<(Node<'v>, &'v str)>,
+    source: Option<MainAnnotation<'v>>,
     show_also: Vec<(Node<'v>, &'v str)>,
     info: Option<&'v str>,
 }
@@ -74,8 +86,8 @@ impl<'v> IrritationRenderer<'v> {
         }
     }
 
-    pub fn set_source(&mut self, at: (Node<'v>, &'v str)) {
-        self.source = Some(at);
+    pub fn set_source(&mut self, source: MainAnnotation<'v>) {
+        self.source = Some(source);
     }
 
     pub fn set_show_also(&mut self, show_also: Vec<(Node<'v>, &'v str)>) {
@@ -95,11 +107,7 @@ impl<'v> IrritationRenderer<'v> {
             info,
         } = self;
 
-        // TODO(kcza): allow source and show_alsos to be in separate files.
-
-        let file_name = source
-            .as_ref()
-            .map(|source| source.0.source_file.path.pretty_path.as_str());
+        let file_name = source.as_ref().map(|source| source.pretty_path().as_str());
         let snippet = Snippet {
             title: Some(Annotation {
                 id: Some(pretty_vex_id.as_str()),
@@ -108,16 +116,28 @@ impl<'v> IrritationRenderer<'v> {
             }),
             slices: source
                 .iter()
-                .map(|(node, label)| {
+                .map(|annot| {
+                    let (node, label) = match annot {
+                        MainAnnotation::Path(path) => {
+                            return Slice {
+                                source: "",
+                                line_start: 1,
+                                origin: Some(path.as_str()),
+                                annotations: vec![],
+                                fold: false,
+                            };
+                        }
+                        MainAnnotation::Node { node, label } => (node, label),
+                    };
                     let range = {
-                        let start = iter::once(&(node.dupe(), *label))
-                            .chain(show_also.iter())
-                            .map(|(node, _)| node.byte_range().start)
+                        let start = iter::once(node)
+                            .chain(show_also.iter().map(|(node, _)| node))
+                            .map(|node| node.byte_range().start)
                             .min()
                             .unwrap();
-                        let end = iter::once(&(node.dupe(), *label))
-                            .chain(show_also.iter())
-                            .map(|(node, _)| node.byte_range().end)
+                        let end = iter::once(node)
+                            .chain(show_also.iter().map(|(node, _)| node))
+                            .map(|node| node.byte_range().end)
                             .max()
                             .unwrap();
                         node.source_file.full_lines_range(start..end)
@@ -125,13 +145,13 @@ impl<'v> IrritationRenderer<'v> {
                     Slice {
                         source: &node.source_file.content[range.start..range.end],
                         line_start: 1 + node.start_position().row,
-                        origin: Some(file_name.as_ref().unwrap()),
+                        origin: file_name,
                         annotations: [SourceAnnotation {
                             range: (
                                 node.start_byte() - range.start,
                                 node.end_byte() - range.start,
                             ),
-                            label,
+                            label: label.unwrap_or_default(),
                             annotation_type: AnnotationType::Warning,
                         }]
                         .into_iter()
@@ -158,7 +178,10 @@ impl<'v> IrritationRenderer<'v> {
                 .collect(),
         };
 
-        let code_source = source.map(|(node, _)| IrritationSource::at(&node));
+        let code_source = source.as_ref().map(|source| match source {
+            MainAnnotation::Path(p) => IrritationSource::whole_file(p.dupe()),
+            MainAnnotation::Node { node, .. } => IrritationSource::at(node),
+        });
         let other_code_sources = show_also
             .iter()
             .map(|(node, _)| IrritationSource::at(node))
