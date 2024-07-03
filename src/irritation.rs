@@ -40,7 +40,7 @@ impl IrritationSource {
     fn whole_file(path: PrettyPath) -> Self {
         Self {
             path,
-            byte_range: 0..1,
+            byte_range: 0..0,
         }
     }
 }
