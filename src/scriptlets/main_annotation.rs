@@ -39,8 +39,8 @@ impl<'v> MainAnnotation<'v> {
 }
 
 impl<'v> Display for MainAnnotation<'v> {
-    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        unimplemented!("unused, required to satisfy trait bound")
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
     }
 }
 
