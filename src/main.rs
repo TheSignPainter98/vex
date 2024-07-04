@@ -78,6 +78,10 @@ fn run() -> Result<ExitCode> {
     let args = Args::parse();
     logger::init(Verbosity::try_from(args.verbosity_level)?)?;
 
+    if log_enabled!(log::Level::Info) {
+        print_banner();
+    }
+
     match args.command {
         Command::Check(cmd_args) => check(cmd_args),
         Command::List(list_args) => list(list_args),
@@ -86,6 +90,24 @@ fn run() -> Result<ExitCode> {
     }?;
 
     Ok(logger::exit_code())
+}
+
+fn print_banner() {
+    printdoc! {
+        r#"
+
+            oooooo      oooo
+             `888.      .8"
+              `888.    .8"   .ooooo.   ooooo ooo
+               `888.  .8"   d88' `88b   `888.8"
+                `888..8"    888ooo888    `888.
+                 `8888"     888    .o   .8"888.
+                  `88"      `Y8bod8P'  o8o o888o
+
+            Let the pedantry begin.
+
+        "#
+    };
 }
 
 fn list(list_args: ListCmd) -> Result<()> {
