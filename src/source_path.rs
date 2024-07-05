@@ -4,13 +4,13 @@ use std::{fmt::Display, ops::Deref, sync::Arc};
 use std::path;
 
 use allocative::Allocative;
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8Path;
 use dupe::{Dupe, OptionDupedExt};
 use serde::Serialize;
 use starlark::{
     environment::{Methods, MethodsBuilder, MethodsStatic},
     starlark_module, starlark_simple_value,
-    values::{Demand, Heap, StarlarkValue, UnpackValue, Value, ValueError},
+    values::{list::AllocList, Demand, Heap, StarlarkValue, UnpackValue, Value, ValueError},
 };
 use starlark_derive::{starlark_value, ProvidesStaticType};
 
@@ -100,11 +100,7 @@ impl PrettyPath {
 
     #[starlark_module]
     fn methods(builder: &mut MethodsBuilder) {
-        fn matches<'v>(this: Value<'v>, other: Value<'v>) -> starlark::Result<bool> {
-            let this = this
-                .request_value::<&PrettyPath>()
-                .expect("receiver has incorrect type");
-
+        fn matches<'v>(this: &PrettyPath, other: Value<'v>) -> starlark::Result<bool> {
             if let Some(other) = other.request_value::<&PrettyPath>() {
                 return Ok(this == other);
             }
@@ -114,9 +110,8 @@ impl PrettyPath {
                 .is_some_and(|other| this.as_str() == other))
         }
 
-        #[allow(clippy::needless_lifetimes)]
-        fn num_components(this: &PrettyPath) -> starlark::Result<i32> {
-            Ok(this.num_components() as i32)
+        fn components<'v>(this: &'v PrettyPath) -> starlark::Result<Vec<&'v str>> {
+            Ok(this.components().map(|c| c.as_str()).collect())
         }
     }
 }
@@ -230,26 +225,26 @@ impl<'v> StarlarkValue<'v> for PrettyPath {
             let high = stop.map(normalise_index).unwrap_or(n);
             if high <= low {
                 // Empty result fast path.
-                return Ok(heap.alloc(PrettyPath::new(Utf8Path::new(""))));
+                return Ok(heap.alloc(Vec::<&str>::new()));
             }
-            Ok(heap.alloc(PrettyPath::new(&Utf8PathBuf::from_iter(
+            Ok(heap.alloc(AllocList(
                 self.components()
                     .enumerate()
                     .map(|(i, c)| (i as i32, c))
                     .skip_while(|(i, _)| *i < low)
                     .take_while(|(i, _)| *i < high)
                     .filter(|(i, _)| (i - low) % stride == 0)
-                    .map(|(_, c)| c),
-            ))))
+                    .map(|(_, c)| c.as_str()),
+            )))
         } else {
             let normalise_index = |idx: i32| if idx < 0 { idx + n } else { idx }.clamp(-1, n - 1);
             let high = start.map(normalise_index).unwrap_or(n - 1);
             let low = stop.map(normalise_index).unwrap_or(-1);
             if high <= low {
                 // Empty result fast path.
-                return Ok(heap.alloc(PrettyPath::new(Utf8Path::new(""))));
+                return Ok(heap.alloc(Vec::<&str>::new()));
             }
-            Ok(heap.alloc(PrettyPath::new(&Utf8PathBuf::from_iter(
+            Ok(heap.alloc(AllocList(
                 self.components()
                     .rev()
                     .enumerate()
@@ -257,8 +252,8 @@ impl<'v> StarlarkValue<'v> for PrettyPath {
                     .skip_while(|(i, _)| *i > high)
                     .take_while(|(i, _)| *i > low)
                     .filter(|(i, _)| (*i - high) % -stride == 0)
-                    .map(|(_, c)| c),
-            ))))
+                    .map(|(_, c)| c.as_str()),
+            )))
         }
     }
 }
@@ -386,16 +381,16 @@ mod test {
     }
 
     #[test]
-    fn num_components() {
+    fn components() {
         PathTest::new("absolute-unix")
             .path("/")
-            .run("check['eq'](path.num_components(), 1)");
+            .run("check['eq'](path.components(), ['/'])");
         PathTest::new("absolute-windows")
             .path("A:")
-            .run("check['eq'](path.num_components(), 1)");
+            .run("check['eq'](path.components(), ['A:'])");
         PathTest::new("normal-unix")
             .path("src/main.rs")
-            .run("check['eq'](path.num_components(), 2)");
+            .run("check['eq'](path.components(), ['src', 'main.rs'])");
     }
 
     #[test]
@@ -487,13 +482,11 @@ mod test {
                 def eq(start, stop, stride, a, b):
                     print('%r, %r, %r...' % (start, stop, stride))
 
-                    if type(a) != 'Path':
+                    if type(a) != 'list':
                         fail('expected path, got %s' % type(a))
 
-                    A = str(a)
-                    B = '/'.join(b)
-                    if A != B:
-                        errs.append('[%r:%r:%r]: "%s" %r' % (start, stop, stride, A, B))
+                    if a != b:
+                        errs.append('[%r:%r:%r]: "%s" %r' % (start, stop, stride, a, b))
                 def test(start, stop, stride):
                     if stride == 0:
                         return
