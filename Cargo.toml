@@ -5,6 +5,9 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+profile = ["dep:pprof", "dep:indicatif"]
+
 [dependencies]
 allocative = "0.3.1"
 annotate-snippets = "0.10.0"
@@ -24,6 +27,7 @@ log = { version = "0.4.20", features = ["std", "kv_unstable"] }
 num-traits = "0.2.17"
 owo-colors = { version = "4.0.0", features = ["supports-colors"] }
 paste = "1.0.15"
+pprof = { version = "0.13.0", features = ["flamegraph"], optional = true }
 regex = "1.10.3"
 serde = { version = "1.0.193", features = ["derive", "rc"] }
 smallvec = "1.13.2"
@@ -41,6 +45,7 @@ tree-sitter-python = "0.21"
 tree-sitter-rust = "0.21"
 tree-sitter-cpp = "0.21"
 uniquote = "4.0.0"
+indicatif = { version = "0.17.8", optional = true }
 
 [dev-dependencies]
 insta = { version = "1.36.1", features = ["yaml"] }

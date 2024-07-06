@@ -124,7 +124,7 @@ pub struct CheckCmd {
 //     }
 // }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum MaxProblems {
     Unlimited,
     Limited(u32),
