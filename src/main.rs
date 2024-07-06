@@ -166,9 +166,15 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
     }
 
     #[cfg(feature = "profile")]
-    profile::profile(|| {
-        std::hint::black_box(vex(&ctx, &store, cmd_args.max_problems))?;
-        Ok::<_, Error>(())
+    profile::profile("vex-check-complete", || {
+        let store = {
+            let preinit_opts = PreinitOptions {
+                lenient: cmd_args.lenient,
+            };
+            PreinitingStore::new(&ctx)?.preinit(preinit_opts)?.init()?
+        };
+        vex(&ctx, &store, cmd_args.max_problems)?;
+        Result::Ok(())
     })
     .unwrap();
 

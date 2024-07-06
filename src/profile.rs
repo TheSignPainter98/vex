@@ -1,15 +1,15 @@
-use std::env;
+use std::{env, hint};
 
 use indicatif::{ProgressIterator, ProgressStyle};
 
-pub fn profile<E>(f: impl Fn() -> Result<(), E>) -> Result<(), E> {
+use crate::result::Result;
+
+pub fn profile(name: &str, f: impl Fn() -> Result<()>) -> Result<()> {
     const REPS_ENV_VAR: &str = "VEX_PROFILE_REPS";
-    println!("repeating the operations many times, adjust how many by setting `${REPS_ENV_VAR}`");
     let reps: u32 = env::var(REPS_ENV_VAR)
-        .as_deref()
-        .unwrap_or("100")
-        .parse()
-        .unwrap();
+        .map(|v| v.parse().expect("internal error: failed to parse integer"))
+        .unwrap_or(1000);
+    println!("repeating '{name}' {reps} times...\nadjust how many by setting `${REPS_ENV_VAR}`");
 
     let guard = pprof::ProfilerGuardBuilder::default()
         .frequency(1000)
@@ -22,17 +22,17 @@ pub fn profile<E>(f: impl Fn() -> Result<(), E>) -> Result<(), E> {
         .progress_chars("=>-");
     (0..reps)
         .progress_with_style(progress_style)
-        .try_for_each(|_| f())?;
+        .try_for_each(|_| hint::black_box(f()))?;
 
     if let Ok(report) = guard.report().build() {
-        const OUTPUT_FILE_NAME: &str = "flamegraph.svg";
+        let output_file_name = format!("flamegraph-{name}.svg");
         report
             .flamegraph(
-                std::fs::File::create(OUTPUT_FILE_NAME)
+                std::fs::File::create(&output_file_name)
                     .expect("internal error: failed to create file"),
             )
             .expect("internal error: failed to write flamegraph");
-        println!("flamegraph written to {OUTPUT_FILE_NAME}");
+        println!("flamegraph written to {output_file_name}");
     }
 
     Ok(())
