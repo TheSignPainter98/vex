@@ -10,7 +10,7 @@ use serde::Serialize;
 use starlark::{
     environment::{Methods, MethodsBuilder, MethodsStatic},
     starlark_module, starlark_simple_value,
-    values::{list::AllocList, Demand, Heap, StarlarkValue, UnpackValue, Value, ValueError},
+    values::{Demand, Heap, StarlarkValue, UnpackValue, Value, ValueError},
 };
 use starlark_derive::{starlark_value, ProvidesStaticType};
 
@@ -211,7 +211,7 @@ impl<'v> StarlarkValue<'v> for PrettyPath {
         stride: Option<Value<'v>>,
         heap: &'v Heap,
     ) -> starlark::Result<Value<'v>> {
-        let n = self.num_components() as i32;
+        let n = self.path.as_str().len() as i32;
         let start = start.and_then(Value::unpack_i32);
         let stop = stop.and_then(Value::unpack_i32);
         let stride = stride.and_then(Value::unpack_i32).unwrap_or(1);
@@ -225,35 +225,39 @@ impl<'v> StarlarkValue<'v> for PrettyPath {
             let high = stop.map(normalise_index).unwrap_or(n);
             if high <= low {
                 // Empty result fast path.
-                return Ok(heap.alloc(Vec::<&str>::new()));
+                return Ok(heap.alloc(""));
             }
-            Ok(heap.alloc(AllocList(
-                self.components()
+            Ok(heap.alloc(
+                self.as_str()
+                    .chars()
                     .enumerate()
                     .map(|(i, c)| (i as i32, c))
                     .skip_while(|(i, _)| *i < low)
                     .take_while(|(i, _)| *i < high)
                     .filter(|(i, _)| (i - low) % stride == 0)
-                    .map(|(_, c)| c.as_str()),
-            )))
+                    .map(|(_, c)| c)
+                    .collect::<String>(),
+            ))
         } else {
             let normalise_index = |idx: i32| if idx < 0 { idx + n } else { idx }.clamp(-1, n - 1);
             let high = start.map(normalise_index).unwrap_or(n - 1);
             let low = stop.map(normalise_index).unwrap_or(-1);
             if high <= low {
                 // Empty result fast path.
-                return Ok(heap.alloc(Vec::<&str>::new()));
+                return Ok(heap.alloc(""));
             }
-            Ok(heap.alloc(AllocList(
-                self.components()
+            Ok(heap.alloc(
+                self.as_str()
+                    .chars()
                     .rev()
                     .enumerate()
                     .map(|(i, c)| (n - i as i32 - 1, c))
                     .skip_while(|(i, _)| *i > high)
                     .take_while(|(i, _)| *i > low)
                     .filter(|(i, _)| (*i - high) % -stride == 0)
-                    .map(|(_, c)| c.as_str()),
-            )))
+                    .map(|(_, c)| c)
+                    .collect::<String>(),
+            ))
         }
     }
 }
@@ -467,11 +471,11 @@ mod test {
         PathTest::new("ok-indices")
             .path("src/foo/bar/baz/main.rs")
             .run(indoc! {r#"
-                expected = ['src', 'foo', 'bar', 'baz', 'main.rs']
+                expected = 'src/foo/bar/baz/main.rs'
 
-                def gen_test_indices(expected, min=2*len(expected), max=2*len(expected)):
-                    ret = [None]
-                    ret.extend(range(min, max+1))
+                def gen_test_indices(expected, min=-len(expected)-1, max=len(expected)+1):
+                    ret = [None, min, 0, 1, max]
+                    ret += range(min, max+1, 4)
                     return ret
                 starts = gen_test_indices(expected)
                 stops = gen_test_indices(expected)
@@ -480,46 +484,53 @@ mod test {
 
                 errs = []
                 def eq(start, stop, stride, a, b):
-                    print('%r, %r, %r...' % (start, stop, stride))
+                    # print('%r, %r, %r...' % (start, stop, stride))
+                    # print('checking: %r == %r' % (a, b))
 
-                    if type(a) != 'list':
-                        fail('expected path, got %s' % type(a))
+                    if type(a) != 'string':
+                        fail('expected list, got %s' % type(a))
 
                     if a != b:
-                        errs.append('[%r:%r:%r]: "%s" %r' % (start, stop, stride, a, b))
+                        errs.append('[%r:%r:%r]: %r %r' % (start, stop, stride, a, b))
+
                 def test(start, stop, stride):
                     if stride == 0:
                         return
 
+                    a = slice(path, start, stop, stride)
+                    b = slice(expected, start, stop, stride)
+                    eq(start, stop, stride, a, b)
+
+                def slice(recv, start, stop, stride):
                     if start != None:
                         if stop != None:
                             if stride != None:
-                                eq(start, stop, stride, path[start:stop:stride], expected[start:stop:stride])
+                                return recv[start:stop:stride]
                             else:
-                                eq(start, stop, stride, path[start:stop:], expected[start:stop:])
+                                return recv[start:stop:]
                         else:
                             if stride != None:
-                                eq(start, stop, stride, path[start::stride], expected[start::stride])
+                                return recv[start::stride]
                             else:
-                                eq(start, stop, stride, path[start::], expected[start::])
+                                return recv[start::]
                     else:
                         if stop != None:
                             if stride != None:
-                                eq(start, stop, stride, path[:stop:stride], expected[:stop:stride])
+                                return recv[:stop:stride]
                             else:
-                                eq(start, stop, stride, path[:stop:], expected[:stop:])
+                                return recv[:stop:]
                         else:
                             if stride != None:
-                                eq(start, stop, stride, path[::stride], expected[::stride])
+                                return recv[::stride]
                             else:
-                                eq(start, stop, stride, path[::], expected[::])
+                                return recv[::]
 
                 for (start, stop, stride) in tests:
                     test(start, stop, stride)
-                for err in errs:
-                    print(err)
-                if len(errs):
-                    fail('encountered %d problems' % len(errs))
+                if len(errs) != 0:
+                    for err in errs:
+                        print(err)
+                    fail('encountered %d/%d problems' % (len(errs), len(tests)))
             "#});
         {
             let expected = "Index `0` is out of bound";
