@@ -219,6 +219,45 @@ impl Display for MatchEvent<'_> {
     }
 }
 
+#[derive(new, Clone, Dupe, Debug, ProvidesStaticType, NoSerialize, Allocative, Trace)]
+pub struct TestEvent;
+
+impl TestEvent {
+    pub fn kind(&self) -> EventKind {
+        EventKind::Test
+    }
+}
+
+impl Display for TestEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        <Self as StarlarkValue>::TYPE.fmt(f)
+    }
+}
+
+#[starlark_value(type = "TestEvent")]
+impl<'v> StarlarkValue<'v> for TestEvent {
+    fn dir_attr(&self) -> Vec<String> {
+        [NAME_ATTR_NAME].into_iter().map(Into::into).collect()
+    }
+
+    fn get_attr(&self, attr: &str, heap: &'v Heap) -> Option<Value<'v>> {
+        match attr {
+            NAME_ATTR_NAME => Some(heap.alloc(heap.alloc_str(self.kind().name()))),
+            _ => None,
+        }
+    }
+
+    fn has_attr(&self, attr: &str, _heap: &'v Heap) -> bool {
+        [NAME_ATTR_NAME].contains(&attr)
+    }
+}
+
+impl<'v> AllocValue<'v> for TestEvent {
+    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+        heap.alloc_simple(self)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use indoc::{formatdoc, indoc};
