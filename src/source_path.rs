@@ -4,7 +4,7 @@ use std::{fmt::Display, ops::Deref, sync::Arc};
 use std::path;
 
 use allocative::Allocative;
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8Path;
 use dupe::{Dupe, OptionDupedExt};
 use serde::Serialize;
 use starlark::{
@@ -100,11 +100,7 @@ impl PrettyPath {
 
     #[starlark_module]
     fn methods(builder: &mut MethodsBuilder) {
-        fn matches<'v>(this: Value<'v>, other: Value<'v>) -> starlark::Result<bool> {
-            let this = this
-                .request_value::<&PrettyPath>()
-                .expect("receiver has incorrect type");
-
+        fn matches<'v>(this: &PrettyPath, other: Value<'v>) -> starlark::Result<bool> {
             if let Some(other) = other.request_value::<&PrettyPath>() {
                 return Ok(this == other);
             }
@@ -114,9 +110,8 @@ impl PrettyPath {
                 .is_some_and(|other| this.as_str() == other))
         }
 
-        #[allow(clippy::needless_lifetimes)]
-        fn num_components(this: &PrettyPath) -> starlark::Result<i32> {
-            Ok(this.num_components() as i32)
+        fn components<'v>(this: &'v PrettyPath) -> starlark::Result<Vec<&'v str>> {
+            Ok(this.components().map(|c| c.as_str()).collect())
         }
     }
 }
@@ -216,7 +211,7 @@ impl<'v> StarlarkValue<'v> for PrettyPath {
         stride: Option<Value<'v>>,
         heap: &'v Heap,
     ) -> starlark::Result<Value<'v>> {
-        let n = self.num_components() as i32;
+        let n = self.path.as_str().len() as i32;
         let start = start.and_then(Value::unpack_i32);
         let stop = stop.and_then(Value::unpack_i32);
         let stride = stride.and_then(Value::unpack_i32).unwrap_or(1);
@@ -230,35 +225,39 @@ impl<'v> StarlarkValue<'v> for PrettyPath {
             let high = stop.map(normalise_index).unwrap_or(n);
             if high <= low {
                 // Empty result fast path.
-                return Ok(heap.alloc(PrettyPath::new(Utf8Path::new(""))));
+                return Ok(heap.alloc(""));
             }
-            Ok(heap.alloc(PrettyPath::new(&Utf8PathBuf::from_iter(
-                self.components()
+            Ok(heap.alloc(
+                self.as_str()
+                    .chars()
                     .enumerate()
                     .map(|(i, c)| (i as i32, c))
                     .skip_while(|(i, _)| *i < low)
                     .take_while(|(i, _)| *i < high)
                     .filter(|(i, _)| (i - low) % stride == 0)
-                    .map(|(_, c)| c),
-            ))))
+                    .map(|(_, c)| c)
+                    .collect::<String>(),
+            ))
         } else {
             let normalise_index = |idx: i32| if idx < 0 { idx + n } else { idx }.clamp(-1, n - 1);
             let high = start.map(normalise_index).unwrap_or(n - 1);
             let low = stop.map(normalise_index).unwrap_or(-1);
             if high <= low {
                 // Empty result fast path.
-                return Ok(heap.alloc(PrettyPath::new(Utf8Path::new(""))));
+                return Ok(heap.alloc(""));
             }
-            Ok(heap.alloc(PrettyPath::new(&Utf8PathBuf::from_iter(
-                self.components()
+            Ok(heap.alloc(
+                self.as_str()
+                    .chars()
                     .rev()
                     .enumerate()
                     .map(|(i, c)| (n - i as i32 - 1, c))
                     .skip_while(|(i, _)| *i > high)
                     .take_while(|(i, _)| *i > low)
                     .filter(|(i, _)| (*i - high) % -stride == 0)
-                    .map(|(_, c)| c),
-            ))))
+                    .map(|(_, c)| c)
+                    .collect::<String>(),
+            ))
         }
     }
 }
@@ -386,16 +385,19 @@ mod test {
     }
 
     #[test]
-    fn num_components() {
-        PathTest::new("absolute-unix")
-            .path("/")
-            .run("check['eq'](path.num_components(), 1)");
-        PathTest::new("absolute-windows")
-            .path("A:")
-            .run("check['eq'](path.num_components(), 1)");
+    fn components() {
+        if !cfg!(target_os = "windows") {
+            PathTest::new("absolute-unix")
+                .path("/")
+                .run("check['eq'](path.components(), ['/'])");
+        } else {
+            PathTest::new("absolute-windows")
+                .path("A:")
+                .run("check['eq'](path.components(), ['A:'])");
+        }
         PathTest::new("normal-unix")
             .path("src/main.rs")
-            .run("check['eq'](path.num_components(), 2)");
+            .run("check['eq'](path.components(), ['src', 'main.rs'])");
     }
 
     #[test]
@@ -472,11 +474,11 @@ mod test {
         PathTest::new("ok-indices")
             .path("src/foo/bar/baz/main.rs")
             .run(indoc! {r#"
-                expected = ['src', 'foo', 'bar', 'baz', 'main.rs']
+                expected = 'src/foo/bar/baz/main.rs'
 
-                def gen_test_indices(expected, min=2*len(expected), max=2*len(expected)):
-                    ret = [None]
-                    ret.extend(range(min, max+1))
+                def gen_test_indices(expected, min=-len(expected)-1, max=len(expected)+1):
+                    ret = [None, min, 0, 1, max]
+                    ret += range(min, max+1, 4)
                     return ret
                 starts = gen_test_indices(expected)
                 stops = gen_test_indices(expected)
@@ -485,48 +487,49 @@ mod test {
 
                 errs = []
                 def eq(start, stop, stride, a, b):
-                    print('%r, %r, %r...' % (start, stop, stride))
+                    if type(a) != 'string':
+                        fail('expected list, got %s' % type(a))
+                    if a != b:
+                        errs.append('[%r:%r:%r]: %r %r' % (start, stop, stride, a, b))
 
-                    if type(a) != 'Path':
-                        fail('expected path, got %s' % type(a))
-
-                    A = str(a)
-                    B = '/'.join(b)
-                    if A != B:
-                        errs.append('[%r:%r:%r]: "%s" %r' % (start, stop, stride, A, B))
                 def test(start, stop, stride):
                     if stride == 0:
                         return
 
+                    a = slice(path, start, stop, stride)
+                    b = slice(expected, start, stop, stride)
+                    eq(start, stop, stride, a, b)
+
+                def slice(obj, start, stop, stride):
                     if start != None:
                         if stop != None:
                             if stride != None:
-                                eq(start, stop, stride, path[start:stop:stride], expected[start:stop:stride])
+                                return obj[start:stop:stride]
                             else:
-                                eq(start, stop, stride, path[start:stop:], expected[start:stop:])
+                                return obj[start:stop:]
                         else:
                             if stride != None:
-                                eq(start, stop, stride, path[start::stride], expected[start::stride])
+                                return obj[start::stride]
                             else:
-                                eq(start, stop, stride, path[start::], expected[start::])
+                                return obj[start::]
                     else:
                         if stop != None:
                             if stride != None:
-                                eq(start, stop, stride, path[:stop:stride], expected[:stop:stride])
+                                return obj[:stop:stride]
                             else:
-                                eq(start, stop, stride, path[:stop:], expected[:stop:])
+                                return obj[:stop:]
                         else:
                             if stride != None:
-                                eq(start, stop, stride, path[::stride], expected[::stride])
+                                return obj[::stride]
                             else:
-                                eq(start, stop, stride, path[::], expected[::])
+                                return obj[::]
 
                 for (start, stop, stride) in tests:
                     test(start, stop, stride)
-                for err in errs:
-                    print(err)
-                if len(errs):
-                    fail('encountered %d problems' % len(errs))
+                if len(errs) != 0:
+                    for err in errs:
+                        print(err)
+                    fail('encountered %d/%d problems' % (len(errs), len(tests)))
             "#});
         {
             let expected = "Index `0` is out of bound";
