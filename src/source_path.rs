@@ -487,12 +487,8 @@ mod test {
 
                 errs = []
                 def eq(start, stop, stride, a, b):
-                    # print('%r, %r, %r...' % (start, stop, stride))
-                    # print('checking: %r == %r' % (a, b))
-
                     if type(a) != 'string':
                         fail('expected list, got %s' % type(a))
-
                     if a != b:
                         errs.append('[%r:%r:%r]: %r %r' % (start, stop, stride, a, b))
 
@@ -504,29 +500,29 @@ mod test {
                     b = slice(expected, start, stop, stride)
                     eq(start, stop, stride, a, b)
 
-                def slice(recv, start, stop, stride):
+                def slice(obj, start, stop, stride):
                     if start != None:
                         if stop != None:
                             if stride != None:
-                                return recv[start:stop:stride]
+                                return obj[start:stop:stride]
                             else:
-                                return recv[start:stop:]
+                                return obj[start:stop:]
                         else:
                             if stride != None:
-                                return recv[start::stride]
+                                return obj[start::stride]
                             else:
-                                return recv[start::]
+                                return obj[start::]
                     else:
                         if stop != None:
                             if stride != None:
-                                return recv[:stop:stride]
+                                return obj[:stop:stride]
                             else:
-                                return recv[:stop:]
+                                return obj[:stop:]
                         else:
                             if stride != None:
-                                return recv[::stride]
+                                return obj[::stride]
                             else:
-                                return recv[::]
+                                return obj[::]
 
                 for (start, stop, stride) in tests:
                     test(start, stop, stride)
