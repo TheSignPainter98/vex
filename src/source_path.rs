@@ -386,12 +386,15 @@ mod test {
 
     #[test]
     fn components() {
-        PathTest::new("absolute-unix")
-            .path("/")
-            .run("check['eq'](path.components(), ['/'])");
-        PathTest::new("absolute-windows")
-            .path("A:")
-            .run("check['eq'](path.components(), ['A:'])");
+        if !cfg!(target_os = "windows") {
+            PathTest::new("absolute-unix")
+                .path("/")
+                .run("check['eq'](path.components(), ['/'])");
+        } else {
+            PathTest::new("absolute-windows")
+                .path("A:")
+                .run("check['eq'](path.components(), ['A:'])");
+        }
         PathTest::new("normal-unix")
             .path("src/main.rs")
             .run("check['eq'](path.components(), ['src', 'main.rs'])");
