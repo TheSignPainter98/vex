@@ -8,16 +8,18 @@ use starlark::{
     eval::Evaluator,
     starlark_module,
     values::{
-        list::UnpackList, none::NoneType, Heap, NoSerialize, ProvidesStaticType, StarlarkValue,
-        StringValue, Value,
+        dict::DictRef, list::UnpackList, none::NoneType, Heap, NoSerialize, ProvidesStaticType,
+        StarlarkValue, StringValue, Value,
     },
 };
 use starlark_derive::starlark_value;
 
 use crate::{
+    cli::MaxProblems,
     error::Error,
     irritation::IrritationRenderer,
     result::Result,
+    run_data::RunData,
     scriptlets::{
         action::Action,
         event::EventKind,
@@ -153,6 +155,32 @@ impl AppObject {
             ret_data.declare_intent(UnfrozenIntent::Warn(irritation_renderer.render()));
 
             Ok(NoneType)
+        }
+
+        fn run<'v>(
+            #[starlark(this)] _this: Value<'v>,
+            #[starlark(require=pos)] vex_id: &str,
+            #[starlark(require=named, default=false)] lenient: bool,
+            #[starlark(require=named)] files: DictRef<'v>,
+            eval: &mut Evaluator<'_, '_>,
+        ) -> anyhow::Result<RunData> {
+            AppObject::check_attr_available(eval, "vex.run", &[Action::Vexing(EventKind::Test)])?;
+
+            let test_files: Vec<_> = files
+                .iter()
+                .map(|(k, v)| (k.unpack_str(), v.unpack_str()))
+                .map(|(k, v)| (k, v.map(textwrap::dedent)))
+                .collect();
+
+            println!("vex.run: {vex_id}, {lenient}, {test_files:?}");
+            // TODO(kcza): filter the vexes run
+            // TODO(kcza): run in a directory
+            // TODO(kcza): new VexOptions?
+
+            let temp_data = TempData::get_from(eval);
+            let ctx = temp_data.ctx.expect("internal error: context not set");
+            let store = temp_data.store.expect("internal error: context not set");
+            Ok(crate::vex(ctx, store, MaxProblems::Unlimited)?)
         }
     }
 

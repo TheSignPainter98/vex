@@ -18,12 +18,14 @@ use crate::{
 };
 
 #[must_use]
+#[derive(Default)]
 pub struct VexTest<'s> {
     name: Cow<'s, str>,
     bare: bool,
     manifest_content: Option<Cow<'s, str>>,
     max_problems: MaxProblems,
     lenient: bool,
+    fire_test_event: bool,
     scriptlets: BTreeMap<Utf8PathBuf, Cow<'s, str>>,
     source_files: BTreeMap<Utf8PathBuf, Cow<'s, str>>,
 }
@@ -32,12 +34,7 @@ impl<'s> VexTest<'s> {
     pub fn new(name: impl Into<Cow<'s, str>>) -> Self {
         Self {
             name: name.into(),
-            bare: false,
-            manifest_content: None,
-            max_problems: MaxProblems::Unlimited,
-            lenient: false,
-            scriptlets: BTreeMap::new(),
-            source_files: BTreeMap::new(),
+            ..Default::default()
         }
     }
 
@@ -60,6 +57,11 @@ impl<'s> VexTest<'s> {
 
     pub fn with_lenient(mut self, lenient: bool) -> Self {
         self.lenient = lenient;
+        self
+    }
+
+    pub fn with_test_event(mut self, fire_test_event: bool) -> Self {
+        self.fire_test_event = fire_test_event;
         self
     }
 
@@ -159,7 +161,12 @@ impl<'s> VexTest<'s> {
             lenient: self.lenient,
         };
         let store = PreinitingStore::new(&ctx)?.preinit(preinit_opts)?.init()?;
-        super::vex(&ctx, &store, self.max_problems)
+        if self.fire_test_event {
+            crate::test::run_tests(&ctx, &store, None)?;
+            Ok(RunData::default())
+        } else {
+            super::vex(&ctx, &store, self.max_problems)
+        }
     }
 
     fn setup(&mut self) {

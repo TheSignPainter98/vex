@@ -8,11 +8,13 @@ use starlark::{
 use starlark_derive::{starlark_value, NoSerialize, Trace};
 
 use crate::{
+    context::Context,
     ignore_markers::IgnoreMarkers,
     scriptlets::{
         action::Action,
         intents::{UnfrozenIntent, UnfrozenIntents},
         query_cache::QueryCache,
+        store::VexingStore,
         Intents,
     },
     vex::id::VexId,
@@ -97,6 +99,8 @@ impl<'v> AllocValue<'v> for RetainedData {
 
 #[derive(Debug, ProvidesStaticType)]
 pub struct TempData<'v> {
+    pub ctx: Option<&'v Context>,
+    pub store: Option<&'v VexingStore>,
     pub action: Action,
     pub query_cache: &'v QueryCache,
     pub vex_id: VexId,

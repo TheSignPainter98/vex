@@ -15,6 +15,7 @@ mod parse;
 mod plural;
 mod query;
 mod result;
+mod run_data;
 mod scriptlets;
 mod source_file;
 mod source_path;
@@ -37,9 +38,6 @@ use indoc::printdoc;
 use lazy_static::lazy_static;
 use log::{info, log_enabled, trace, warn};
 use owo_colors::{OwoColorize, Stream, Style};
-use scriptlets::{
-    action::Action, event::EventKind, handler_module::HandlerModule, Observable, ObserveOptions,
-};
 use source_file::SourceFile;
 use strum::IntoEnumIterator;
 use tree_sitter::QueryCursor;
@@ -48,15 +46,18 @@ use crate::{
     cli::{Args, CheckCmd, Command},
     context::{Context, EXAMPLE_VEX_FILE},
     error::{Error, IOAction},
-    irritation::Irritation,
     plural::Plural,
     result::Result,
+    run_data::RunData,
     scriptlets::{
+        action::Action,
+        event::EventKind,
         event::{MatchEvent, OpenFileEvent, OpenProjectEvent},
+        handler_module::HandlerModule,
         intents::Intent,
         query_cache::QueryCache,
         query_captures::QueryCaptures,
-        PreinitOptions, PreinitingStore, VexingStore,
+        Observable, ObserveOptions, PreinitOptions, PreinitingStore, VexingStore,
     },
     source_path::{PrettyPath, SourcePath},
     supported_language::SupportedLanguage,
@@ -168,19 +169,6 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
     Ok(())
 }
 
-#[derive(Debug)]
-struct RunData {
-    irritations: Vec<Irritation>,
-    num_files_scanned: usize,
-}
-
-impl RunData {
-    #[cfg(test)]
-    fn into_irritations(self) -> Vec<Irritation> {
-        self.irritations
-    }
-}
-
 fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<RunData> {
     let files = {
         let mut paths = Vec::new();
@@ -229,6 +217,8 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
         let event = OpenProjectEvent::new(ctx.project_root.dupe());
         let handler_module = HandlerModule::new();
         let observe_opts = ObserveOptions {
+            ctx: Some(ctx),
+            store: Some(store),
             action: Action::Vexing(event.kind()),
             query_cache: &query_cache,
             ignore_markers: None,
@@ -268,6 +258,8 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
             let event = OpenFileEvent::new(path);
             let handler_module = HandlerModule::new();
             let observe_opts = ObserveOptions {
+                ctx: Some(ctx),
+                store: Some(store),
                 action: Action::Vexing(event.kind()),
                 query_cache: &query_cache,
                 ignore_markers: None,
@@ -325,6 +317,8 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
                             handler_module.heap().alloc(MatchEvent::new(path, captures))
                         };
                         let observe_opts = ObserveOptions {
+                            ctx: Some(ctx),
+                            store: Some(store),
                             action: Action::Vexing(EventKind::Match),
                             query_cache: &query_cache,
                             ignore_markers: Some(&ignore_markers),

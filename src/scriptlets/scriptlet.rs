@@ -107,6 +107,8 @@ impl PreinitingScriptlet {
 
             {
                 let temp_data = TempData {
+                    ctx: None,
+                    store: None,
                     action: Action::Preiniting,
                     vex_id: vex_id.dupe(),
                     query_cache: &QueryCache::new(),
@@ -320,6 +322,8 @@ impl InitingScriptlet {
             let module = HandlerModule::new();
             {
                 let temp_data = TempData {
+                    ctx: None,
+                    store: None,
                     action: Action::Initing,
                     query_cache: &QueryCache::new(),
                     vex_id: vex_id.dupe(),

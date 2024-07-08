@@ -1,5 +1,3 @@
-use starlark::values::FrozenHeap;
-
 use crate::{
     context::Context,
     result::Result,
@@ -7,7 +5,7 @@ use crate::{
         action::Action, event::TestEvent, handler_module::HandlerModule, query_cache::QueryCache,
         Observable, ObserveOptions, PreinitOptions, PreinitingStore, VexingStore,
     },
-    RunData,
+    vex::id::PrettyVexId,
 };
 
 pub fn test() -> Result<()> {
@@ -16,33 +14,78 @@ pub fn test() -> Result<()> {
         let preinit_opts = PreinitOptions::default();
         PreinitingStore::new(&ctx)?.preinit(preinit_opts)?.init()?
     };
-    run_tests(&ctx, &store)
+
+    run_tests(&ctx, &store, None)?;
+    Ok(())
 }
 
-pub fn run_tests(ctx: &Context, store: &VexingStore) -> Result<RunData> {
+pub fn run_tests(ctx: &Context, store: &VexingStore, _filter: Option<PrettyVexId>) -> Result<()> {
     let event = TestEvent;
     let handler_module = HandlerModule::new();
     let observe_opts = ObserveOptions {
+        ctx: Some(ctx),
+        store: Some(store),
         action: Action::Vexing(event.kind()),
         query_cache: &QueryCache::new(),
         ignore_markers: None,
     };
-    store.observers_for(TestEvent.kind()).observe(
+    store.observers_for(event.kind()).observe(
         &handler_module,
         handler_module.heap().alloc(event),
         observe_opts,
     )?;
-    let frozen_heap = FrozenHeap::new();
-    let mut intents = vec![];
-    handler_module
-        .into_intents_on(&frozen_heap)
-        .into_iter()
-        .for_each(|intent| match intent {
-            _ => todo!(),
-        });
 
-    Ok(RunData {
-        irritations,
-        num_files_scanned: store.len(),
-    })
+    Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use indoc::indoc;
+
+    use crate::vextest::VexTest;
+
+    #[test]
+    fn check() {
+        VexTest::new("check")
+            .with_test_event(true)
+            .with_scriptlet(
+                "vexes/asdf.star",
+                indoc! {
+                    r#"
+                        def init():
+                            vex.observe('open_project', on_open_project)
+                            vex.observe('test', on_test)
+
+                        def on_open_project(event):
+                            vex.search(
+                                'rust',
+                                '''
+                                    (binary_expression) @bin_expr
+                                ''',
+                                on_match,
+                            )
+
+                        def on_match(event):
+                            bin_expr = event.captures['bin_expr']
+                            vex.warn('oh no!', at=bin_expr)
+
+                        def on_test(event):
+                            data = vex.run(
+                                # event.vex_id,
+                                'helo',
+                                lenient=True,
+                                files={
+                                    'src/main.rs': '''
+                                        fn main() {
+                                            let _ = 1 + 1;
+                                        }
+                                    '''
+                                }
+                            )
+                            fail(data)
+                    "#,
+                },
+            )
+            .assert_irritation_free()
+    }
 }

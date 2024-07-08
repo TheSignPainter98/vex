@@ -41,6 +41,7 @@ tree-sitter-python = "0.21"
 tree-sitter-rust = "0.21"
 tree-sitter-cpp = "0.21"
 uniquote = "4.0.0"
+textwrap = { version = "0.16.1", default-features = false }
 
 [dev-dependencies]
 insta = { version = "1.36.1", features = ["yaml"] }

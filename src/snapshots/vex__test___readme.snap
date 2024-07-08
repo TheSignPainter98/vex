@@ -1,0 +1,5 @@
+---
+source: src/main.rs
+expression: irritations
+---
+- "warning[test]: large operands should come later\n --> src/main.rs:2:5\n  |\n2 |     123456 + 1\n  |     ------ number too large\n  |\n  = info: large numbers can hide smaller ones"

@@ -270,6 +270,7 @@ mod test {
         attrs: &'static [&'static str],
     ) {
         VexTest::new("is-triggered")
+            .with_test_event(event_name == "test")
             .with_scriptlet(
                 "vexes/test.star",
                 formatdoc! {r#"
@@ -305,6 +306,7 @@ mod test {
             )
             .returns_error("error-marker");
         VexTest::new("type-name")
+            .with_test_event(event_name == "test")
             .with_scriptlet(
                 "vexes/test.star",
                 formatdoc! {r#"
@@ -331,6 +333,7 @@ mod test {
             )
             .assert_irritation_free();
         VexTest::new("attrs")
+            .with_test_event(event_name == "test")
             .with_scriptlet(
                 "vexes/test.star",
                 formatdoc! {r#"
@@ -353,10 +356,11 @@ mod test {
                             check['attrs'](event, ['{attrs_repr}'])
                             check['eq'](event.name, '{event_name}')
 
-                            if 'project' in '{event_name}':
-                                check['is_path'](str(event.path))
-                            else:
-                                check['in'](str(event.path), ['src/main.rs', 'src\\main.rs'])
+                            if 'path' in ['{attrs_repr}']:
+                                if 'project' in '{event_name}':
+                                    check['is_path'](str(event.path))
+                                else:
+                                    check['in'](str(event.path), ['src/main.rs', 'src\\main.rs'])
                     "#,
                     check_path = VexTest::CHECK_STARLARK_PATH,
                     attrs_repr = attrs.join("', '"),
@@ -446,5 +450,10 @@ mod test {
                 "#},
             )
             .assert_irritation_free();
+    }
+
+    #[test]
+    fn on_test_event() {
+        test_event_common_properties("test", "TestEvent", &["name"]);
     }
 }

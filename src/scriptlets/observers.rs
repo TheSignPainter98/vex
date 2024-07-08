@@ -8,11 +8,12 @@ use starlark::{
 use starlark_derive::{starlark_value, NoSerialize, ProvidesStaticType, Trace};
 
 use crate::{
+    context::Context,
     ignore_markers::IgnoreMarkers,
     result::Result,
     scriptlets::{
         action::Action, event::EventKind, extra_data::TempData, handler_module::HandlerModule,
-        print_handler::PrintHandler, query_cache::QueryCache,
+        print_handler::PrintHandler, query_cache::QueryCache, store::VexingStore,
     },
     vex::id::VexId,
 };
@@ -120,6 +121,8 @@ pub trait Observable {
 
 #[derive(Clone, Debug, Dupe)]
 pub struct ObserveOptions<'v> {
+    pub ctx: Option<&'v Context>,
+    pub store: Option<&'v VexingStore>,
     pub action: Action,
     pub query_cache: &'v QueryCache,
     pub ignore_markers: Option<&'v IgnoreMarkers>,
@@ -133,6 +136,8 @@ impl Observable for Observer {
         opts: ObserveOptions<'_>,
     ) -> Result<()> {
         let temp_data = TempData {
+            ctx: opts.ctx,
+            store: opts.store,
             action: opts.action,
             query_cache: opts.query_cache,
             vex_id: self.vex_id.dupe(),
