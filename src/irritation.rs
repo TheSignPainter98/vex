@@ -14,16 +14,101 @@ use crate::{
     vex::id::PrettyVexId,
 };
 
-#[derive(
-    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Allocative, Serialize, ProvidesStaticType,
-)]
+#[derive(Debug, Clone, PartialEq, Eq, Allocative, Serialize, ProvidesStaticType)]
 #[non_exhaustive]
 pub struct Irritation {
-    code_source: Option<IrritationSource>,
-    pretty_vex_id: PrettyVexId,
-    other_code_sources: Vec<IrritationSource>,
-    info_present: bool,
     pub(crate) rendered: String,
+    pretty_vex_id: PrettyVexId,
+    message: String,
+    source: Option<(IrritationSource, Option<String>)>,
+    show_also: Vec<(IrritationSource, String)>,
+    info: Option<String>,
+}
+
+impl Ord for Irritation {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let Self {
+            source,
+            pretty_vex_id,
+            show_also,
+            info,
+            message,
+            rendered: _,
+        } = self;
+
+        fn loc<S, T>(annot: &(S, T)) -> &S {
+            let (loc, _) = annot;
+            loc
+        }
+        fn label<S, T>(annot: &(S, T)) -> &T {
+            let (_, label) = annot;
+            label
+        }
+        return (
+            source.as_ref().map(loc),
+            pretty_vex_id,
+            ComparableIterator(show_also.iter().map(loc)),
+            info,
+            source.as_ref().map(label),
+            ComparableIterator(show_also.iter().map(label)),
+            message,
+        )
+            .cmp(&(
+                other.source.as_ref().map(loc),
+                &other.pretty_vex_id,
+                ComparableIterator(other.show_also.iter().map(loc)),
+                &other.info,
+                other.source.as_ref().map(label),
+                ComparableIterator(other.show_also.iter().map(label)),
+                &other.message,
+            ));
+
+        #[derive(Clone)]
+        struct ComparableIterator<I>(I);
+
+        impl<I, T> Ord for ComparableIterator<I>
+        where
+            I: Iterator<Item = T> + Clone,
+            T: Ord,
+        {
+            fn cmp(&self, other: &Self) -> Ordering {
+                self.0.clone().cmp(other.0.clone())
+            }
+        }
+
+        impl<I, T> PartialOrd for ComparableIterator<I>
+        where
+            I: Iterator<Item = T> + Clone,
+            T: Ord,
+        {
+            fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+                Some(self.cmp(other))
+            }
+        }
+
+        impl<I, T> Eq for ComparableIterator<I>
+        where
+            I: Iterator<Item = T> + Clone,
+            T: Eq,
+        {
+        }
+
+        impl<I, T> PartialEq for ComparableIterator<I>
+        where
+            I: Iterator<Item = T> + Clone,
+            T: Eq,
+        {
+            fn eq(&self, other: &Self) -> bool {
+                self.0.to_owned().eq(other.0.clone())
+            }
+        }
+    }
+}
+
+impl PartialOrd<Self> for Irritation {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 #[starlark_value(type = "Irritation")]
@@ -192,22 +277,29 @@ impl<'v> IrritationRenderer<'v> {
                 .collect(),
         };
 
-        let code_source = source.as_ref().map(|source| match source {
-            MainAnnotation::Path { path, .. } => IrritationSource::whole_file(path.dupe()),
-            MainAnnotation::Node { node, .. } => IrritationSource::at(node),
-        });
-        let other_code_sources = show_also
-            .iter()
-            .map(|(node, _)| IrritationSource::at(node))
-            .collect();
-        let info_present = info.is_some();
         let rendered = logger::render_snippet(snippet);
+        let message = message.to_string();
+        let source = source.map(|source| match source {
+            MainAnnotation::Path { path, label } => (
+                IrritationSource::whole_file(path.dupe()),
+                label.map(|l| l.to_string()),
+            ),
+            MainAnnotation::Node { node, label } => {
+                (IrritationSource::at(&node), label.map(|l| l.to_string()))
+            }
+        });
+        let show_also = show_also
+            .into_iter()
+            .map(|(node, label)| (IrritationSource::at(&node), label.to_string()))
+            .collect();
+        let info = info.map(|e| e.to_string());
         Irritation {
-            pretty_vex_id,
-            code_source,
-            other_code_sources,
-            info_present,
             rendered,
+            pretty_vex_id,
+            message,
+            source,
+            show_also,
+            info,
         }
     }
 }
