@@ -41,7 +41,9 @@ impl<'v> StarlarkValue<'v> for RunData {
 
     fn get_attr(&self, attr: &str, heap: &'v Heap) -> Option<Value<'v>> {
         match attr {
-            Self::IRRITATIONS_ATTR_NAME => Some(heap.alloc(AllocList(self.irritations))),
+            Self::IRRITATIONS_ATTR_NAME => {
+                Some(heap.alloc(AllocList(self.irritations.iter().cloned())))
+            }
             Self::NUM_FILES_SCANNED => Some(heap.alloc(self.num_files_scanned)),
             _ => None,
         }

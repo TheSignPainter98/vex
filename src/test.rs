@@ -40,18 +40,20 @@ pub fn run_tests(ctx: &Context, store: &VexingStore, _filter: Option<PrettyVexId
 
 #[cfg(test)]
 mod test {
-    use indoc::indoc;
+    use indoc::formatdoc;
 
     use crate::vextest::VexTest;
 
     #[test]
-    fn check() {
-        VexTest::new("check")
+    fn run() {
+        VexTest::new("run")
             .with_test_event(true)
             .with_scriptlet(
                 "vexes/asdf.star",
-                indoc! {
+                formatdoc! {
                     r#"
+                        load('{check_path}', 'check')
+
                         def init():
                             vex.observe('open_project', on_open_project)
                             vex.observe('test', on_test)
@@ -67,23 +69,33 @@ mod test {
 
                         def on_match(event):
                             bin_expr = event.captures['bin_expr']
-                            vex.warn('oh no!', at=bin_expr)
+                            vex.warn('oh no!', at=(bin_expr, 'label'))
 
                         def on_test(event):
                             data = vex.run(
                                 # event.vex_id,
                                 'helo',
                                 lenient=True,
-                                files={
+                                files={{
                                     'src/main.rs': '''
-                                        fn main() {
-                                            let _ = 1 + 1;
-                                        }
-                                    '''
-                                }
+                                        mod other;
+
+                                        fn main() {{
+                                            let _ = 1 + (2 + (3 + 3));
+                                        }}
+                                    ''',
+                                    'src/other.rs': '''
+                                        fn other() {{
+                                            let _ = 4 + 4;
+                                        }}
+                                    ''',
+                                }}
                             )
-                            fail(data)
+
+                            check['eq'](data.num_files_scanned, 2)
+                            check['eq'](len(data.irritations), 4)
                     "#,
+                    check_path = VexTest::CHECK_STARLARK_PATH,
                 },
             )
             .assert_irritation_free()

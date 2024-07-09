@@ -1,6 +1,11 @@
-use std::fmt::Display;
+use std::{
+    fmt::Display,
+    fs::{self, File},
+    io::Write,
+};
 
 use allocative::Allocative;
+use camino::{Utf8Path, Utf8PathBuf};
 use derive_new::new;
 use dupe::Dupe;
 use starlark::{
@@ -16,7 +21,7 @@ use starlark_derive::starlark_value;
 
 use crate::{
     cli::MaxProblems,
-    error::Error,
+    error::{Error, IOAction},
     irritation::IrritationRenderer,
     result::Result,
     run_data::RunData,
@@ -29,6 +34,7 @@ use crate::{
         observers::UnfrozenObserver,
         Node,
     },
+    source_path::PrettyPath,
     supported_language::SupportedLanguage,
 };
 
@@ -168,19 +174,61 @@ impl AppObject {
 
             let test_files: Vec<_> = files
                 .iter()
-                .map(|(k, v)| (k.unpack_str(), v.unpack_str()))
-                .map(|(k, v)| (k, v.map(textwrap::dedent)))
-                .collect();
+                .map(|(k, v)| {
+                    let k = k.unpack_str().ok_or_else(|| Error::WrongType {
+                        expected_type: "str",
+                        actual_type: k.get_type(),
+                    })?;
+                    let v = v.unpack_str().ok_or_else(|| Error::WrongType {
+                        expected_type: "str",
+                        actual_type: v.get_type(),
+                    })?;
+                    Ok::<_, Error>((k, v))
+                })
+                .map(|r| {
+                    let (k, v) = r?;
+                    Ok::<_, Error>((Utf8PathBuf::from(k), textwrap::dedent(v)))
+                })
+                .collect::<Result<Vec<_>>>()?;
 
             println!("vex.run: {vex_id}, {lenient}, {test_files:?}");
             // TODO(kcza): filter the vexes run
             // TODO(kcza): run in a directory
-            // TODO(kcza): new VexOptions?
+            let root_dir = tempfile::tempdir().map_err(|cause| Error::IO {
+                path: PrettyPath::new(&Utf8Path::new("(temp dir)")),
+                action: IOAction::Create,
+                cause,
+            })?;
+            let root_path = Utf8PathBuf::try_from(root_dir.path().to_path_buf())?;
+            for (path, content) in test_files.into_iter() {
+                let abs_path = root_path.join(&path);
+                let dir = abs_path.parent().unwrap();
+                fs::create_dir_all(dir).map_err(|cause| Error::IO {
+                    path: PrettyPath::new(&dir),
+                    action: IOAction::Create,
+                    cause,
+                })?;
+                File::create(abs_path)
+                    .map_err(|cause| Error::IO {
+                        path: PrettyPath::new(&path),
+                        action: IOAction::Create,
+                        cause,
+                    })?
+                    .write_all(content.as_bytes())
+                    .map_err(|cause| Error::IO {
+                        path: PrettyPath::new(&path),
+                        action: IOAction::Write,
+                        cause,
+                    })?;
+            }
 
             let temp_data = TempData::get_from(eval);
-            let ctx = temp_data.ctx.expect("internal error: context not set");
+            let ctx = temp_data
+                .ctx
+                .expect("internal error: context not set")
+                .sub_context(PrettyPath::new(&root_path));
             let store = temp_data.store.expect("internal error: context not set");
-            Ok(crate::vex(ctx, store, MaxProblems::Unlimited)?)
+            Ok(crate::vex(&ctx, store, MaxProblems::Unlimited)?)
         }
     }
 

@@ -4,6 +4,8 @@ use allocative::Allocative;
 use annotate_snippets::{Annotation, AnnotationType, Slice, Snippet, SourceAnnotation};
 use dupe::Dupe;
 use serde::Serialize;
+use starlark::values::{AllocValue, Heap, StarlarkValue, Value};
+use starlark_derive::{starlark_value, ProvidesStaticType};
 
 use crate::{
     logger,
@@ -12,7 +14,9 @@ use crate::{
     vex::id::PrettyVexId,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Allocative, Serialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Allocative, Serialize, ProvidesStaticType,
+)]
 #[non_exhaustive]
 pub struct Irritation {
     code_source: Option<IrritationSource>,
@@ -20,6 +24,15 @@ pub struct Irritation {
     other_code_sources: Vec<IrritationSource>,
     info_present: bool,
     pub(crate) rendered: String,
+}
+
+#[starlark_value(type = "Irritation")]
+impl<'v> StarlarkValue<'v> for Irritation {}
+
+impl<'v> AllocValue<'v> for Irritation {
+    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+        heap.alloc_simple(self)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Allocative, Serialize)]

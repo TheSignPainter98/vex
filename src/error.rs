@@ -143,6 +143,12 @@ pub enum Error {
 
     #[error(transparent)]
     Utf8(#[from] Utf8Error),
+
+    #[error("expected a {expected_type} but got a {actual_type} instead")]
+    WrongType {
+        expected_type: &'static str,
+        actual_type: &'static str,
+    },
 }
 
 impl From<anyhow::Error> for Error {
