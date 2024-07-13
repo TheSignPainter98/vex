@@ -36,7 +36,6 @@ impl Context {
         })
     }
 
-    #[cfg(test)]
     pub fn acquire_in(dir: &Utf8Path) -> Result<Self> {
         let (project_root, raw_data) = Manifest::acquire_content_in(dir)?;
         let project_root = PrettyPath::new(&project_root);
@@ -45,6 +44,10 @@ impl Context {
             project_root,
             manifest: data,
         })
+    }
+
+    pub fn project_root(&self) -> &PrettyPath {
+        &self.project_root
     }
 
     pub fn init(project_root: impl AsRef<Utf8Path>, force: bool) -> Result<()> {

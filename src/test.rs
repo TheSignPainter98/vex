@@ -70,6 +70,8 @@ mod test {
                             )
 
                         def on_match(event):
+                            check['true'](vex.lenient)
+
                             bin_expr = event.captures['bin_expr']
                             if event.path.matches('src/main.rs'):
                                 vex.warn('oh no!', at=bin_expr)

@@ -225,12 +225,18 @@ impl AppObject {
             }
 
             let temp_data = TempData::get_from(eval);
-            let ctx = temp_data
-                .ctx
-                .expect("internal error: context not set")
-                .sub_context(PrettyPath::new(&root_path));
-            let store = temp_data.store.expect("internal error: context not set");
-            Ok(crate::vex(&ctx, store, MaxProblems::Unlimited)?)
+            let ctx = Context::acquire_in(
+                &temp_data
+                    .ctx
+                    .expect("internal error: context not set")
+                    .project_root(),
+            )?;
+            let store = {
+                let preinit_opts = PreinitOptions { lenient };
+                PreinitingStore::new(&ctx)?.preinit(preinit_opts)?.init()?
+            };
+            let sub_ctx = ctx.sub_context(PrettyPath::new(&root_path));
+            Ok(crate::vex(&sub_ctx, &store, MaxProblems::Unlimited)?)
         }
     }
 
