@@ -38,6 +38,7 @@ pub fn run_tests(ctx: &Context, store: &VexingStore, _filter: Option<PrettyVexId
     Ok(())
 }
 
+#[allow(clippy::module_inception)]
 #[cfg(test)]
 mod test {
     use indoc::formatdoc;

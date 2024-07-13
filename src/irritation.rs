@@ -142,12 +142,11 @@ impl<'v> StarlarkValue<'v> for Irritation {
                 self.source
                     .clone()
                     .map(|(src, label)| {
-                        let label_value = label
-                            .map(|l| heap.alloc(l))
-                            .unwrap_or_else(|| Value::new_none());
+                        let label_value =
+                            label.map(|l| heap.alloc(l)).unwrap_or_else(Value::new_none);
                         heap.alloc((src, label_value))
                     })
-                    .unwrap_or_else(|| Value::new_none()),
+                    .unwrap_or_else(Value::new_none),
             ),
             Self::SHOW_ALSO_ATTR_NAME => {
                 Some(heap.alloc(AllocList(self.show_also.iter().cloned())))
@@ -156,7 +155,7 @@ impl<'v> StarlarkValue<'v> for Irritation {
                 self.info
                     .clone()
                     .map(|info| heap.alloc(info))
-                    .unwrap_or_else(|| Value::new_none()),
+                    .unwrap_or_else(Value::new_none),
             ),
             _ => None,
         }

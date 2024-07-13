@@ -167,7 +167,7 @@ impl AppObject {
 
         fn run<'v>(
             #[starlark(this)] _this: Value<'v>,
-            #[starlark(require=pos)] vex_id: &str,
+            #[starlark(require=pos)] _vex_id: &str,
             #[starlark(require=named, default=false)] lenient: bool,
             #[starlark(require=named)] files: DictRef<'v>,
             eval: &mut Evaluator<'_, '_>,
@@ -193,11 +193,8 @@ impl AppObject {
                 })
                 .collect::<Result<Vec<_>>>()?;
 
-            println!("vex.run: {vex_id}, {lenient}, {test_files:?}");
-            // TODO(kcza): filter the vexes run
-            // TODO(kcza): run in a directory
             let root_dir = tempfile::tempdir().map_err(|cause| Error::IO {
-                path: PrettyPath::new(&Utf8Path::new("(temp dir)")),
+                path: PrettyPath::new(Utf8Path::new("(temp dir)")),
                 action: IOAction::Create,
                 cause,
             })?;
@@ -206,7 +203,7 @@ impl AppObject {
                 let abs_path = root_path.join(&path);
                 let dir = abs_path.parent().unwrap();
                 fs::create_dir_all(dir).map_err(|cause| Error::IO {
-                    path: PrettyPath::new(&dir),
+                    path: PrettyPath::new(dir),
                     action: IOAction::Create,
                     cause,
                 })?;
@@ -226,7 +223,7 @@ impl AppObject {
 
             let temp_data = TempData::get_from(eval);
             let ctx = Context::acquire_in(
-                &temp_data
+                temp_data
                     .ctx
                     .expect("internal error: context not set")
                     .project_root(),
