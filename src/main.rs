@@ -166,7 +166,7 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
     }
 
     #[cfg(feature = "profile")]
-    profile::profile("vex-check-complete", || {
+    profile::profile("vex-check", || {
         let store = {
             let preinit_opts = PreinitOptions {
                 lenient: cmd_args.lenient,
