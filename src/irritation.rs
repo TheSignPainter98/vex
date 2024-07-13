@@ -4,12 +4,12 @@ use allocative::Allocative;
 use annotate_snippets::{Annotation, AnnotationType, Slice, Snippet, SourceAnnotation};
 use dupe::Dupe;
 use serde::Serialize;
-use starlark::values::{AllocValue, Heap, StarlarkValue, Value};
-use starlark_derive::{starlark_value, ProvidesStaticType};
+use starlark::values::{list::AllocList, AllocValue, Heap, StarlarkValue, Value};
+use starlark_derive::{starlark_attrs, starlark_value, ProvidesStaticType, StarlarkAttrs};
 
 use crate::{
     logger,
-    scriptlets::{main_annotation::MainAnnotation, Node},
+    scriptlets::{main_annotation::MainAnnotation, Location, Node},
     source_path::PrettyPath,
     vex::id::PrettyVexId,
 };
@@ -23,6 +23,14 @@ pub struct Irritation {
     source: Option<(IrritationSource, Option<String>)>,
     show_also: Vec<(IrritationSource, String)>,
     info: Option<String>,
+}
+
+impl Irritation {
+    const PRETTY_VEX_ID_ATTR_NAME: &'static str = "vex_id";
+    const MESSAGE_ATTR_NAME: &'static str = "message";
+    const SOURCE_ATTR_NAME: &'static str = "at";
+    const SHOW_ALSO_ATTR_NAME: &'static str = "show_also";
+    const INFO_ATTR_NAME: &'static str = "info";
 }
 
 impl Ord for Irritation {
@@ -112,7 +120,59 @@ impl PartialOrd<Self> for Irritation {
 }
 
 #[starlark_value(type = "Irritation")]
-impl<'v> StarlarkValue<'v> for Irritation {}
+impl<'v> StarlarkValue<'v> for Irritation {
+    fn dir_attr(&self) -> Vec<String> {
+        [
+            Self::PRETTY_VEX_ID_ATTR_NAME,
+            Self::MESSAGE_ATTR_NAME,
+            Self::SOURCE_ATTR_NAME,
+            Self::SHOW_ALSO_ATTR_NAME,
+            Self::INFO_ATTR_NAME,
+        ]
+        .into_iter()
+        .map(Into::into)
+        .collect()
+    }
+
+    fn get_attr(&self, attr: &str, heap: &'v Heap) -> Option<Value<'v>> {
+        match attr {
+            Self::PRETTY_VEX_ID_ATTR_NAME => Some(heap.alloc(self.pretty_vex_id.to_string())),
+            Self::MESSAGE_ATTR_NAME => Some(heap.alloc(&self.message)),
+            Self::SOURCE_ATTR_NAME => Some(
+                self.source
+                    .clone()
+                    .map(|(src, label)| {
+                        let label_value = label
+                            .map(|l| heap.alloc(l))
+                            .unwrap_or_else(|| Value::new_none());
+                        heap.alloc((src, label_value))
+                    })
+                    .unwrap_or_else(|| Value::new_none()),
+            ),
+            Self::SHOW_ALSO_ATTR_NAME => {
+                Some(heap.alloc(AllocList(self.show_also.iter().cloned())))
+            }
+            Self::INFO_ATTR_NAME => Some(
+                self.info
+                    .clone()
+                    .map(|info| heap.alloc(info))
+                    .unwrap_or_else(|| Value::new_none()),
+            ),
+            _ => None,
+        }
+    }
+
+    fn has_attr(&self, attr: &str, _heap: &'v Heap) -> bool {
+        [
+            Self::PRETTY_VEX_ID_ATTR_NAME,
+            Self::MESSAGE_ATTR_NAME,
+            Self::SOURCE_ATTR_NAME,
+            Self::SHOW_ALSO_ATTR_NAME,
+            Self::INFO_ATTR_NAME,
+        ]
+        .contains(&attr)
+    }
+}
 
 impl<'v> AllocValue<'v> for Irritation {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
@@ -120,11 +180,19 @@ impl<'v> AllocValue<'v> for Irritation {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Allocative, Serialize)]
+impl Display for Irritation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.rendered.fmt(f)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Allocative, Serialize, StarlarkAttrs, ProvidesStaticType)]
 pub struct IrritationSource {
     path: PrettyPath,
+    #[starlark(skip)]
     #[allocative(skip)]
     byte_range: Range<usize>,
+    location: Location,
 }
 
 impl IrritationSource {
@@ -132,6 +200,7 @@ impl IrritationSource {
         Self {
             path: node.source_file.path.pretty_path.dupe(),
             byte_range: node.byte_range(),
+            location: Location::of(node),
         }
     }
 
@@ -139,6 +208,7 @@ impl IrritationSource {
         Self {
             path,
             byte_range: 0..0,
+            location: Location::start_of_file(),
         }
     }
 }
@@ -159,9 +229,28 @@ impl PartialOrd for IrritationSource {
     }
 }
 
-impl Display for Irritation {
+impl Dupe for IrritationSource {
+    // Fields:
+    // .path: Dupe
+    // .byte_range: !Dupe but cheap
+    // .location: Dupe
+}
+
+#[starlark_value(type = "IrritationSource")]
+impl<'v> StarlarkValue<'v> for IrritationSource {
+    starlark_attrs!();
+}
+
+impl<'v> AllocValue<'v> for IrritationSource {
+    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+        heap.alloc_simple(self)
+    }
+}
+
+impl Display for IrritationSource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.rendered.fmt(f)
+        let Self { path, location, .. } = self;
+        write!(f, "{path}:{location}")
     }
 }
 

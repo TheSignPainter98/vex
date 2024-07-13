@@ -21,6 +21,7 @@ use starlark_derive::starlark_value;
 
 use crate::{
     cli::MaxProblems,
+    context::Context,
     error::{Error, IOAction},
     irritation::IrritationRenderer,
     result::Result,
@@ -32,6 +33,7 @@ use crate::{
         intents::UnfrozenIntent,
         main_annotation::MainAnnotation,
         observers::UnfrozenObserver,
+        store::{PreinitOptions, PreinitingStore},
         Node,
     },
     source_path::PrettyPath,
