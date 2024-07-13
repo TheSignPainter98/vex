@@ -7,11 +7,11 @@ extern crate pretty_assertions;
 mod associations;
 mod cli;
 mod context;
+mod dump;
 mod error;
 mod ignore_markers;
 mod irritation;
 mod logger;
-mod parse;
 mod plural;
 mod query;
 mod result;
@@ -86,7 +86,7 @@ fn run() -> Result<ExitCode> {
         Command::Check(cmd_args) => check(cmd_args),
         Command::List(list_args) => list(list_args),
         Command::Init(init_args) => init(init_args),
-        Command::Parse(parse_args) => parse::parse(parse_args),
+        Command::Dump(dump_args) => dump::dump(dump_args),
     }?;
 
     Ok(logger::exit_code())
