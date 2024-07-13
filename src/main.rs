@@ -403,17 +403,18 @@ fn walkdir(
             }
         }
 
-        if metadata.is_symlink() {
-            if log_enabled!(log::Level::Info) {
-                let symlink_path = entry_path.strip_prefix(ctx.project_root.as_ref())?;
-                info!("ignoring /{symlink_path} (symlink)");
-            }
-        } else if is_dir {
+        if is_dir {
             walkdir(ctx, &entry_path, ignores, allows, paths)?;
         } else if metadata.is_file() {
             paths.push(entry_path);
-        } else {
-            panic!("unreachable");
+        } else if log_enabled!(log::Level::Info) {
+            let entry_path = entry_path.strip_prefix(ctx.project_root.as_ref())?;
+            let file_type = if metadata.is_symlink() {
+                "symlink"
+            } else {
+                "unknown type"
+            };
+            info!("ignoring /{entry_path} ({file_type})");
         }
     }
 
