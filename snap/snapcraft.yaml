@@ -9,10 +9,14 @@ grade: stable
 confinement: strict
 
 apps:
-  hello:
-    command: vex
+  vex:
+    command: bin/vex
 
 parts:
   vex:
     source: https://github.com/TheSignPainter98/vex.git
     plugin: rust
+    override-build: |
+      snapcraftctl build
+      cp -a target/release/vex $SNAPCRAFT_PART_INSTALL/bin
+      snapcraftctl set-version $($SNAPCRAFT_PART_BUILD/target/release/vex -V | cut -d' ' -f2)
