@@ -487,7 +487,7 @@ pub struct Location {
 starlark_simple_value!(Location);
 
 impl Location {
-    pub fn of(node: &Node<'_>) -> Self {
+    pub fn of(node: &TSNode<'_>) -> Self {
         let Point {
             row: start_row,
             column: start_column,

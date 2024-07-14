@@ -134,7 +134,7 @@ mod test {
         assert_eq!(
             err.to_string(),
             format!(
-                "cannot parse {} as rust",
+                "{}:1:0-33: cannot parse rust",
                 test_file.path.as_str().replace(path::MAIN_SEPARATOR, "/")
             )
         );

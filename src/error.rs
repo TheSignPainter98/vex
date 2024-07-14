@@ -135,10 +135,11 @@ pub enum Error {
     #[error("unsupported language '{0}'")]
     UnsupportedLanguage(String),
 
-    #[error("cannot parse {path} as {language}")]
+    #[error("{path}:{location}: cannot parse {language}")]
     UnparseableAsLanguage {
         path: PrettyPath,
         language: SupportedLanguage,
+        location: Location,
     },
 
     #[error(transparent)]
