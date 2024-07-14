@@ -711,19 +711,30 @@ mod test {
             .collect();
         matches.sort_by_cached_key(|cap| cap.to_string());
         assert_eq!(2, matches.len());
-        assert_eq!(matches[0].get_type(), "Node");
-        assert!(matches[0].to_string().contains("let_declaration"));
-        assert_eq!(matches[1].get_type(), "list");
-        assert!(matches[1]
+        assert_eq!(matches[0].get_type(), "list");
+        assert!(matches[0]
             .at(heap.alloc(0), &heap)
             .unwrap()
-            .to_string()
+            .request_value::<&Node>()
+            .unwrap()
+            .to_complete_sexp()
+            .unwrap()
             .contains("line_comment"));
-        assert!(matches[1]
+        assert!(matches[0]
             .at(heap.alloc(1), &heap)
             .unwrap()
-            .to_string()
+            .request_value::<&Node>()
+            .unwrap()
+            .to_complete_sexp()
+            .unwrap()
             .contains("line_comment"));
+        assert_eq!(matches[1].get_type(), "Node");
+        assert!(matches[1]
+            .request_value::<&Node>()
+            .unwrap()
+            .to_complete_sexp()
+            .unwrap()
+            .contains("let_declaration"));
     }
 
     #[test]
@@ -777,7 +788,10 @@ mod test {
             assert!(matches[0]
                 .at(heap.alloc(i), &heap)
                 .unwrap()
-                .to_string()
+                .request_value::<&Node>()
+                .unwrap()
+                .to_complete_sexp()
+                .unwrap()
                 .contains(node_kind));
         })
     }
