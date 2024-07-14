@@ -4,7 +4,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 
 use crate::{
     associations::Associations,
-    cli::ParseCmd,
+    cli::DumpCmd,
     context::Context,
     error::{Error, IOAction},
     result::Result,
@@ -13,7 +13,7 @@ use crate::{
     source_path::{PrettyPath, SourcePath},
 };
 
-pub fn parse(cmd: ParseCmd) -> Result<()> {
+pub fn dump(cmd: DumpCmd) -> Result<()> {
     let cwd = Utf8PathBuf::try_from(env::current_dir().map_err(|e| Error::IO {
         path: PrettyPath::new(Utf8Path::new(&cmd.path)),
         action: IOAction::Read,
@@ -86,7 +86,7 @@ mod test {
     }
 
     #[test]
-    fn parse_valid_file() {
+    fn dump_valid_file() {
         let test_file = TestFile::new(
             "path/to/file.rs",
             indoc! {r#"
@@ -96,17 +96,17 @@ mod test {
             "#},
         );
 
-        let args = Args::try_parse_from(["vex", "parse", test_file.path.as_str()]).unwrap();
-        let cmd = args.command.into_parse_cmd().unwrap();
-        parse(cmd).unwrap();
+        let args = Args::try_parse_from(["vex", "dump", test_file.path.as_str()]).unwrap();
+        let cmd = args.command.into_dump_cmd().unwrap();
+        dump(cmd).unwrap();
     }
 
     #[test]
-    fn parse_nonexistent_file() {
+    fn dump_nonexistent_file() {
         let file_path = "/i/do/not/exist.rs";
-        let args = Args::try_parse_from(["vex", "parse", file_path]).unwrap();
-        let cmd = args.command.into_parse_cmd().unwrap();
-        let err = parse(cmd).unwrap_err();
+        let args = Args::try_parse_from(["vex", "dump", file_path]).unwrap();
+        let cmd = args.command.into_dump_cmd().unwrap();
+        let err = dump(cmd).unwrap_err();
         if cfg!(target_os = "windows") {
             assert_eq!(
                 err.to_string(),
@@ -121,16 +121,16 @@ mod test {
     }
 
     #[test]
-    fn parse_invalid_file() {
+    fn dump_invalid_file() {
         let test_file = TestFile::new(
             "src/file.rs",
             indoc! {r#"
                 i am not valid a valid rust file!
             "#},
         );
-        let args = Args::try_parse_from(["vex", "parse", test_file.path.as_str()]).unwrap();
-        let cmd = args.command.into_parse_cmd().unwrap();
-        let err = parse(cmd).unwrap_err();
+        let args = Args::try_parse_from(["vex", "dump", test_file.path.as_str()]).unwrap();
+        let cmd = args.command.into_dump_cmd().unwrap();
+        let err = dump(cmd).unwrap_err();
         assert_eq!(
             err.to_string(),
             format!(
@@ -143,9 +143,9 @@ mod test {
     #[test]
     fn no_extension() {
         let test_file = TestFile::new("no-extension", "");
-        let args = Args::try_parse_from(["vex", "parse", test_file.path.as_str()]).unwrap();
-        let cmd = args.command.into_parse_cmd().unwrap();
-        let err = parse(cmd).unwrap_err();
+        let args = Args::try_parse_from(["vex", "dump", test_file.path.as_str()]).unwrap();
+        let cmd = args.command.into_dump_cmd().unwrap();
+        let err = dump(cmd).unwrap_err();
 
         // Assertion relaxed due to strange Github Actions Windows and Macos runner path handling.
         let expected = format!(
@@ -161,9 +161,9 @@ mod test {
     #[test]
     fn unknown_extension() {
         let test_file = TestFile::new("file.unknown-extension", "");
-        let args = Args::try_parse_from(["vex", "parse", test_file.path.as_str()]).unwrap();
-        let cmd = args.command.into_parse_cmd().unwrap();
-        let err = parse(cmd).unwrap_err();
+        let args = Args::try_parse_from(["vex", "dump", test_file.path.as_str()]).unwrap();
+        let cmd = args.command.into_dump_cmd().unwrap();
+        let err = dump(cmd).unwrap_err();
         assert_eq!(
             err.to_string(),
             format!(

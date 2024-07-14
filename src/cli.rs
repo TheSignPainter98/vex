@@ -49,7 +49,7 @@ pub enum Command {
     Init(InitCmd),
 
     /// Print the syntax tree of the given file
-    Parse(ParseCmd),
+    Dump(DumpCmd),
 }
 
 #[cfg(test)]
@@ -61,9 +61,9 @@ impl Command {
         }
     }
 
-    pub fn into_parse_cmd(self) -> Option<ParseCmd> {
+    pub fn into_dump_cmd(self) -> Option<DumpCmd> {
         match self {
-            Self::Parse(p) => Some(p),
+            Self::Dump(p) => Some(p),
             _ => None,
         }
     }
@@ -243,7 +243,7 @@ const OVERRIDES: [(&[u8], &[u8]); 2] = [
 ];
 
 #[derive(Debug, Default, PartialEq, Eq, Parser)]
-pub struct ParseCmd {
+pub struct DumpCmd {
     /// File to parse
     #[arg(value_name = "file")]
     pub path: Utf8PathBuf,
@@ -414,35 +414,35 @@ mod test {
         }
     }
 
-    mod parse {
+    mod dump {
         use super::*;
 
         #[test]
         fn requires_path() {
-            Args::try_parse_from(["vex", "parse"]).unwrap_err();
+            Args::try_parse_from(["vex", "dump"]).unwrap_err();
         }
 
         #[test]
         fn relative_path() {
             const PATH: &str = "./src/main.rs";
-            let args = Args::try_parse_from(["vex", "parse", PATH]).unwrap();
-            let parse_cmd = args.into_command().into_parse_cmd().unwrap();
-            assert_eq!(parse_cmd.path, PATH);
+            let args = Args::try_parse_from(["vex", "dump", PATH]).unwrap();
+            let dump_cmd = args.into_command().into_dump_cmd().unwrap();
+            assert_eq!(dump_cmd.path, PATH);
         }
 
         #[test]
         fn absolute_path() {
             const PATH: &str = "/src/main.rs";
-            let args = Args::try_parse_from(["vex", "parse", PATH]).unwrap();
-            let parse_cmd = args.into_command().into_parse_cmd().unwrap();
-            assert_eq!(parse_cmd.path, PATH);
+            let args = Args::try_parse_from(["vex", "dump", PATH]).unwrap();
+            let dump_cmd = args.into_command().into_dump_cmd().unwrap();
+            assert_eq!(dump_cmd.path, PATH);
         }
 
         #[test]
         fn language() {
-            let args = Args::try_parse_from(["vex", "parse", "asdf.foo", "--as", "rust"]).unwrap();
-            let parse_cmd = args.into_command().into_parse_cmd().unwrap();
-            assert_eq!(SupportedLanguage::Rust, parse_cmd.language.unwrap());
+            let args = Args::try_parse_from(["vex", "dump", "asdf.foo", "--as", "rust"]).unwrap();
+            let dump_cmd = args.into_command().into_dump_cmd().unwrap();
+            assert_eq!(SupportedLanguage::Rust, dump_cmd.language.unwrap());
         }
     }
 
