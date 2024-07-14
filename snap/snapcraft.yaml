@@ -18,5 +18,7 @@ parts:
     plugin: rust
     override-build: |
       snapcraftctl build
+
       cp -a target/release/vex $SNAPCRAFT_PART_INSTALL/bin
-      snapcraftctl set-version $($SNAPCRAFT_PART_BUILD/target/release/vex -V | cut -d' ' -f2)
+
+      snapcraftctl set-version $(grep '^version' Cargo.toml | cut -d' ' -f3 | sed 's/"//g')
