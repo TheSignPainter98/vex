@@ -79,13 +79,13 @@ impl Context {
                 # underscores.
 
                 lit = event.captures['lit']
-                lit_text = lit.text()
+                lit_str = str(lit)
 
-                if lit_text.startswith('0x') or lit_text.startswith('0b'):
+                if lit_str.startswith('0x') or lit_str.startswith('0b'):
                     return
-                if len(lit_text) <= 6:
+                if len(lit_str) <= 6:
                     return
-                if '_' in lit_text:
+                if '_' in lit_str:
                     return
 
                 vex.warn(

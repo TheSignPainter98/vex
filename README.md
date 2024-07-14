@@ -68,7 +68,7 @@ def on_match(event):
     left_operand = event.captures['left_operand']
     right_operand = event.captures['right_operand']
     bin_expr = event.captures['bin_expr']
-    if int(left_operand.text()) >= int(right_operand.text()) / 1000:
+    if int(str(left_operand)) >= int(str(right_operand)) / 1000:
         vex.warn(
             'large operands should come later',
             at=(left_operand, 'number too large'),
