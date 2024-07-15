@@ -1,0 +1,125 @@
+@import url('https://fonts.googleapis.com/css2?family=Jost:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Unna:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+
+html {
+	font-family: 'Jost', sans-serif;
+}
+.serif {
+	font-family: 'Unna', serif;
+	font-size: 17.25px;
+}
+.sidebar {
+	font-family: 'Jost', sans-serif;
+	font-size: 16px;
+}
+
+.chapter li.chapter-item, .pagetoc a {
+	line-height: calc(3.55ex * 5/4);
+	margin-top: unset;
+	padding-top: unset;
+	padding-bottom: unset;
+}
+
+html, p, .content, .content * {
+	line-height: 3.55ex;
+	margin-bottom: 0px;
+}
+
+p + * {
+	margin-top: 3.55ex;
+	margin-bottom: 3.55ex;
+}
+
+p + p {
+	margin-block-start: 0px;
+	text-indent: 2em;
+}
+
+@media screen and (min-width: 500px) {
+	ul, ol {
+		padding-left: 0em;
+	}
+	ul ul, ul ol, ol ol, ol ul {
+		padding-left: 2em;
+	}
+	h1 code:first-child {
+		margin-left: -0.66666em;
+	}
+	h1.not-directive code:first-child {
+		margin-left: 0em;
+	}
+}
+@media screen and (max-width: 500px) {
+	ul, ol {
+		padding-left: 2em;
+	}
+	ul ul, ul ol, ol ol, ol ul {
+		padding-left: 2em;
+	}
+}
+
+.footnote-definition {
+	border: 0px;
+	border-top: 1px;
+	border-style: solid;
+	border-color: --fg;
+}
+
+code, :not(pre) > .hljs {
+	font-family: 'Jetbrains Mono', monospace !important;
+	/* font-family: 'isoveka', monospace !important; */
+	font-size: 85%;
+	padding-bottom: unset;
+	white-space: pre-wrap;
+	text-indent: 3em hanging each-line;
+	word-break: keep-all;
+	tab-size: 4;
+}
+:not(pre):not(a) > .hljs {
+	color: unset;
+}
+
+h1, h2, h3, h4, h5, h6 {
+	font-family: 'Unna', serif;
+}
+
+h1 code, h2 code, h3 code, h4 code, h5 code, h6 code {
+	font-size: inherit;
+	font-size: 85%;
+}
+
+.serif code, .serif :not(pre) > .hljs {
+	font-size: 80%;
+}
+.example {
+	background-color: #9f9;
+	padding-top: 1px;
+	padding-right: 20px;
+	padding-bottom: 20px;
+	padding-left: 20px;
+	border-top-color: #090;
+	border-top-style: solid;
+	border-top-width: 1.5px;
+	border-bottom-color: #090;
+	border-bottom-style: solid;
+	border-bottom-width: 1.5px;
+	display: block;
+}
+
+.pagetoc a {
+	border-left: unset;
+}
+.pagetoc a.active, .pagetoc a:hover {
+	text-decoration: none;
+}
+
+@media only screen and (min-width:1440px) {
+	.pagetoc {
+		width: 12.5%;
+	}
+}
+
+html.ayu .invertable, html.navy .invertable, html.coal .invertable {
+	filter: invert(1);
+}
