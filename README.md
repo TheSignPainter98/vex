@@ -88,9 +88,15 @@ vex check
 ```
 and see the pretty output as `vex` notifies you that the left operand is larger than the right.
 
+## Building the docs
+
+Building the docs requires [`mdbook`][mdbook] and [`mdbook-linkcheck`][mdbook-linkcheck]
+
 ## Author and License
 
 This project is maintained by Ed Jones and is licensed under the GNU General Public License version 3.
 
 [scheme]: https://tree-sitter.github.io/tree-sitter/using-parsers#pattern-matching-with-queries
 [starlark]: https://github.com/bazelbuild/starlark/blob/master/spec.md
+[mdbook]: https://github.com/rust-lang/mdBook
+[mdbook-linkcheck]: https://github.com/Michael-F-Bryan/mdbook-linkcheck
