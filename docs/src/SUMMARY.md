@@ -13,7 +13,7 @@
     - [How to change language]()
     - [How to check specific files]()
     - [How to create a new vex project]()
-    - [How to ignore warnings]()
+    - [How to ignore warnings](./how-to-guides/how-to-ignore-warnings.md)
     - [How to implement lint-levels]()
     - [How to search child nodes]()
     - [How to search parent nodes]()
