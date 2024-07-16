@@ -10,7 +10,7 @@
 - [How-to guides](./how-to-guides/README.md)
     - [How to annotate sources]()
     - [How to capture many nodes]()
-    - [How to change language]()
+    - [How to change language](./how-to-guides/how-to-change-language.md)
     - [How to check specific files]()
     - [How to create a new vex project]()
     - [How to ignore warnings]()
