@@ -26,4 +26,7 @@ ttc = true
 ttf = true
 woff = true
 
+[output.html.fold]
+enable = true
+
 [output.linkcheck]
