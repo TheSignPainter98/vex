@@ -27,7 +27,6 @@ html, p, .content, .content * {
 }
 
 p + * {
-	margin-top: 3.55ex;
 	margin-bottom: 3.55ex;
 }
 
