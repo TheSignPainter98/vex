@@ -1,15 +1,8 @@
 # How to ignore warnings
 
-1. Check the warning message for the ID of the vex which caused it. In the following example it is `redundant-if`.
+1. Copy the ID of the vex which caused the warning (in the terminal, look for: `warning[vex-id-here]`).
+2. Put your cursor at the start of the token or block of code which triggered the warning.
+3. Type out the following ignore marker—
     ```
-    warning[redundant-if]: if condition is always true
-    --> src/my-file.rs:1:1
-    |
-    1 |         if (true) {
-    |           ---------
-    |
+    // vex:ignore <vex-name-here>
     ```
-2. Put your cursor at the start of the token or block of code which caused it.
-3. Type out the following ignore marker:
-    - To ignore a specific warning: `// vex:ignore <vex-name-here>`
-    - To ignore all warnings: `// vex:ignore *`
