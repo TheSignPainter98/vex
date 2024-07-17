@@ -27,7 +27,6 @@ html, p, .content, .content * {
 }
 
 p + * {
-	margin-top: 3.55ex;
 	margin-bottom: 3.55ex;
 }
 
@@ -122,4 +121,21 @@ h1 code, h2 code, h3 code, h4 code, h5 code, h6 code {
 
 html.ayu .invertable, html.navy .invertable, html.coal .invertable {
 	filter: invert(1);
+}
+
+.diataxis-card-header {
+	font-weight: bold;
+	margin-top: 0ex;
+	margin-bottom: 0ex;
+}
+
+.quote-grid {
+    display: grid;
+    gap: 3.55ex;
+    grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+    margin: 3.55ex 0;
+}
+
+.quote-grid > blockquote {
+  margin: 0;
 }

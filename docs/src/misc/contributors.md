@@ -4,5 +4,6 @@ This is a list of all the great people who’ve taken time to improve vex. A mas
 
 <!-- Please add new names to the end of the list :) -->
 - [marco6](https://github.com/marco6)
+- [jf908](https://github.com/jf908)
 
 If you believe your name is missing from this list, please submit a pull request :D

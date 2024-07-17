@@ -4,7 +4,30 @@
 
 - [Installation](./installation.md)
 - [Quick start guide](./quick-start-guide.md)
+- [Tutorials](./tutorials/README.md)
+    - [Let’s write a vex]()
+    - [Let’s test a vex]()
+- [How-to guides](./how-to-guides/README.md)
+    - [How to annotate sources]()
+    - [How to capture many nodes]()
+    - [How to change language]()
+    - [How to check specific files]()
+    - [How to create a new vex project]()
+    - [How to ignore warnings]()
+    - [How to implement lint-levels]()
+    - [How to search child nodes]()
+    - [How to search parent nodes]()
+    - [How to use regexes]()
+- [Reference materials](./reference-materials/README.md)
+    - [The `vex` object]()
+    - [Events]()
+        - [Project-open]()
+        - [File-open]()
+- [Explanations](./explanations/README.md)
+    - [A workflow for lint-writing]()
+    - [A thesis on good lints]()
+    - [A thesis on warnings]()
 
---------------
+---
 
 [Contributors](./misc/contributors.md)
