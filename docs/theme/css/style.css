@@ -132,9 +132,9 @@ html.ayu .invertable, html.navy .invertable, html.coal .invertable {
 
 .quote-grid {
     display: grid;
-    gap: 20px;
+    gap: 3.55ex;
     grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
-    margin: 20px 0;
+    margin: 3.55ex 0;
 }
 
 .quote-grid > blockquote {
