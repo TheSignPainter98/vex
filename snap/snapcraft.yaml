@@ -11,6 +11,9 @@ confinement: strict
 apps:
   vex:
     command: bin/vex
+    plugs:
+      - home
+      - removable-media
 
 parts:
   vex:
