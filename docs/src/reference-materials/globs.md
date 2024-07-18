@@ -1,8 +1,8 @@
 # Globs
 
-Globs are patterns used to represent multiple files in a single statement, most commonly seen in shell languages.
+Globs are patterns, commonly seen in shell language, used to represent one or multiple file paths.
 
-In vex, the following glob features are supported:[^glob-citation]
+Vex supports the following glob features:[^glob-citation]
 
 - `?` matches any single character.
 - `*` matches any (possibly empty) sequence of characters.
@@ -11,4 +11,4 @@ In vex, the following glob features are supported:[^glob-citation]
 - `[!...]` is the negation of `[...]`, i.e. it matches any characters not in the brackets.
 - The metacharacters `?`, `*`, `[`, `]` can be matched by using brackets (e.g. `[?]`). When a `]` occurs immediately following `[` or `[!` then it is interpreted as being part of, rather then ending, the character set, so `]` and NOT `]` can be matched by `[]]` and `[!]]` respectively. The `-` character can be specified inside a character sequence pattern by placing it at the start or the end, e.g. `[abc-]`.
 
-[^glob-citation]: This list originally came from the [`Pattern` docs](https://docs.rs/glob/latest/glob/struct.Pattern.html) in the excellent [`glob` Rust crate](https://docs.rs/glob/latest/glob/index.html).
+[^glob-citation]: This list originally came from the [`Pattern` docs](https://docs.rs/glob/latest/glob/struct.Pattern.html) in the excellent [`glob` Rust crate](https://docs.rs/glob/latest/glob/index.html), used by this project.
