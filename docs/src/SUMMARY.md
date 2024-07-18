@@ -15,6 +15,7 @@
     - [How to create a new vex project]()
     - [How to ignore warnings]()
     - [How to implement lint-levels]()
+    - [How to import vexes with git](./how-to-guides/how-to-import-vexes-with-git.md)
     - [How to search child nodes]()
     - [How to search parent nodes]()
     - [How to use regexes]()
