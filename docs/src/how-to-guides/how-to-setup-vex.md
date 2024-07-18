@@ -1,7 +1,7 @@
 # How to setup vex
 
 1. Open a terminal in the root directory of your project.
-2. Type and run
+2. Type and run—
     ```bash
     vex init
     ```
