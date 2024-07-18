@@ -6,4 +6,4 @@
 4. In this section, if absent, type out a new `use-for = []` field.
 5. In the square brackets from the previous instruction, type a [glob][glob] in double-quotes which matches the file whose language association you wish to change.
 
-[glob]: /reference-materials/globs.md
+[glob]: ../reference-materials/globs.md
