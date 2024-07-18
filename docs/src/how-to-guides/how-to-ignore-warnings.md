@@ -4,5 +4,5 @@
 2. Put your cursor at the start of the token or block of code which triggered the warning.
 3. Type out the following ignore marker—
     ```
-    // vex:ignore <vex-name-here>
+    // vex:ignore <vex-id-here>
     ```
