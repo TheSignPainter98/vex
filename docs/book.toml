@@ -17,7 +17,7 @@ git-repository-icon = "fa-github"
 git-repository-url = "https://github.com/TheSignPainter98/vex"
 site-url = "/vex/"
 smart-punctuation = true
-cname = "vex.kcza.net"
+cname = "kcza.net"
 
 [output.html.font]
 enable = true
