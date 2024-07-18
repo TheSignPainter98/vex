@@ -5,5 +5,5 @@
     ```
     git submodule add <vexes-repo-url> vexes/<vexes-repo-name>
     git add .gitmodules vexes/<vexes-repo-name>
-    git commit -m ‘Added vexes’
+    git commit -m 'Added vexes'
     ```
