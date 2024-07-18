@@ -23,6 +23,7 @@
     - [Events]()
         - [Project-open]()
         - [File-open]()
+    - [Globs](./reference-materials/globs.md)
 - [Explanations](./explanations/README.md)
     - [A workflow for lint-writing]()
     - [A thesis on good lints]()
