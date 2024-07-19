@@ -23,7 +23,7 @@ If all matching children is needed, use the second.
 4. Call the `find_child` function, passing the node whose children are to be searched and a function or lambda which takes a node returns whether it is the desired one.
     For example, to find the first child `let_declaration` node, use the following—
     ```python
-     find_child(
+    find_child(
         node_to_search,
         lambda node: node.kind == 'let_declaration',
     )
@@ -52,7 +52,7 @@ If all matching children is needed, use the second.
 4. Call the `find_all_children` function, passing the node whose children are to be searched and a function or lambda which takes a node returns whether to include it in the output.
     For example, to find all child `let_declaration` nodes, use the following—
     ```python
-     find_all_children(
+    find_all_children(
         node_to_search,
         lambda node: node.kind == 'let_declaration',
         allow_nested=True,
