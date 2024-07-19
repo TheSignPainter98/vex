@@ -2,8 +2,8 @@
 
 [Introduction](./introduction.md)
 
-- [Installation](./installation.md)
-- [Quick start guide](./quick-start-guide.md)
+- [Installation]()
+- [Quick start guide]()
 - [Tutorials](./tutorials/README.md)
     - [Let’s write a vex]()
     - [Let’s test a vex]()
