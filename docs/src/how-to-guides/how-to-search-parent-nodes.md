@@ -1,6 +1,8 @@
 # How to search parent nodes
 
-This guide details two approaches, depending on whether one or many matching parent nodes are required.
+This guide provides two solutions.
+If only one matching parent is needed, use the first.
+If all matching parents is needed, use the second.
 
 ## How to search parent nodes, returning the first match
 
@@ -13,14 +15,15 @@ This guide details two approaches, depending on whether one or many matching par
                 return parent
         return None
     ```
-3. Call the `find_parent` function, passing the node whose parents are to be searched and a function or lambda which takes a node returns whether it is the desired one—
+3. Move to where the matching child is required.
+4. Call the `find_parent` function, passing the node whose parents are to be searched and a function or lambda which takes a node returns whether it is the desired one.
+    For example, to find the first parent `let_declaration` node, use the following—
     ```python
-    let_declaration = find_parent(
+    find_parent(
         node_to_search,
         lambda node: node.kind == 'let_declaration',
     )
     ```
-    The variable `let_declaration` is now either a `Node` or `None`.
 
 ## How to search parent nodes, returning all matches
 
@@ -30,9 +33,11 @@ This guide details two approaches, depending on whether one or many matching par
     def find_all_parents(node, predicate, allow_nested=False):
         return [ parent for parent in node.parents() if predicate(parent) ]
     ```
-3. Call the `find_all_parents` function, passing the node whose parents are to be searched and a function or lambda which takes a node returns whether to include it in the output, e.g.—
+3. Move to where the matching child is required.
+4. Call the `find_all_parents` function, passing the node whose parents are to be searched and a function or lambda which takes a node returns whether to include it in the output.
+    For example, to find all parent `let_declaration` nodes, use the following—
     ```python
-    let_declarations = find_all_parents(
+    find_all_parents(
         node_to_search,
         lambda node: node.kind == 'let_declaration',
     )
