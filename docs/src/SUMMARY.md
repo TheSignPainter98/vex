@@ -17,7 +17,7 @@
     - [How to implement lint-levels]()
     - [How to import vexes with git](./how-to-guides/how-to-import-vexes-with-git.md)
     - [How to search child nodes]()
-    - [How to search parent nodes]()
+    - [How to search parent nodes](./how-to-guides/how-to-search-parent-nodes.md)
     - [How to use regexes]()
 - [Reference materials](./reference-materials/README.md)
     - [The `vex` object]()
