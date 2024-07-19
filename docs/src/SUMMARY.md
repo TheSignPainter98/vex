@@ -16,7 +16,7 @@
     - [How to ignore warnings](./how-to-guides/how-to-ignore-warnings.md)
     - [How to implement lint-levels]()
     - [How to import vexes with git](./how-to-guides/how-to-import-vexes-with-git.md)
-    - [How to search child nodes]()
+    - [How to search child nodes](./how-to-guides/how-to-search-child-nodes.md)
     - [How to search parent nodes]()
     - [How to use regexes]()
 - [Reference materials](./reference-materials/README.md)
