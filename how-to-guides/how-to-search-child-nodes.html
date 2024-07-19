@@ -202,7 +202,7 @@ If all matching children is needed, use the second.</p>
 <li>Move to where the matching child is required.</li>
 <li>Call the <code>find_child</code> function, passing the node whose children are to be searched and a function or lambda which takes a node returns whether it is the desired one.
 For example, to find the first child <code>let_declaration</code> node, use the following—
-<pre><code class="language-python"> find_child(
+<pre><code class="language-python">find_child(
     node_to_search,
     lambda node: node.kind == 'let_declaration',
 )
@@ -231,7 +231,7 @@ For example, to find the first child <code>let_declaration</code> node, use the 
 <li>Move to where the matching child is required.</li>
 <li>Call the <code>find_all_children</code> function, passing the node whose children are to be searched and a function or lambda which takes a node returns whether to include it in the output.
 For example, to find all child <code>let_declaration</code> nodes, use the following—
-<pre><code class="language-python"> find_all_children(
+<pre><code class="language-python">find_all_children(
     node_to_search,
     lambda node: node.kind == 'let_declaration',
     allow_nested=True,
