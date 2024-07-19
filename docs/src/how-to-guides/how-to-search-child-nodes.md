@@ -1,6 +1,6 @@
 # How to search child nodes
 
-The approach to take is slightly different depending on whether a single matching child is required, or all matching children are required.
+This guide details two approaches, depending on whether one or many matching child nodes are required.
 
 ## How to search child nodes, returning the first match
 
@@ -31,7 +31,7 @@ The approach to take is slightly different depending on whether a single matchin
 1. Put the cursor at the end of vex script.
 2. If absent, copy the following function into the script—
     ```python
-    def find_children(node, predicate, allow_nested=False):
+    def find_all_children(node, predicate, allow_nested=False):
         def _find_children(node, predicate, allow_nested, ret)
             for child in node.children():
                 if predicate(child):
@@ -45,9 +45,9 @@ The approach to take is slightly different depending on whether a single matchin
         _find_children(node, predicate, allow_nested, ret)
         return ret
     ```
-3. Call the `find_children` function, passing the node whose children are to be searched and a function or lambda which takes a node returns whether to include it in the output, e.g.—
+3. Call the `find_all_children` function, passing the node whose children are to be searched and a function or lambda which takes a node returns whether to include it in the output, e.g.—
     ```python
-    let_declarations = find_children(
+    let_declarations = find_all_children(
         node_to_search,
         lambda node: node.kind == 'let_declaration',
         allow_nested=True,
