@@ -14,7 +14,7 @@
     - [How to check specific files]()
     - [How to setup vex](./how-to-guides/how-to-setup-vex.md)
     - [How to ignore warnings](./how-to-guides/how-to-ignore-warnings.md)
-    - [How to implement lint-levels]()
+    - [How to make a vex lenient](./how-to-guides/how-to-make-a-vex-lenient.md)
     - [How to import vexes with git](./how-to-guides/how-to-import-vexes-with-git.md)
     - [How to search child nodes]()
     - [How to search parent nodes]()
