@@ -2,7 +2,7 @@
 
 Vex provides two lint levels: lenient and non-lenient.
 
-## How to make a make a vex lenient
+## How to make a vex lenient
 
 1. Open the file containing the `init` function which sets up the vex.
 2. If the `open_project` event is observed, put the cursor at the top of its event handler function and type the following—
