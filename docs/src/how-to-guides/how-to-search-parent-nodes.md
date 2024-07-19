@@ -15,7 +15,10 @@ The approach to take is slightly different depending on whether a single matchin
     ```
 3. Call the `find_parent` function, passing the node whose parents are to be searched and a function or lambda which takes a node returns whether it is the desired one—
     ```python
-    let_declaration = find_parent(node_to_search, lambda node: node.kind == 'let_declaration')
+    let_declaration = find_parent(
+        node_to_search,
+        lambda node: node.kind == 'let_declaration',
+    )
     ```
     The variable `let_declaration` is now either a `Node` or `None`.
 
@@ -31,7 +34,7 @@ The approach to take is slightly different depending on whether a single matchin
     ```python
     let_declarations = find_parents(
         node_to_search,
-        lambda node: node.kind == 'let_declaration'
+        lambda node: node.kind == 'let_declaration',
     )
     ```
     The variable `let_declarations` is now a list.
