@@ -15,30 +15,30 @@ Vex supports Linux, macOS and Windows.
 <!---->
 <!-- Test the installation by running `vex`. -->
 
-## Install via cargo
-
+<!-- ## Install via cargo -->
+<!---->
 <!-- Use this option if snaps are unavailable on your system. -->
-
-Firstly, make sure [cargo][cargo] is installed, then open a terminal and run the following—
-<!-- TODO(kcza): use crate once published -->
+<!---->
+Assuming that [cargo][cargo] is installed, open a terminal and run the following—
 ```bash
 cargo install --git https://github.com/TheSignPainter98/vex
 ```
 
-Test the installation by running `vex`. If `vex` appears unavailable, ensure that `~/.cargo/bin/` is present in your `$PATH` then retry.
+Test the installation by running `vex`.
+If `vex` appears unavailable, ensure that `~/.cargo/bin/` is present in your `$PATH` and then retry.
 
-## Install from source
+<!-- ## Install from source -->
 
-Use this option if you wish to contribute to `vex`.
+<!-- Use this option if you would like to contribute to `vex`. -->
 
-Firstly, make sure [cargo][cargo] is installed, then open a terminal and run the following—
-```bash
-git clone https://github.com/TheSignPainter98/vex
-cd vex
-cargo build
-```
-
-This will create a binary in `target/debug/`.
+<!-- Assuming that [cargo][cargo] is installed, open a terminal and run the following— -->
+<!-- ```bash -->
+<!-- git clone https://github.com/TheSignPainter98/vex -->
+<!-- cd vex -->
+<!-- cargo build -->
+<!-- ``` -->
+<!---->
+<!-- This will create a binary in `target/debug/`. -->
 
 [cargo]: https://doc.rust-lang.org/cargo/getting-started/installation.html
 <!-- [vex-snap]: https://snapcraft.io/vex -->
