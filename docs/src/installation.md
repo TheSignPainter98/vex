@@ -35,7 +35,7 @@ If `vex` appears unavailable, ensure that `~/.cargo/bin/` is present in your `$P
 <!-- ```bash -->
 <!-- git clone https://github.com/TheSignPainter98/vex -->
 <!-- cd vex -->
-<!-- cargo build -->
+<!-- cargo install --path . -->
 <!-- ``` -->
 <!---->
 <!-- This will create a binary in `target/debug/`. -->
