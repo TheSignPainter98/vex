@@ -27,18 +27,5 @@ cargo install --git https://github.com/TheSignPainter98/vex
 Test the installation by running `vex`.
 If `vex` appears unavailable, ensure that `~/.cargo/bin/` is present in your `$PATH` and then retry.
 
-<!-- ## Install from source -->
-
-<!-- Use this option if you would like to contribute to `vex`. -->
-
-<!-- Assuming that [cargo][cargo] is installed, open a terminal and run the following— -->
-<!-- ```bash -->
-<!-- git clone https://github.com/TheSignPainter98/vex -->
-<!-- cd vex -->
-<!-- cargo install --path . -->
-<!-- ``` -->
-<!---->
-<!-- This will create a binary in `target/debug/`. -->
-
 [cargo]: https://doc.rust-lang.org/cargo/getting-started/installation.html
 <!-- [vex-snap]: https://snapcraft.io/vex -->
