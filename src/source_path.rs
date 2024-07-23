@@ -307,7 +307,7 @@ mod test {
 
             let path = PrettyPath::new(Utf8Path::new(self.path.expect("path not set")));
             let module = Module::new();
-            module.set("path", module.heap().alloc(path));
+            module.set("path", module.heap().alloc(path.dupe()));
 
             let code = formatdoc! {r#"
                     load('{check_path}', 'check')
@@ -321,8 +321,9 @@ mod test {
                 ..Dialect::Standard
             };
             let ast = AstModule::parse("vexes/test.star", code.to_string(), &dialect).unwrap();
+            let print_handler = PrintHandler::new(path.as_str());
             let mut eval = Evaluator::new(&module);
-            eval.set_print_handler(&PrintHandler);
+            eval.set_print_handler(&print_handler);
             eval.set_loader(&TestModuleCache);
             eval.eval_module(ast, &Self::globals()).map(|_| ())
         }

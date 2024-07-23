@@ -112,9 +112,10 @@ impl PreinitingScriptlet {
                     query_cache: &QueryCache::new(),
                     ignore_markers: None,
                 };
+                let print_handler = PrintHandler::new(path.pretty_path.as_str());
                 let mut eval = Evaluator::new(&preinited_module);
                 eval.set_loader(&cache);
-                eval.set_print_handler(&PrintHandler);
+                eval.set_print_handler(&print_handler);
                 eval.extra = Some(&temp_data);
                 eval.eval_module(ast, &Self::globals(*lenient))?;
             };
@@ -325,9 +326,10 @@ impl InitingScriptlet {
                     vex_id: vex_id.dupe(),
                     ignore_markers: None,
                 };
+                let print_handler = PrintHandler::new(path.pretty_path.as_str());
                 let mut eval = Evaluator::new(&module);
                 eval.extra = Some(&temp_data);
-                eval.set_print_handler(&PrintHandler);
+                eval.set_print_handler(&print_handler);
                 eval.eval_function(init.value(), &[], &[])?;
             }
             module.into_module().freeze()?
