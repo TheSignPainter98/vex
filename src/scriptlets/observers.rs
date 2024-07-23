@@ -127,10 +127,10 @@ impl Observable for Observer {
             vex_id: self.vex_id.dupe(),
             ignore_markers: opts.ignore_markers,
         };
-
+        let print_handler = PrintHandler::new(opts.action.name());
         let mut eval = Evaluator::new(handler_module);
         eval.extra = Some(&temp_data);
-        eval.set_print_handler(&PrintHandler);
+        eval.set_print_handler(&print_handler);
 
         let func = self.callback.dupe().to_value(); // TODO(kcza): check thread safety! Can this unfrozen
                                                     // function mutate upvalues if it is a closure?
