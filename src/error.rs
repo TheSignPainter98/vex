@@ -231,6 +231,9 @@ pub enum InvalidLoadReason {
     #[display(fmt = "load path cannot contain both `./` and `../`")]
     MixedPathOperators,
 
+    #[display(fmt = "load path cannot be relative")]
+    Relative,
+
     #[display(fmt = "load path invalid, see docs")] // TODO(kcza): link to spec once public.
     NonSpecific,
 }
