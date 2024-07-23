@@ -5,11 +5,11 @@ Vex supports Linux, macOS and Windows.
 <!-- ## Install via Snap (Linux + macOS only) -->
 <!---->
 <!-- The easiest way to install `vex` is via the [snap][vex-snap]. -->
-<!-- On Linux and macOS, open a terminal and run the following— -->
+<!-- On Linux and macOS, open a terminal and run the following--- -->
 <!-- ```bash -->
 <!-- sudo snap install vex -->
 <!---->
-<!-- # If vex will be run on removable media, run this— -->
+<!-- # If vex will be run on removable media, run this--- -->
 <!-- sudo snap connect vex:removable-storage -->
 <!-- ``` -->
 <!---->
@@ -19,7 +19,7 @@ Vex supports Linux, macOS and Windows.
 <!---->
 <!-- Use this option if snaps are unavailable on your system. -->
 <!---->
-Assuming that [cargo][cargo] is installed, open a terminal and run the following—
+Assuming that [cargo][cargo] is installed, open a terminal and run the following---
 ```bash
 cargo install --git https://github.com/TheSignPainter98/vex
 ```

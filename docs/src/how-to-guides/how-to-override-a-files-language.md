@@ -1,6 +1,6 @@
 # How to override a file’s language
 
-1. Open a terminal, type and run—
+1. Open a terminal, type and run---
     ```bash
     vex list languages
     ```
