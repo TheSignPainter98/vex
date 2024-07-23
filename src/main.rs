@@ -183,6 +183,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
     let files = {
         let mut paths = Vec::new();
         let ignores = ctx
+            .metadata
             .ignores
             .clone()
             .into_inner()
@@ -190,6 +191,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
             .map(|ignore| ignore.compile())
             .collect::<Result<Vec<_>>>()?;
         let allows = ctx
+            .metadata
             .allows
             .clone()
             .into_iter()
@@ -428,7 +430,7 @@ fn init(init_args: InitCmd) -> Result<()> {
         cause,
     })?)?;
     Context::init(cwd, init_args.force)?;
-    let queries_dir = Context::acquire()?.manifest.queries_dir;
+    let queries_dir = Context::acquire()?.manifest.metadata.queries_dir;
     printdoc!(
         "
             {}: vex initialised
