@@ -10,7 +10,6 @@ use crate::{
     scriptlets::{action::Action, event::EventKind, LoadStatementModule, Location},
     source_path::PrettyPath,
     supported_language::SupportedLanguage,
-    vex::id::VexId,
 };
 
 // TODO(kcza): box this!
@@ -44,7 +43,7 @@ pub enum Error {
     FromPathBuf(#[from] camino::FromPathBufError),
 
     #[error("vex id mismatch: expected '{expected}' but got '{actual}'")]
-    IDMismatch { expected: VexId, actual: String },
+    IDMismatch { expected: String, actual: String },
 
     #[error("import cycle detected: {}", .0.iter().join_with(" -> "))]
     ImportCycle(Vec<PrettyPath>),

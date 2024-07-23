@@ -70,7 +70,7 @@ def on_match(event):
     bin_expr = event.captures['bin_expr']
     if int(str(left_operand)) >= int(str(right_operand)) / 1000:
         vex.warn(
-            'distracting_operand',
+            'distracting-operand',
             'large operands should come later',
             at=(left_operand, 'number too large'),
             info='large numbers can hide smaller ones',

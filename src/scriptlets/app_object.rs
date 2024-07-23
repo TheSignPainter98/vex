@@ -133,12 +133,12 @@ impl AppObject {
 
             let ret_data = UnfrozenRetainedData::get_from(eval.module());
             let temp_data = TempData::get_from(eval);
-            if temp_data.vex_id.to_pretty().as_str() != vex_id {
-                return Err(Error::IDMismatch {
-                    expected: temp_data.vex_id,
-                    actual: vex_id.to_string(),
+            {
+                let expected = temp_data.vex_id.to_pretty().as_str().replace('_', "-");
+                if vex_id != expected {
+                    let actual = vex_id.to_string();
+                    return Err(Error::IDMismatch { expected, actual }.into());
                 }
-                .into());
             }
             let mut irritation_renderer =
                 IrritationRenderer::new(temp_data.vex_id.to_pretty(), message);
@@ -223,7 +223,8 @@ mod test {
 
     #[test]
     fn warn_valid() {
-        const VEX_NAME: &str = "name_of_vex";
+        const VEX_NAME: &str = "name-of-vex";
+        const VEX_FILE_NAME: &str = "name_of_vex";
         const FILE_NAME: &str = "main.rs";
         const AT_PATH_LABEL: &str = "file label";
         const AT_NODE_LABEL: &str = "node bin_expr";
@@ -233,7 +234,7 @@ mod test {
 
         let irritations = VexTest::new("arg-combinations")
             .with_scriptlet(
-                format!("vexes/{VEX_NAME}.star"),
+                format!("vexes/{VEX_FILE_NAME}.star"),
                 formatdoc! {r#"
                     def init():
                         vex.observe('open_project', on_open_project)
@@ -295,16 +296,12 @@ mod test {
         assert_eq!(irritations.len(), 18);
 
         let assert_contains = |irritation: &str, strings: &[&str]| {
-            [VEX_NAME]
-                .as_ref()
-                .iter()
-                .chain(strings)
-                .for_each(|string| {
-                    assert!(
-                        irritation.contains(string),
-                        "could not find {string} in {irritation}"
-                    )
-                })
+            strings.iter().for_each(|string| {
+                assert!(
+                    irritation.contains(string),
+                    "could not find {string} in {irritation}"
+                )
+            })
         };
         assert_contains(&irritations[0], &[VEX_NAME, "test-00"]);
         assert_contains(&irritations[1], &[VEX_NAME, "test-01"]);
@@ -371,7 +368,8 @@ mod test {
 
     #[test]
     fn warn_invalid() {
-        const VEX_NAME: &str = "name_of_vex";
+        const VEX_NAME: &str = "name-of-vex";
+        const VEX_FILE_NAME: &str = "name_of_vex";
         const SHOW_ALSO_L: &str = "node l found here";
         const SHOW_ALSO_R: &str = "node r found here";
         VexTest::new("show-also-without-at")
@@ -417,7 +415,7 @@ mod test {
             .returns_error("cannot display `show_also` without an `at` argument");
         VexTest::new("show-also-with-path-at")
             .with_scriptlet(
-                format!("vexes/{VEX_NAME}.star"),
+                format!("vexes/{VEX_FILE_NAME}.star"),
                 formatdoc! {r#"
                     def init():
                         vex.observe('open_project', on_open_project)
@@ -452,8 +450,10 @@ mod test {
 
     #[test]
     fn warn_sorting() {
-        const VEX_1_NAME: &str = "vex_1";
-        const VEX_2_NAME: &str = "vex_2";
+        const VEX_1_NAME: &str = "vex-1";
+        const VEX_1_FILE_NAME: &str = "vex_1";
+        const VEX_2_NAME: &str = "vex-2";
+        const VEX_2_FILE_NAME: &str = "vex_2";
         const AT: &str = "node bin_expr found here";
         const SHOW_ALSO_L: &str = "node l found here";
         const SHOW_ALSO_R: &str = "node r found here";
@@ -492,8 +492,14 @@ mod test {
         "#}
         };
         let irritations = VexTest::new("many-origins")
-            .with_scriptlet(format!("vexes/{VEX_2_NAME}.star"), &vex_source(VEX_2_NAME))
-            .with_scriptlet(format!("vexes/{VEX_1_NAME}.star"), &vex_source(VEX_1_NAME))
+            .with_scriptlet(
+                format!("vexes/{}.star", VEX_2_FILE_NAME),
+                &vex_source(VEX_2_NAME),
+            )
+            .with_scriptlet(
+                format!("vexes/{}.star", VEX_1_FILE_NAME),
+                &vex_source(VEX_1_NAME),
+            )
             .with_source_file(
                 "src/main.rs",
                 indoc! {r#"
