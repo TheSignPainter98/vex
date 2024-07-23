@@ -523,7 +523,7 @@ mod test {
         let collated_starlark_snippets = collate_snippets("python");
         let collated_rust_snippets = collate_snippets("rust");
         let irritations = VexTest::new("README-snippets")
-            .with_scriptlet("vexes/distracting-operand.star", collated_starlark_snippets)
+            .with_scriptlet("vexes/distracting_operand.star", collated_starlark_snippets)
             .with_source_file("src/main.rs", collated_rust_snippets)
             .try_run()
             .unwrap()
