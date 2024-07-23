@@ -89,6 +89,7 @@ impl Context {
                     return
 
                 vex.warn(
+                    'example',
                     'large unbroken integer literal',
                     at=(lit, 'consider adding underscores')
                 )

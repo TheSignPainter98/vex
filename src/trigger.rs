@@ -164,7 +164,7 @@ mod test {
                             )
 
                         def on_match(event):
-                            vex.warn('language={language}: opened and matched %s' % event.path)
+                            vex.warn('test', 'language={language}: opened and matched %s' % event.path)
                     "#,
                     language = language_test.language,
                     query = language_test.query,
