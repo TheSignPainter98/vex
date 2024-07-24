@@ -460,7 +460,7 @@ mod test {
         let irritations = VexTest::new("max-problems")
             .with_max_problems(MaxProblems::Limited(MAX))
             .with_scriptlet(
-                "vexes/var.star",
+                "vexes/test.star",
                 indoc! {r#"
                     def init():
                         vex.observe('open_project', on_open_project)
@@ -473,7 +473,7 @@ mod test {
                         )
 
                     def on_match(event):
-                        vex.warn('oh no a number!', at=(event.captures['num'], 'num'))
+                        vex.warn('test', 'oh no a number!', at=(event.captures['num'], 'num'))
                 "#},
             )
             .with_source_file(
@@ -523,7 +523,7 @@ mod test {
         let collated_starlark_snippets = collate_snippets("python");
         let collated_rust_snippets = collate_snippets("rust");
         let irritations = VexTest::new("README-snippets")
-            .with_scriptlet("vexes/test.star", collated_starlark_snippets)
+            .with_scriptlet("vexes/distracting_operand.star", collated_starlark_snippets)
             .with_source_file("src/main.rs", collated_rust_snippets)
             .try_run()
             .unwrap()

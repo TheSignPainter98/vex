@@ -42,6 +42,9 @@ pub enum Error {
     #[error(transparent)]
     FromPathBuf(#[from] camino::FromPathBufError),
 
+    #[error("vex id mismatch: expected '{expected}' but got '{actual}'")]
+    IDMismatch { expected: String, actual: String },
+
     #[error("import cycle detected: {}", .0.iter().join_with(" -> "))]
     ImportCycle(Vec<PrettyPath>),
 

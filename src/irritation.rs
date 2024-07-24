@@ -107,10 +107,11 @@ impl<'v> IrritationRenderer<'v> {
             info,
         } = self;
 
+        let id = pretty_vex_id.as_str().replace('_', "-"); // TODO(kcza): remove once redundant.
         let file_name = source.as_ref().map(|source| source.pretty_path().as_str());
         let snippet = Snippet {
             title: Some(Annotation {
-                id: Some(pretty_vex_id.as_str()),
+                id: Some(&id),
                 label: Some(message),
                 annotation_type: AnnotationType::Warning,
             }),

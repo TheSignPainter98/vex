@@ -521,7 +521,7 @@ mod test {
             Unavailable,
             "vex.observe('open_file', lambda x: x)",
         );
-        test_preiniting_availability("vex.warn", Unavailable, "vex.warn('oh no!')");
+        test_preiniting_availability("vex.warn", Unavailable, "vex.warn('test', 'oh no!')");
 
         let assert_available_initing = |name, call| {
             VexTest::new(format!("initing-{name}"))
@@ -535,7 +535,7 @@ mod test {
                 )
                 .returns_error(format!("{name} unavailable while initing"));
         };
-        assert_available_initing("vex.warn", "vex.warn('oh no!')");
+        assert_available_initing("vex.warn", "vex.warn('test', 'oh no!')");
 
         let test_vexing_open_availability = |name, availability, call| {
             let result = VexTest::new(format!("vexing-{name}"))
@@ -575,7 +575,7 @@ mod test {
             Unavailable,
             "vex.observe('open_file', lambda x: x)",
         );
-        test_vexing_open_availability("vex.warn", Available, "vex.warn('oh no!')");
+        test_vexing_open_availability("vex.warn", Available, "vex.warn('test', 'oh no!')");
 
         let test_vexing_match_availability = |name, availability, call| {
             let result = VexTest::new(format!("vexing-{name}"))
@@ -626,7 +626,7 @@ mod test {
             Unavailable,
             "vex.observe('open_file', lambda x: x)",
         );
-        test_vexing_match_availability("vex.warn", Available, "vex.warn('oh no!')");
+        test_vexing_match_availability("vex.warn", Available, "vex.warn('test', 'oh no!')");
     }
 
     #[test]

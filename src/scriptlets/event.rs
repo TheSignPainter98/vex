@@ -351,7 +351,7 @@ mod test {
                         if 'main.rs' not in event.path:
                             return
 
-                        vex.warn("opened file %s" % event.path)
+                        vex.warn("test", "opened file %s" % event.path)
                 "#},
             )
             .with_source_file("src/main.rs", r#"fn main() { println!("hello, world!"); }"#)
