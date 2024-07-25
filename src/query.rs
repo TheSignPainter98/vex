@@ -22,7 +22,28 @@ impl Query {
     ];
 
     pub fn new(language: SupportedLanguage, query: &str) -> Result<Self> {
-        let query = TSQuery::new(language.ts_language(), query)?;
+        let has_content = |query: &str| {
+            query
+                .chars()
+                .scan(false, |scanning_comment, c| match c {
+                    ';' => {
+                        *scanning_comment = true;
+                        Some(false)
+                    }
+                    '\n' => {
+                        *scanning_comment = false;
+                        Some(false)
+                    }
+                    ' ' | '\t' => Some(false),
+                    _ => Some(!*scanning_comment),
+                })
+                .any(|b| b)
+        };
+        if query.is_empty() || !has_content(query) {
+            return Err(Error::EmptyQuery);
+        }
+        let sanitised_query = format!("({query}\n)"); // TODO(kcza): remove me!
+        let query = TSQuery::new(language.ts_language(), &sanitised_query)?;
 
         if query.pattern_count() == 0 {
             return Err(Error::EmptyQuery);
