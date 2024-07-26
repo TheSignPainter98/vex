@@ -1,4 +1,4 @@
-# `vex`
+# Vex
 
 _A blazingly-fast, hackable linter_
 
@@ -7,16 +7,16 @@ Whereas correct functionality can be ensured with good design and tests, style i
 Even if we assume correctly formatted code and an absence of lint, there are still plenty of ways in which one solution may differ from another.
 As a result, when working conventions naturally arise (especially on large code-bases), enforced only by fallible human review.
 So what if we were able to express some of these idiosyncratic style decisions in a form amenable to automation?
-This is where `vex` comes in.
+This is where Vex comes in.
 
-`vex` is a hackable linter, intended to act as an enforcer for subjective, project-local style preferences.
+Vex is a hackable linter, intended to act as an enforcer for subjective, project-local style preferences.
 Taking input of a set of [Starlark][starlark] scripts which express style rules, it scans the project directories to find style problems.
 
-`vex` supports Linux, macos and Windows, as well as a variety of languages including Rust, Go, C/C++ and Java. (For a complete up-to-date list, run `vex languages` once installed.)
+Vex supports Linux, macos and Windows, as well as a variety of languages including Rust, Go, C/C++ and Java. (For a complete up-to-date list, run `vex languages` once installed.)
 
 ## Installation
 
-To install `vex`, type and run—
+To install Vex, type and run—
 ```bash
 git clone https://github.com/TheSignPainter98/vex
 cd vex/
@@ -29,14 +29,14 @@ vex --version
 
 ## How to use
 
-Once installed, to start using `vex` in your project, `cd` to the project’s root and type
+Once installed, to start using  Vex in your project, `cd` to the project’s root and type
 ```bash
 vex init
 ```
 
 To create a lint, in the newly-created `vexes/` directory create a new file called `<my_lint_name>.star`.
 Open that file in your editor and let’s set up your script.
-First, let’s tell `vex` that when opening the project at the start of its run, we intend to—in this example—find binary expressions.
+First, let’s tell Vex that when opening the project at the start of its run, we intend to—in this example—find binary expressions.
 ```python
 def init():
     vex.observe('open_project', on_open_project)
@@ -87,7 +87,7 @@ then type—
 ```bash
 vex check
 ```
-and see the pretty output as `vex` notifies you that the left operand is larger than the right.
+and see the pretty output as Vex notifies you that the left operand is larger than the right.
 
 ## Building the docs
 
