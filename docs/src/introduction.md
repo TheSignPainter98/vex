@@ -8,14 +8,15 @@ These scripts declare [tree-sitter queries][tree-sitter-query-syntax], reason ab
 When working on any codebase---especially large ones---conventions naturally arise and although ultimately noble in intent, they all share a significant problem.
 Typical tools for code standardisation express preferences at the level of _all code_ written in a particular language but conventions are most often at the level of _specific code_ and hence no pattern gets enforced.
 Therefore, to ensure consistency, we must rely on fallible human review to identify and help eliminate non-standard code-patterns.
-Human mistakes inevitably lead to messy code, but this need not be the way.
+Consistency is now at the mercy of human mistakes, hence inconsistency is inevitable.
+This need not be the way.
 
 Vex allows subjective style preferences to be defined at a level closer to the project, specifically through a folder of vexes in the project root.
 These are then mechanically enforced throughout the project, leaving no room for later ugly surprises.
-For the best results, Vex is used alongside language-specific formatters and linters.
+For truly excellent code, Vex is used alongside language-specific formatters and linters.
 
 This tool is perfect for anyone looking to improve the consistency and hence the quality of their or their team’s code.
-To get started, first [install Vex](./installation.md) and then follow the [let’s write a vex tutorial](./tutorials/lets-write-a-vex.md).
+To get started, [install Vex](./installation.md) and then follow the [let’s write a vex tutorial](./tutorials/lets-write-a-vex.md).
 The rest of these docs is organised as follows:
 <div class="quote-grid">
     <blockquote>
