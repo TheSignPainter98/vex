@@ -2,21 +2,21 @@
 
 Vex is an enforcer of local style guidelines, in the form of a hackable linter.
 
-Vex scans source files for non-idiomatic code-patterns expressed in a set of user-provided [Starlark][starlark] scripts.
+Vex scans source files for non-idiomatic code-patterns expressed via a set of user-provided [Starlark][starlark] scripts.
 These scripts declare [tree-sitter queries][tree-sitter-query-syntax], reason about their results and create pretty, human-readable warnings which annotate source files.
 
-When working on any codebase---especially large ones---conventions naturally arise and although ultimately noble in intent, they all have a significant problem.
-The commonmost tools for code standardisation express preferences at the level of _all code_ written in a particular language but our preferences are at the level of the _specific code_ we have in front of us.
-It is simply not possible for a centralised tool to express good opinions in every case, hence we rely must rely on human review to identify and help eliminate non-standard code-patterns.
-To err is to be human and it would seem hence that to be human is to have inconsistent code, but this need not be the case.
+When working on any codebase---especially large ones---conventions naturally arise and although ultimately noble in intent, they all share a significant problem.
+Typical tools for code standardisation express preferences at the level of _all code_ written in a particular language but conventions are most often at the level of _specific code_ and hence no pattern gets enforced.
+Therefore, to ensure consistency, we must rely on fallible human review to identify and help eliminate non-standard code-patterns.
+Human mistakes inevitably lead to messy code, but this need not be the way.
 
-Vex allows subjective style preferences to be encoded at a level closer to projects.
-By placing a folder of vexes in the root of a project, we may express _project-local_ preferences.
-Furthermore, if that folder contains a shared repository of vexes, we may express _organisation-local_ preferences.
-By employing vex, language-specific linters and formatters, clean code is within reach.
+Vex allows subjective style preferences to be defined at a level closer to the project, specifically through a folder of vexes in the project root.
+These are then mechanically enforced throughout the project, leaving no room for later ugly surprises.
+For the best results, Vex is used alongside language-specific formatters and linters.
 
-Exactly which preferences are to be enforced is up to you, these docs will show you not only how to [install Vex](./installation.md) but also its ins and outs, organised as follows:
-
+This tool is perfect for anyone looking to improve the consistency and hence the quality of their or their team’s code.
+To get started, first [install Vex](./installation.md) and then follow the [let’s write a vex tutorial](./tutorials/lets-write-a-vex.md).
+The rest of these docs is organised as follows:
 <div class="quote-grid">
     <blockquote>
             <p>

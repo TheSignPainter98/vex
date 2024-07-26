@@ -5,7 +5,7 @@
 - [Installation](./installation.md)
 - [Quick start guide]()
 - [Tutorials](./tutorials/README.md)
-    - [Let’s write a vex]()
+    - [Let’s write a vex](./tutorials/lets-write-a-vex.md)
     - [Let’s test a vex]()
 - [How-to guides](./how-to-guides/README.md)
     - [How to annotate sources]()
