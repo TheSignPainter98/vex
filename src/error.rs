@@ -42,8 +42,11 @@ pub enum Error {
     #[error(transparent)]
     FromPathBuf(#[from] camino::FromPathBufError),
 
-    #[error("vex id mismatch: expected '{expected}' but got '{actual}'")]
-    IDMismatch { expected: String, actual: String },
+    #[error("invalid vex ID '{raw_id}': {reason}")]
+    InvalidID {
+        raw_id: String,
+        reason: InvalidIDReason,
+    },
 
     #[error("import cycle detected: {}", .0.iter().join_with(" -> "))]
     ImportCycle(Vec<PrettyPath>),
@@ -161,6 +164,30 @@ impl From<starlark::Error> for Error {
     fn from(err: starlark::Error) -> Self {
         err.into_anyhow().into()
     }
+}
+
+#[derive(Debug, Display)]
+pub enum InvalidIDReason {
+    #[display(fmt = "cannot contain '::'")]
+    ContainsDoubleColon { index: usize },
+
+    #[display(fmt = "cannot contain '--'")]
+    ContainsDoubleDash { index: usize },
+
+    #[display(fmt = "can only contain a-z, 0-9, ':' and '-'")]
+    IllegalChar,
+
+    #[display(fmt = "cannot start with '{_0}'")]
+    IllegalStartChar(char),
+
+    #[display(fmt = "cannot end with '{_0}'")]
+    IllegalEndChar(char),
+
+    #[display(fmt = "too few characters ({len} < {min_len})")]
+    TooShort { len: usize, min_len: usize },
+
+    #[display(fmt = "too many characters ({len} > {max_len})")]
+    TooLong { len: usize, max_len: usize },
 }
 
 #[derive(Debug, Display)]

@@ -4,9 +4,11 @@ use std::{
 
 use allocative::Allocative;
 use dupe::{Dupe, OptionDupedExt};
+use lazy_static::lazy_static;
+use regex::Regex;
 use serde::Serialize;
 
-use crate::source_path::PrettyPath;
+use crate::{error::{Error, InvalidIDReason}};
 
 #[derive(Copy, Clone, Debug, Allocative, Dupe)]
 pub struct VexId(usize);
@@ -31,13 +33,67 @@ impl VexId {
             .expect("internal error: failed to lock ID store")
             .get_id(raw)
     }
-
+    
     pub fn to_pretty(self) -> PrettyVexId {
         ID_STORE
             .lock()
             .expect("internal error: failed to lock ID store")
             .get_pretty_id(self)
             .expect("internal error: invalid ID")
+    }
+}
+
+impl<'i> TryFrom<&'i str> for VexId<'i> {
+    type Error = Error;
+
+    fn try_from(raw_id: &'i str) -> Result<Self, Self::Error> {
+        let invalid_id = |reason| Error::InvalidID {
+            raw_id: raw_id.to_string(),
+            reason,
+        };
+
+        const MIN_ID_LEN: usize = 3;
+        const MAX_ID_LEN: usize = 25;
+        if raw_id.len() <= MIN_ID_LEN {
+            return Err(invalid_id(InvalidIDReason::TooShort {
+                len: raw_id.len(),
+                min_len: MIN_ID_LEN,
+            }));
+        }
+        if raw_id.len() >= MAX_ID_LEN {
+            return Err(invalid_id(InvalidIDReason::TooLong {
+                len: raw_id.len(),
+                max_len: MAX_ID_LEN,
+            }));
+        }
+
+        lazy_static! {
+            static ref VALID_VEX_ID: Regex = Regex::new("^[a-z0-9:-]*$").unwrap();
+        }
+        if !VALID_VEX_ID.is_match(raw_id) {
+            return Err(invalid_id(InvalidIDReason::IllegalChar));
+        }
+        let first_char = raw_id.chars().next().unwrap();
+        match first_char {
+            '0'..='9' | ':' | '-' => {
+                return Err(invalid_id(InvalidIDReason::IllegalStartChar(first_char)))
+            }
+            _ => {}
+        }
+        let last_char = raw_id.chars().rev().next().unwrap();
+        match last_char {
+            ':' | '-' => return Err(invalid_id(InvalidIDReason::IllegalEndChar(last_char))),
+            _ => {}
+        }
+
+        if let Some(index) = raw_id.find("::") {
+            return Err(invalid_id(InvalidIDReason::ContainsDoubleColon { index }));
+        }
+        if let Some(index) = raw_id.find("--") {
+            return Err(invalid_id(InvalidIDReason::ContainsDoubleDash { index }));
+        }
+
+        Ok(Self::new(raw_id))
     }
 }
 
