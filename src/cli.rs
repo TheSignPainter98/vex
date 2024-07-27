@@ -12,7 +12,14 @@ use clap::{
 use crate::{error::Error, supported_language::SupportedLanguage};
 
 #[derive(Debug, Parser)]
-#[command(author, version, about, disable_help_flag = true, styles=Self::styles())]
+#[command(
+    author,
+    version,
+    about,
+    disable_help_flag = true,
+    disable_version_flag = true,
+    styles=Self::styles(),
+)]
 pub struct Args {
     #[command(subcommand)]
     pub command: Command,
@@ -24,6 +31,10 @@ pub struct Args {
     /// Print help information, use `--help` for more detail
     #[arg(short, long, action=ArgAction::Help, global=true)]
     help: Option<bool>,
+
+    /// Print version
+    #[arg(long, action=ArgAction::Version)]
+    version: Option<bool>,
 }
 
 impl Args {
