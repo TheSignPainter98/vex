@@ -43,7 +43,7 @@ impl Args {
             .error(
                 Style::new()
                     .bold()
-                    .fg_color(Some(Color::Ansi(AnsiColor::Red))),
+                    .fg_color(Color::Ansi(AnsiColor::Red).into()),
             )
             .usage(header_style)
             .literal(command_style)
