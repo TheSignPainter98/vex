@@ -48,11 +48,7 @@ impl Args {
             .usage(header_style)
             .literal(command_style)
             .placeholder(literal_style)
-            .valid(
-                Style::new()
-                    .bold()
-                    .fg_color(Color::Ansi(AnsiColor::Green).into()),
-            )
+            .valid(literal_style)
             .invalid(
                 Style::new()
                     .bold()
