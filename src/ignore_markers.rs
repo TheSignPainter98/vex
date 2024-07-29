@@ -182,6 +182,8 @@ struct MarkerEnd {
 mod test {
     use smallvec::smallvec;
 
+    use crate::error::InvalidIDReason;
+
     use super::*;
 
     #[test]
@@ -220,5 +222,43 @@ mod test {
                 ignore_markers.is_ignored(index, &vex_id)
             );
         });
+    }
+
+    #[test]
+    fn try_from_iter() {
+        use RecoverableResult::*;
+
+        const ID1: &str = "some-okay-id";
+        const ID2: &str = "some-okay-id";
+        match VexIdFilter::try_from_iter([ID1, ID2].into_iter()) {
+            Ok(filter) => assert_eq!(
+                filter,
+                VexIdFilter::Specific(smallvec![
+                    VexId::try_from(ID1.to_string()).unwrap(),
+                    VexId::try_from(ID2.to_string()).unwrap()
+                ])
+            ),
+            Recovered(_, errs) => panic!("unexpected errors: {errs:?}"),
+
+            Err(err) => panic!("unexpected unrecoverable error: {err}"),
+        }
+
+        match VexIdFilter::try_from_iter(["hello", "*", "<><><><>"].into_iter()) {
+            Ok(_) => panic!("expected result"),
+            Recovered(filter, errs) => {
+                assert!(!errs.is_empty());
+                assert!(errs.iter().any(|err| matches!(err, Error::RedundantIgnore)));
+                assert!(errs.iter().any(|err| matches!(
+                    err,
+                    Error::InvalidID {
+                        reason: InvalidIDReason::IllegalChar,
+                        ..
+                    }
+                )));
+
+                assert_eq!(filter, VexIdFilter::All);
+            }
+            Err(err) => panic!("unexpected unrecoverable error: {err}"),
+        }
     }
 }
