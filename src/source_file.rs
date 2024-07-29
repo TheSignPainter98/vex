@@ -155,14 +155,12 @@ impl ParsedSourceFile {
                         }
                         RecoverableResult::Err(err) => return Err(err),
                     };
-                    if filter.is_empty() {
-                        if log_enabled!(log::Level::Warn) {
-                            warn!(
-                                "{}:{}: no vex ids specified",
-                                self.path,
-                                Location::of(&Node::new(node, self)),
-                            )
-                        }
+                    if filter.is_empty() && log_enabled!(log::Level::Warn) {
+                        warn!(
+                            "{}:{}: no vex ids specified",
+                            self.path,
+                            Location::of(&Node::new(node, self)),
+                        )
                     }
                     filter
                 };
