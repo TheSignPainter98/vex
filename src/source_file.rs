@@ -149,14 +149,16 @@ impl ParsedSourceFile {
                             }
                             filter
                         }
-                        RecoverableResult::Recovered(filter, err) => {
+                        RecoverableResult::Recovered(filter, errs) => {
                             if log_enabled!(log::Level::Warn) {
-                                warn!(
-                                    "{}:{}: {}",
-                                    self.path,
-                                    Location::of(&Node::new(node, self)),
-                                    err
-                                )
+                                for err in errs {
+                                    warn!(
+                                        "{}:{}: {}",
+                                        self.path,
+                                        Location::of(&Node::new(node, self)),
+                                        err
+                                    );
+                                }
                             }
                             filter
                         }

@@ -6,6 +6,6 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[must_use]
 pub enum RecoverableResult<T> {
     Ok(T),
-    Recovered(T, Error),
+    Recovered(T, Vec<Error>),
     Err(Error),
 }
