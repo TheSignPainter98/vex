@@ -9,14 +9,14 @@ use crate::{
     logger,
     scriptlets::{main_annotation::MainAnnotation, Node},
     source_path::PrettyPath,
-    vex::id::PrettyVexId,
+    vex::id::VexId,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Allocative, Serialize)]
 #[non_exhaustive]
 pub struct Irritation {
     code_source: Option<IrritationSource>,
-    pretty_vex_id: PrettyVexId,
+    vex_id: VexId,
     other_code_sources: Vec<IrritationSource>,
     info_present: bool,
     pub(crate) rendered: String,
@@ -68,7 +68,7 @@ impl Display for Irritation {
 }
 
 pub struct IrritationRenderer<'v> {
-    pretty_vex_id: PrettyVexId,
+    vex_id: VexId,
     message: &'v str,
     source: Option<MainAnnotation<'v>>,
     show_also: Vec<(Node<'v>, &'v str)>,
@@ -76,9 +76,9 @@ pub struct IrritationRenderer<'v> {
 }
 
 impl<'v> IrritationRenderer<'v> {
-    pub fn new(pretty_vex_id: PrettyVexId, message: &'v str) -> Self {
+    pub fn new(vex_id: VexId, message: &'v str) -> Self {
         Self {
-            pretty_vex_id,
+            vex_id,
             message,
             source: None,
             show_also: Vec::with_capacity(0),
@@ -100,18 +100,17 @@ impl<'v> IrritationRenderer<'v> {
 
     pub fn render(self) -> Irritation {
         let Self {
-            pretty_vex_id,
+            vex_id,
             source,
             message,
             show_also,
             info,
         } = self;
 
-        let id = pretty_vex_id.as_str().replace('_', "-"); // TODO(kcza): remove once redundant.
         let file_name = source.as_ref().map(|source| source.pretty_path().as_str());
         let snippet = Snippet {
             title: Some(Annotation {
-                id: Some(&id),
+                id: Some(vex_id.as_ref()),
                 label: Some(message),
                 annotation_type: AnnotationType::Warning,
             }),
@@ -191,7 +190,7 @@ impl<'v> IrritationRenderer<'v> {
         let info_present = info.is_some();
         let rendered = logger::render_snippet(snippet);
         Irritation {
-            pretty_vex_id,
+            vex_id,
             code_source,
             other_code_sources,
             info_present,

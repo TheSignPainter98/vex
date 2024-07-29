@@ -30,13 +30,11 @@ use crate::{
         Intent, ObserverData, PreinitOptions,
     },
     source_path::{PrettyPath, SourcePath},
-    vex::id::VexId,
 };
 
 #[derive(Debug)]
 pub struct PreinitingScriptlet {
     pub path: SourcePath,
-    vex_id: VexId,
     ast: AstModule,
     loads_files: HashSet<PrettyPath>,
 }
@@ -54,7 +52,6 @@ impl PreinitingScriptlet {
     fn new_from_str(path: SourcePath, code: impl Into<String>) -> Result<Self> {
         let code = code.into();
 
-        let vex_id = VexId::new(path.pretty_path.dupe());
         let ast = AstModule::parse(path.as_str(), code, &Dialect::Standard)?;
         Self::validate_loads(&ast, &path.pretty_path)?;
         let loads_files = ast
@@ -64,7 +61,6 @@ impl PreinitingScriptlet {
             .collect();
         Ok(Self {
             path,
-            vex_id,
             ast,
             loads_files,
         })
@@ -95,7 +91,6 @@ impl PreinitingScriptlet {
     ) -> Result<InitingScriptlet> {
         let Self {
             path,
-            vex_id,
             ast,
             loads_files: _,
         } = self;
@@ -108,7 +103,6 @@ impl PreinitingScriptlet {
             {
                 let temp_data = TempData {
                     action: Action::Preiniting,
-                    vex_id: vex_id.dupe(),
                     query_cache: &QueryCache::new(),
                     ignore_markers: None,
                 };
@@ -125,7 +119,6 @@ impl PreinitingScriptlet {
 
         Ok(InitingScriptlet {
             path,
-            vex_id,
             preinited_module,
         })
     }
@@ -305,7 +298,6 @@ impl LoadStatementModule<'_> {
 #[derive(Debug)]
 pub struct InitingScriptlet {
     pub path: SourcePath,
-    pub vex_id: VexId,
     pub preinited_module: FrozenModule,
 }
 
@@ -313,7 +305,6 @@ impl InitingScriptlet {
     pub fn init(self, frozen_heap: &FrozenHeap) -> Result<ObserverData> {
         let Self {
             path,
-            vex_id,
             preinited_module,
         } = self;
 
@@ -327,7 +318,6 @@ impl InitingScriptlet {
                 let temp_data = TempData {
                     action: Action::Initing,
                     query_cache: &QueryCache::new(),
-                    vex_id: vex_id.dupe(),
                     ignore_markers: None,
                 };
                 let print_handler = PrintHandler::new(path.pretty_path.as_str());
@@ -361,12 +351,6 @@ impl InitingScriptlet {
             warn!("{} observes no events", path.pretty_path);
         }
         Ok(observer_data)
-    }
-
-    pub fn is_vex(&self) -> bool {
-        self.preinited_module
-            .get_option("init")
-            .is_ok_and(|o| o.is_some())
     }
 }
 
