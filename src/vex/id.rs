@@ -12,13 +12,12 @@ use serde::Serialize;
 
 use crate::error::{Error, InvalidIDReason};
 
-// TODO(kcza): rename this to IrritationID
 #[derive(Debug, Clone, Allocative, Eq, PartialEq, Serialize)]
 pub struct VexId {
     hash: u64,
 
     #[allocative(skip)]
-    name: String, // TODO(kcza): Cow this
+    name: String,
 }
 
 impl VexId {
