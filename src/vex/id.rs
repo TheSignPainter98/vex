@@ -42,13 +42,13 @@ impl TryFrom<String> for VexId {
 
         const MIN_ID_LEN: usize = 3;
         const MAX_ID_LEN: usize = 25;
-        if raw_id.len() <= MIN_ID_LEN {
+        if raw_id.len() < MIN_ID_LEN {
             return Err(invalid_id(InvalidIDReason::TooShort {
                 len: raw_id.len(),
                 min_len: MIN_ID_LEN,
             }));
         }
-        if raw_id.len() >= MAX_ID_LEN {
+        if raw_id.len() > MAX_ID_LEN {
             return Err(invalid_id(InvalidIDReason::TooLong {
                 len: raw_id.len(),
                 max_len: MAX_ID_LEN,
