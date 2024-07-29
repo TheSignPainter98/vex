@@ -129,12 +129,12 @@ impl VexIdFilter {
         let capacity = max.unwrap_or(min);
 
         let mut ids = SmallVec::with_capacity(capacity);
+        let mut errs = vec![];
+        let mut star_found = false;
         for raw_id in &mut raw_ids {
             if raw_id == "*" {
-                if !ids.is_empty() || raw_ids.next().is_some() {
-                    return RecoverableResult::Recovered(Self::All, vec![Error::RedundantIgnore]);
-                }
-                return RecoverableResult::Ok(Self::All);
+                star_found = true;
+                continue;
             }
             let id = match VexId::try_from(raw_id.to_string()) {
                 Ok(id) => id,
@@ -144,7 +144,20 @@ impl VexIdFilter {
             };
             ids.push(id)
         }
-        RecoverableResult::Ok(Self::Specific(ids))
+
+        if star_found && ids.len() != 1 {
+            errs.push(Error::RedundantIgnore)
+        }
+
+        let ret = if star_found {
+            Self::All
+        } else {
+            Self::Specific(ids)
+        };
+        if !errs.is_empty() {
+            return RecoverableResult::Recovered(ret, errs);
+        }
+        RecoverableResult::Ok(ret)
     }
 
     fn covers(&self, vex_id: &VexId) -> bool {
