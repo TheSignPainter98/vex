@@ -137,18 +137,9 @@ impl ParsedSourceFile {
                         + IGNORE_MARKER.len();
                     let raw_parts = raw_text[ids_start_index..]
                         .split(',')
-                        .map(|raw_part| raw_part.trim())
-                        .filter(|raw_part| !raw_part.is_empty());
-                    match VexIdFilter::try_from_iter(raw_parts) {
-                        RecoverableResult::Ok(filter) => {
-                            if filter.is_empty() {
-                                return Err(Error::NoVexIds {
-                                    file: self.path.pretty_path.dupe(),
-                                    location: Location::of(&Node::new(node, self)),
-                                });
-                            }
-                            filter
-                        }
+                        .map(|raw_part| raw_part.trim());
+                    let filter = match VexIdFilter::try_from_iter(raw_parts) {
+                        RecoverableResult::Ok(filter) => filter,
                         RecoverableResult::Recovered(filter, errs) => {
                             if log_enabled!(log::Level::Warn) {
                                 for err in errs {
@@ -163,7 +154,17 @@ impl ParsedSourceFile {
                             filter
                         }
                         RecoverableResult::Err(err) => return Err(err),
+                    };
+                    if filter.is_empty() {
+                        if log_enabled!(log::Level::Warn) {
+                            warn!(
+                                "{}:{}: no vex ids specified",
+                                self.path,
+                                Location::of(&Node::new(node, self)),
+                            )
+                        }
                     }
+                    filter
                 };
                 Ok((byte_range, filter))
             })
@@ -297,10 +298,14 @@ mod test {
             SupportedLanguage::Rust,
         )
         .unwrap();
-        let err = source_file.ignore_markers().unwrap_err();
-        assert!(
-            err.to_string().contains("no vex ids specified"),
-            "incorrect error, got {err}"
-        );
+        let ignore_markers = source_file.ignore_markers().unwrap();
+        let markers: Vec<_> = ignore_markers.markers().collect();
+        let [marker] = &markers[..] else {
+            panic!("incorrect markers");
+        };
+        match marker.filter() {
+            VexIdFilter::Specific(ids) => assert!(ids.is_empty()),
+            _ => panic!("unexpected filter in marker: {marker:?}"),
+        }
     }
 }

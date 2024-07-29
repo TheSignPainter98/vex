@@ -112,7 +112,7 @@ impl IgnoreMarker {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VexIdFilter {
     All,
     Specific(SmallVec<[VexId; 2]>),
@@ -136,16 +136,13 @@ impl VexIdFilter {
                 star_found = true;
                 continue;
             }
-            let id = match VexId::try_from(raw_id.to_string()) {
-                Ok(id) => id,
-                Err(err) => {
-                    return RecoverableResult::Recovered(Self::Specific(SmallVec::new()), vec![err])
-                }
+            match VexId::try_from(raw_id.to_string()) {
+                Ok(id) => ids.push(id),
+                Err(err) => errs.push(err),
             };
-            ids.push(id)
         }
 
-        if star_found && ids.len() != 1 {
+        if star_found && !ids.is_empty() {
             errs.push(Error::RedundantIgnore)
         }
 
