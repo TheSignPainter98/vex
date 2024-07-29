@@ -2,7 +2,6 @@ use std::fmt::Display;
 
 use allocative::Allocative;
 use derive_new::new;
-use dupe::Dupe;
 use starlark::{
     environment::{Methods, MethodsBuilder, MethodsStatic},
     eval::Evaluator,
@@ -28,6 +27,7 @@ use crate::{
         Node,
     },
     supported_language::SupportedLanguage,
+    vex::id::VexId,
 };
 
 #[derive(Debug, PartialEq, Eq, new, ProvidesStaticType, NoSerialize, Allocative)]
@@ -64,10 +64,7 @@ impl AppObject {
                 let temp_data = TempData::get_from(eval);
                 temp_data.query_cache.get_or_create(language, query)?
             };
-            let on_match = {
-                let vex_id = TempData::get_from(eval).vex_id.dupe();
-                UnfrozenObserver::new(vex_id, on_match)
-            };
+            let on_match = UnfrozenObserver::new(on_match);
             ret_data.declare_intent(UnfrozenIntent::Find {
                 language,
                 query,
@@ -87,10 +84,7 @@ impl AppObject {
 
             let ret_data = UnfrozenRetainedData::get_from(eval.module());
             let event_kind = event.parse()?;
-            let observer = {
-                let vex_id = TempData::get_from(eval).vex_id.dupe();
-                UnfrozenObserver::new(vex_id, observer)
-            };
+            let observer = UnfrozenObserver::new(observer);
             ret_data.declare_intent(UnfrozenIntent::Observe {
                 event_kind,
                 observer,
@@ -131,26 +125,21 @@ impl AppObject {
                 .into());
             }
 
-            let ret_data = UnfrozenRetainedData::get_from(eval.module());
-            let temp_data = TempData::get_from(eval);
-            {
-                let expected = temp_data.vex_id.to_pretty().as_str().replace('_', "-");
-                if vex_id != expected {
-                    let actual = vex_id.to_string();
-                    return Err(Error::IDMismatch { expected, actual }.into());
-                }
-            }
-            let mut irritation_renderer =
-                IrritationRenderer::new(temp_data.vex_id.to_pretty(), message);
-            if let Some(at) = at {
-                if let Some(ignore_markers) = temp_data.ignore_markers {
-                    if let Some(node) = at.node() {
-                        if ignore_markers.marked(node.byte_range().start, temp_data.vex_id) {
-                            return Ok(NoneType);
-                        }
-                    }
-                }
+            let vex_id = VexId::try_from(vex_id.to_string())?;
 
+            let temp_data = TempData::get_from(eval);
+            let ignored = at.as_ref().and_then(|at| at.node()).is_some_and(|node| {
+                temp_data.ignore_markers.is_some_and(|ignore_markers| {
+                    ignore_markers.is_ignored(node.byte_range().start, &vex_id)
+                })
+            });
+            if ignored {
+                return Ok(NoneType);
+            }
+
+            let ret_data = UnfrozenRetainedData::get_from(eval.module());
+            let mut irritation_renderer = IrritationRenderer::new(vex_id, message);
+            if let Some(at) = at {
                 irritation_renderer.set_source(at)
             }
             if let Some(show_also) = show_also {

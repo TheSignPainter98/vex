@@ -112,14 +112,6 @@ fn print_banner() {
 
 fn list(list_args: ListCmd) -> Result<()> {
     match list_args.what {
-        ToList::Checks => {
-            let ctx = Context::acquire()?;
-            let store = PreinitingStore::new(&ctx)?.preinit(PreinitOptions::default())?;
-            store
-                .vexes()
-                .map(|vex| &vex.vex_id)
-                .for_each(|id| println!("{}", id));
-        }
         ToList::Languages => SupportedLanguage::iter().for_each(|lang| println!("{}", lang)),
     }
     Ok(())

@@ -1,9 +1,8 @@
 use std::ops::Range;
 
-use log::{log_enabled, warn};
 use smallvec::SmallVec;
 
-use crate::{scriptlets::Location, source_path::PrettyPath, vex::id::VexId};
+use crate::{error::Error, result::RecoverableResult, vex::id::VexId};
 
 #[derive(Debug)]
 pub struct IgnoreMarkers {
@@ -16,7 +15,7 @@ impl IgnoreMarkers {
         IgnoreMarkersBuilder::new()
     }
 
-    pub fn marked(&self, byte_index: usize, vex_id: VexId) -> bool {
+    pub fn is_ignored(&self, byte_index: usize, vex_id: &VexId) -> bool {
         if self.markers.is_empty() {
             return false;
         }
@@ -123,35 +122,44 @@ impl VexIdFilter {
     // This function creates a new `VexIdFilter` from a comma-separated list of stringified
     // pretty vex ids. If any vex ids are unknown, the first unknown one will be returned as an
     // error.
-    pub fn new(raw: &str, opts: VexIdFilterOpts<'_>) -> Self {
-        if raw == "*" {
-            return Self::All;
+    pub fn try_from_iter<'a>(
+        mut raw_ids: impl Iterator<Item = &'a str>,
+    ) -> RecoverableResult<Self> {
+        let (min, max) = raw_ids.size_hint();
+        let capacity = max.unwrap_or(min);
+
+        let mut ids = SmallVec::with_capacity(capacity);
+        for raw_id in &mut raw_ids {
+            if raw_id == "*" {
+                if !ids.is_empty() || raw_ids.next().is_some() {
+                    return RecoverableResult::Recovered(Self::All, Error::RedundantIgnoreIDs);
+                }
+                return RecoverableResult::Ok(Self::All);
+            }
+            let id = match VexId::try_from(raw_id.to_string()) {
+                Ok(id) => id,
+                Err(err) => {
+                    return RecoverableResult::Recovered(Self::Specific(SmallVec::new()), err)
+                }
+            };
+            ids.push(id)
         }
-        Self::Specific(
-            raw.split(',')
-                .flat_map(|raw_id| {
-                    let id = VexId::retrieve_str(raw_id);
-                    if id.is_none() && log_enabled!(log::Level::Warn) {
-                        warn!("{}:{}: unknown vex '{raw_id}'", opts.path, opts.location)
-                    }
-                    id
-                })
-                .collect(),
-        )
+        RecoverableResult::Ok(Self::Specific(ids))
     }
 
-    fn covers(&self, vex_id: VexId) -> bool {
+    fn covers(&self, vex_id: &VexId) -> bool {
         match self {
             Self::All => true,
-            Self::Specific(ids) => ids.contains(&vex_id),
+            Self::Specific(ids) => ids.contains(vex_id),
         }
     }
-}
 
-#[derive(Debug)]
-pub struct VexIdFilterOpts<'path> {
-    pub path: &'path PrettyPath,
-    pub location: Location,
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::All => false,
+            Self::Specific(ids) => ids.is_empty(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -162,18 +170,15 @@ struct MarkerEnd {
 
 #[cfg(test)]
 mod test {
-    use dupe::Dupe;
     use smallvec::smallvec;
-
-    use crate::source_path::PrettyPath;
 
     use super::*;
 
     #[test]
     fn ignore_ranges() {
-        let vex_id = VexId::new(PrettyPath::new("foo/bar.star".into()));
+        let vex_id = VexId::try_from("foo-bar".to_string()).unwrap();
         let ignore_markers = {
-            let filter = VexIdFilter::Specific(smallvec![vex_id.dupe()]);
+            let filter = VexIdFilter::Specific(smallvec![vex_id.clone()]);
             let mut builder = IgnoreMarkers::builder();
             builder.add(3..10, filter.clone());
             builder.add(4..9, filter.clone());
@@ -199,10 +204,10 @@ mod test {
         ];
         tests.into_iter().for_each(|(index, expected)| {
             assert_eq!(
-                ignore_markers.marked(index, vex_id),
+                ignore_markers.is_ignored(index, &vex_id),
                 expected,
                 "index {index}: expected {expected}, got {}",
-                ignore_markers.marked(index, vex_id)
+                ignore_markers.is_ignored(index, &vex_id)
             );
         });
     }

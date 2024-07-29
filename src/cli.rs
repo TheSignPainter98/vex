@@ -85,7 +85,6 @@ pub struct ListCmd {
 
 #[derive(Clone, Debug, PartialEq, Eq, ValueEnum)]
 pub enum ToList {
-    Checks,
     Languages,
 }
 
@@ -362,18 +361,6 @@ mod test {
                     .into_command(),
                 Command::List(ListCmd {
                     what: ToList::Languages
-                }),
-            );
-        }
-
-        #[test]
-        fn vexes() {
-            assert_eq!(
-                Args::try_parse_from(["vex", "list", "checks"])
-                    .unwrap()
-                    .into_command(),
-                Command::List(ListCmd {
-                    what: ToList::Checks
                 }),
             );
         }

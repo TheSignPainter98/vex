@@ -105,6 +105,9 @@ pub enum Error {
     #[error(transparent)]
     Query(#[from] tree_sitter::QueryError),
 
+    #[error("ignoring '*' makes other ignore ids redundant")]
+    RedundantIgnoreIDs,
+
     #[error(transparent)]
     SetLogger(#[from] log::SetLoggerError),
 
@@ -168,12 +171,6 @@ impl From<starlark::Error> for Error {
 
 #[derive(Debug, Display)]
 pub enum InvalidIDReason {
-    #[display(fmt = "cannot contain '::'")]
-    ContainsDoubleColon { index: usize },
-
-    #[display(fmt = "cannot contain '--'")]
-    ContainsDoubleDash { index: usize },
-
     #[display(fmt = "can only contain a-z, 0-9, ':' and '-'")]
     IllegalChar,
 
@@ -182,6 +179,9 @@ pub enum InvalidIDReason {
 
     #[display(fmt = "cannot end with '{_0}'")]
     IllegalEndChar(char),
+
+    #[display(fmt = "cannot contain '{found}'")]
+    UglySubstring { found: String, index: usize },
 
     #[display(fmt = "too few characters ({len} < {min_len})")]
     TooShort { len: usize, min_len: usize },

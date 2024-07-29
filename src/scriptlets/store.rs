@@ -348,10 +348,6 @@ impl InitingStore {
             frozen_heap,
         })
     }
-
-    pub fn vexes(&self) -> impl Iterator<Item = &InitingScriptlet> {
-        self.store.iter().filter(|s| s.is_vex())
-    }
 }
 
 #[derive(Debug)]
