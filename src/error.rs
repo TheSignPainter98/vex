@@ -106,7 +106,7 @@ pub enum Error {
     Query(#[from] tree_sitter::QueryError),
 
     #[error("ignoring '*' makes other ignore ids redundant")]
-    RedundantIgnoreIDs,
+    RedundantIgnore,
 
     #[error(transparent)]
     SetLogger(#[from] log::SetLoggerError),

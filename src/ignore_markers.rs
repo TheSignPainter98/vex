@@ -132,7 +132,7 @@ impl VexIdFilter {
         for raw_id in &mut raw_ids {
             if raw_id == "*" {
                 if !ids.is_empty() || raw_ids.next().is_some() {
-                    return RecoverableResult::Recovered(Self::All, Error::RedundantIgnoreIDs);
+                    return RecoverableResult::Recovered(Self::All, Error::RedundantIgnore);
                 }
                 return RecoverableResult::Ok(Self::All);
             }
