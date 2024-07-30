@@ -10,7 +10,7 @@ allocative = "0.3.1"
 annotate-snippets = "0.10.0"
 anyhow = "1.0.76"
 camino = { version = "1.1.6", features = ["serde1"] }
-clap = { version = "4.4.11", features = ["derive", "color"] }
+clap = { version = "4.4.11", features = ["derive", "color", "wrap_help"] }
 const_format = "0.2.32"
 derive-new = "0.6.0"
 derive_more = "0.99.17"
