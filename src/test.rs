@@ -86,8 +86,6 @@ mod test {
 
                         def on_test(event):
                             data = vex.run(
-                                # event.vex_id,
-                                'helo',
                                 lenient=True,
                                 files={{
                                     'src/main.rs': '''

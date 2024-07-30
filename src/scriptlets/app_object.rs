@@ -167,7 +167,6 @@ impl AppObject {
 
         fn run<'v>(
             #[starlark(this)] _this: Value<'v>,
-            #[starlark(require=pos)] _vex_id: &str,
             #[starlark(require=named, default=false)] lenient: bool,
             #[starlark(require=named)] files: DictRef<'v>,
             eval: &mut Evaluator<'_, '_>,
