@@ -11,13 +11,15 @@ create-missing = false
 
 [output.html]
 additional-css = ['theme/css/style.css']
+cname = "kcza.net"
 copy-fonts = true
 default-theme = "ayu"
+edit-url-template = "https://github.com/TheSignPainter98/vex/blob/master/docs/{path}"
 git-repository-icon = "fa-github"
 git-repository-url = "https://github.com/TheSignPainter98/vex"
+preferred-dark-theme = "ayu"
 site-url = "/vex/"
 smart-punctuation = true
-cname = "vex.kcza.net"
 
 [output.html.font]
 enable = true

@@ -7,8 +7,8 @@ use tree_sitter::{Node as TSNode, Parser, QueryCursor, Tree};
 
 use crate::{
     error::{Error, IOAction},
-    ignore_markers::{IgnoreMarkers, VexIdFilter, VexIdFilterOpts},
-    result::Result,
+    ignore_markers::{IgnoreMarkers, VexIdFilter},
+    result::{RecoverableResult, Result},
     scriptlets::{Location, Node},
     source_path::SourcePath,
     supported_language::SupportedLanguage,
@@ -148,25 +148,42 @@ impl ParsedSourceFile {
                     start..end
                 };
                 let filter = {
+                    const IGNORE_MARKER: &str = "vex:ignore";
+
                     let node = qcaps[marker_index].node;
-                    let mut raw_parts = node
-                        .utf8_text(self.content.as_bytes())
-                        .unwrap()
-                        .split_whitespace()
-                        .skip(2);
-                    let Some(raw) = raw_parts.next() else {
-                        return Err(Error::NoVexIds {
-                            file: self.path.pretty_path.dupe(),
-                            location: Location::of(&Node::new(node, self)),
-                        });
+                    let raw_text = node.utf8_text(self.content.as_bytes()).unwrap();
+                    let ids_start_index = raw_text
+                        .find(IGNORE_MARKER)
+                        .expect("vex:ignore not present in ignore marker")
+                        + IGNORE_MARKER.len();
+                    let raw_parts = raw_text[ids_start_index..]
+                        .split(',')
+                        .map(|raw_part| raw_part.trim());
+                    let filter = match VexIdFilter::try_from_iter(raw_parts) {
+                        RecoverableResult::Ok(filter) => filter,
+                        RecoverableResult::Recovered(filter, errs) => {
+                            if log_enabled!(log::Level::Warn) {
+                                for err in errs {
+                                    warn!(
+                                        "{}:{}: {}",
+                                        self.path,
+                                        Location::of(&Node::new(node, self)),
+                                        err
+                                    );
+                                }
+                            }
+                            filter
+                        }
+                        RecoverableResult::Err(err) => return Err(err),
                     };
-                    VexIdFilter::new(
-                        raw,
-                        VexIdFilterOpts {
-                            path: &self.path.pretty_path,
-                            location: Location::of(&Node::new(node, self)),
-                        },
-                    )
+                    if filter.is_empty() && log_enabled!(log::Level::Warn) {
+                        warn!(
+                            "{}:{}: no vex ids specified",
+                            self.path,
+                            Location::of(&Node::new(node, self)),
+                        )
+                    }
+                    filter
                 };
                 Ok((byte_range, filter))
             })
@@ -206,7 +223,7 @@ impl Eq for ParsedSourceFile {}
 mod test {
     use indoc::indoc;
 
-    use crate::{source_path::PrettyPath, vex::id::VexId};
+    use crate::vex::id::VexId;
 
     use super::*;
 
@@ -236,13 +253,14 @@ mod test {
 
     #[test]
     fn specific_ignore_markers() {
-        let vex1 = VexId::new(PrettyPath::new("some/specific/lint.star".into()));
-        let vex2 = VexId::new(PrettyPath::new("some/other/lint.star".into()));
+        let id1 = VexId::try_from("some-lint".to_string()).unwrap();
+        let id2 = VexId::try_from("some-other-lint".to_string()).unwrap();
+        let id3 = VexId::try_from("some-different-lint".to_string()).unwrap();
         let source_file = ParsedSourceFile::new_with_content(
             SourcePath::new_in("src/main.rs".into(), "".into()),
             indoc! {r#"
                 fn main() {
-                    // vex:ignore some/specific/lint,some/other/lint
+                    // vex:ignore some-lint,some-other-lint, some-different-lint
                     let x = 10;
                 }
             "#},
@@ -258,7 +276,7 @@ mod test {
             VexIdFilter::All => panic!("incorrect marker, got {marker:?}"),
             VexIdFilter::Specific(ids) => ids,
         };
-        assert_eq!(&specific_ids[..], [vex1, vex2]);
+        assert_eq!(&specific_ids[..], [id1, id2, id3]);
     }
 
     #[test]
@@ -267,7 +285,7 @@ mod test {
             SourcePath::new_in("src/main.rs".into(), "".into()),
             indoc! {r#"
                 fn main() {
-                    // vex:ignore i/do/not/exist
+                    // vex:ignore i/am/invalid
                     let x = 10;
                 }
             "#},
@@ -299,10 +317,14 @@ mod test {
             SupportedLanguage::Rust,
         )
         .unwrap();
-        let err = source_file.ignore_markers().unwrap_err();
-        assert!(
-            err.to_string().contains("no vex ids specified"),
-            "incorrect error, got {err}"
-        );
+        let ignore_markers = source_file.ignore_markers().unwrap();
+        let markers: Vec<_> = ignore_markers.markers().collect();
+        let [marker] = &markers[..] else {
+            panic!("incorrect markers");
+        };
+        match marker.filter() {
+            VexIdFilter::Specific(ids) => assert!(ids.is_empty()),
+            _ => panic!("unexpected filter in marker: {marker:?}"),
+        }
     }
 }

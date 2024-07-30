@@ -2,14 +2,24 @@ use std::{cmp, env, fmt::Display, iter, process};
 
 use camino::Utf8PathBuf;
 use clap::{
-    builder::{StringValueParser, TypedValueParser},
+    builder::{
+        styling::{AnsiColor, Color, Style},
+        StringValueParser, Styles, TypedValueParser,
+    },
     ArgAction, Parser, Subcommand, ValueEnum,
 };
 
 use crate::{error::Error, supported_language::SupportedLanguage};
 
 #[derive(Debug, Parser)]
-#[command(author, version, about, disable_help_flag = true)]
+#[command(
+    author,
+    version,
+    about,
+    disable_help_flag = true,
+    disable_version_flag = true,
+    styles=Self::styles(),
+)]
 pub struct Args {
     #[command(subcommand)]
     pub command: Command,
@@ -21,12 +31,40 @@ pub struct Args {
     /// Print help information, use `--help` for more detail
     #[arg(short, long, action=ArgAction::Help, global=true)]
     help: Option<bool>,
+
+    /// Print version
+    #[arg(long, action=ArgAction::Version)]
+    version: Option<bool>,
 }
 
 impl Args {
     pub fn parse() -> Self {
         parse_overrides();
         <Self as Parser>::parse()
+    }
+
+    fn styles() -> Styles {
+        let header_style = Style::new()
+            .bold()
+            .fg_color(Color::Ansi(AnsiColor::Green).into());
+        let literal_style = Style::new().fg_color(Color::Ansi(AnsiColor::Cyan).into());
+        let command_style = literal_style.bold();
+        Styles::styled()
+            .header(header_style)
+            .error(
+                Style::new()
+                    .bold()
+                    .fg_color(Color::Ansi(AnsiColor::Red).into()),
+            )
+            .usage(header_style)
+            .literal(command_style)
+            .placeholder(literal_style)
+            .valid(literal_style)
+            .invalid(
+                Style::new()
+                    .bold()
+                    .fg_color(Color::Ansi(AnsiColor::Yellow).into()),
+            )
     }
 }
 
@@ -85,7 +123,6 @@ pub struct ListCmd {
 
 #[derive(Clone, Debug, PartialEq, Eq, ValueEnum)]
 pub enum ToList {
-    Checks,
     Languages,
 }
 
@@ -362,18 +399,6 @@ mod test {
                     .into_command(),
                 Command::List(ListCmd {
                     what: ToList::Languages
-                }),
-            );
-        }
-
-        #[test]
-        fn vexes() {
-            assert_eq!(
-                Args::try_parse_from(["vex", "list", "checks"])
-                    .unwrap()
-                    .into_command(),
-                Command::List(ListCmd {
-                    what: ToList::Checks
                 }),
             );
         }

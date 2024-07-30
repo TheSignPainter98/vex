@@ -15,7 +15,6 @@ use crate::{
         query_cache::QueryCache,
         Intents,
     },
-    vex::id::VexId,
 };
 
 #[derive(Debug, Display, ProvidesStaticType, NoSerialize, Allocative, Trace)]
@@ -99,7 +98,6 @@ impl<'v> AllocValue<'v> for RetainedData {
 pub struct TempData<'v> {
     pub action: Action,
     pub query_cache: &'v QueryCache,
-    pub vex_id: VexId,
     pub ignore_markers: Option<&'v IgnoreMarkers>,
 }
 

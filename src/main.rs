@@ -112,14 +112,6 @@ fn print_banner() {
 
 fn list(list_args: ListCmd) -> Result<()> {
     match list_args.what {
-        ToList::Checks => {
-            let ctx = Context::acquire()?;
-            let store = PreinitingStore::new(&ctx)?.preinit(PreinitOptions::default())?;
-            store
-                .vexes()
-                .map(|vex| &vex.vex_id)
-                .for_each(|id| println!("{}", id));
-        }
         ToList::Languages => SupportedLanguage::iter().for_each(|lang| println!("{}", lang)),
     }
     Ok(())
@@ -183,6 +175,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
     let files = {
         let mut paths = Vec::new();
         let ignores = ctx
+            .metadata
             .ignores
             .clone()
             .into_inner()
@@ -190,6 +183,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
             .map(|ignore| ignore.compile())
             .collect::<Result<Vec<_>>>()?;
         let allows = ctx
+            .metadata
             .allows
             .clone()
             .into_iter()
@@ -428,7 +422,7 @@ fn init(init_args: InitCmd) -> Result<()> {
         cause,
     })?)?;
     Context::init(cwd, init_args.force)?;
-    let queries_dir = Context::acquire()?.manifest.queries_dir;
+    let queries_dir = Context::acquire()?.manifest.metadata.queries_dir;
     printdoc!(
         "
             {}: vex initialised
@@ -458,7 +452,7 @@ mod test {
         let irritations = VexTest::new("max-problems")
             .with_max_problems(MaxProblems::Limited(MAX))
             .with_scriptlet(
-                "vexes/var.star",
+                "vexes/test.star",
                 indoc! {r#"
                     def init():
                         vex.observe('open_project', on_open_project)
@@ -471,7 +465,7 @@ mod test {
                         )
 
                     def on_match(event):
-                        vex.warn('oh no a number!', at=(event.captures['num'], 'num'))
+                        vex.warn('test', 'oh no a number!', at=(event.captures['num'], 'num'))
                 "#},
             )
             .with_source_file(
@@ -521,7 +515,7 @@ mod test {
         let collated_starlark_snippets = collate_snippets("python");
         let collated_rust_snippets = collate_snippets("rust");
         let irritations = VexTest::new("README-snippets")
-            .with_scriptlet("vexes/test.star", collated_starlark_snippets)
+            .with_scriptlet("vexes/distracting_operand.star", collated_starlark_snippets)
             .with_source_file("src/main.rs", collated_rust_snippets)
             .try_run()
             .unwrap()
