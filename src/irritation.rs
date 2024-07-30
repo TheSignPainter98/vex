@@ -71,6 +71,7 @@ impl Ord for Irritation {
                 &other.message,
             ));
 
+        // ComparableIterator implements Ord on the lexicographic order of its contents.
         #[derive(Clone)]
         struct ComparableIterator<I>(I);
 
