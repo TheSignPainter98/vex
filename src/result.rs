@@ -7,5 +7,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum RecoverableResult<T> {
     Ok(T),
     Recovered(T, Vec<Error>),
+
+    #[allow(unused)]
     Err(Error),
 }

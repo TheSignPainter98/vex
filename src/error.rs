@@ -7,7 +7,7 @@ use strum::IntoEnumIterator;
 
 use crate::{
     query::Query,
-    scriptlets::{action::Action, event::EventKind, LoadStatementModule},
+    scriptlets::{action::Action, event::EventKind, LoadStatementModule, Location},
     source_path::PrettyPath,
     supported_language::SupportedLanguage,
 };
@@ -138,10 +138,11 @@ pub enum Error {
     #[error("unsupported language '{0}'")]
     UnsupportedLanguage(String),
 
-    #[error("cannot parse {path} as {language}")]
+    #[error("{path}:{location}: cannot parse {language}")]
     UnparseableAsLanguage {
         path: PrettyPath,
         language: SupportedLanguage,
+        location: Location,
     },
 
     #[error(transparent)]

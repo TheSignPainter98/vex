@@ -3,7 +3,7 @@ use std::{fs, ops::Range};
 use allocative::Allocative;
 use dupe::Dupe;
 use log::{info, log_enabled, warn};
-use tree_sitter::{Parser, QueryCursor, Tree};
+use tree_sitter::{Node as TSNode, Parser, QueryCursor, Tree};
 
 use crate::{
     error::{Error, IOAction},
@@ -74,10 +74,31 @@ impl ParsedSourceFile {
             let tree = parser
                 .parse(&content, None)
                 .expect("unexpected parser failure");
-            if tree.root_node().has_error() {
+
+            fn find_error_node(root: TSNode<'_>) -> Option<TSNode<'_>> {
+                if !root.has_error() {
+                    return None;
+                }
+
+                let mut cursor = root.walk();
+                loop {
+                    let curr_node = cursor.node();
+                    if curr_node.is_error() || curr_node.is_missing() {
+                        break Some(curr_node);
+                    }
+
+                    if curr_node.has_error() {
+                        assert!(cursor.goto_first_child());
+                    } else {
+                        assert!(cursor.goto_next_sibling());
+                    }
+                }
+            }
+            if let Some(node) = find_error_node(tree.root_node()) {
                 return Err(Error::UnparseableAsLanguage {
                     path: path.pretty_path.dupe(),
                     language,
+                    location: Location::of(&node),
                 });
             }
             tree
