@@ -15,7 +15,6 @@ use crate::{
         action::Action, event::EventKind, extra_data::TempData, handler_module::HandlerModule,
         print_handler::PrintHandler, query_cache::QueryCache, store::VexingStore,
     },
-    vex::id::VexId,
 };
 
 #[derive(Debug, derive_more::Display, NoSerialize, ProvidesStaticType, Allocative)]
@@ -90,7 +89,6 @@ impl<'v> StarlarkValue<'v> for ObserverData {}
 
 #[derive(new, Debug, Trace, Allocative)]
 pub struct UnfrozenObserver<'v> {
-    vex_id: VexId,
     callback: Value<'v>,
 }
 
@@ -98,15 +96,14 @@ impl<'v> Freeze for UnfrozenObserver<'v> {
     type Frozen = Observer;
 
     fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
-        let Self { vex_id, callback } = self;
+        let Self { callback } = self;
         let callback = callback.freeze(freezer)?;
-        Ok(Observer { vex_id, callback })
+        Ok(Observer { callback })
     }
 }
 
 #[derive(new, Debug, Clone, Dupe, Allocative)]
 pub struct Observer {
-    vex_id: VexId,
     callback: FrozenValue,
 }
 
@@ -140,13 +137,12 @@ impl Observable for Observer {
             store: opts.store,
             action: opts.action,
             query_cache: opts.query_cache,
-            vex_id: self.vex_id.dupe(),
             ignore_markers: opts.ignore_markers,
         };
-
+        let print_handler = PrintHandler::new(opts.action.name());
         let mut eval = Evaluator::new(handler_module);
         eval.extra = Some(&temp_data);
-        eval.set_print_handler(&PrintHandler);
+        eval.set_print_handler(&print_handler);
 
         let func = self.callback.dupe().to_value(); // TODO(kcza): check thread safety! Can this unfrozen
                                                     // function mutate upvalues if it is a closure?

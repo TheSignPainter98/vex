@@ -17,7 +17,6 @@ use crate::{
         store::VexingStore,
         Intents,
     },
-    vex::id::VexId,
 };
 
 #[derive(Debug, Display, ProvidesStaticType, NoSerialize, Allocative, Trace)]
@@ -103,7 +102,6 @@ pub struct TempData<'v> {
     pub store: Option<&'v VexingStore>,
     pub action: Action,
     pub query_cache: &'v QueryCache,
-    pub vex_id: VexId,
     pub ignore_markers: Option<&'v IgnoreMarkers>,
 }
 

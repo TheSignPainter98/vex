@@ -7,7 +7,6 @@ use std::{
 use allocative::Allocative;
 use camino::{Utf8Path, Utf8PathBuf};
 use derive_new::new;
-use dupe::Dupe;
 use starlark::{
     environment::{Methods, MethodsBuilder, MethodsStatic},
     eval::Evaluator,
@@ -38,6 +37,7 @@ use crate::{
     },
     source_path::PrettyPath,
     supported_language::SupportedLanguage,
+    vex::id::VexId,
 };
 
 #[derive(Debug, PartialEq, Eq, new, ProvidesStaticType, NoSerialize, Allocative)]
@@ -74,10 +74,7 @@ impl AppObject {
                 let temp_data = TempData::get_from(eval);
                 temp_data.query_cache.get_or_create(language, query)?
             };
-            let on_match = {
-                let vex_id = TempData::get_from(eval).vex_id.dupe();
-                UnfrozenObserver::new(vex_id, on_match)
-            };
+            let on_match = UnfrozenObserver::new(on_match);
             ret_data.declare_intent(UnfrozenIntent::Find {
                 language,
                 query,
@@ -97,10 +94,7 @@ impl AppObject {
 
             let ret_data = UnfrozenRetainedData::get_from(eval.module());
             let event_kind = event.parse()?;
-            let observer = {
-                let vex_id = TempData::get_from(eval).vex_id.dupe();
-                UnfrozenObserver::new(vex_id, observer)
-            };
+            let observer = UnfrozenObserver::new(observer);
             ret_data.declare_intent(UnfrozenIntent::Observe {
                 event_kind,
                 observer,
@@ -109,8 +103,10 @@ impl AppObject {
             Ok(NoneType)
         }
 
+        #[allow(clippy::too_many_arguments)]
         fn warn<'v>(
             #[starlark(this)] _this: Value<'v>,
+            #[starlark(require=pos)] vex_id: &'v str,
             #[starlark(require=pos)] message: &'v str,
             #[starlark(require=named)] at: Option<MainAnnotation<'v>>,
             #[starlark(require=named)] show_also: Option<UnpackList<(Node<'v>, &'v str)>>,
@@ -139,19 +135,21 @@ impl AppObject {
                 .into());
             }
 
-            let ret_data = UnfrozenRetainedData::get_from(eval.module());
-            let temp_data = TempData::get_from(eval);
-            let mut irritation_renderer =
-                IrritationRenderer::new(temp_data.vex_id.to_pretty(), message);
-            if let Some(at) = at {
-                if let Some(ignore_markers) = temp_data.ignore_markers {
-                    if let Some(node) = at.node() {
-                        if ignore_markers.marked(node.byte_range().start, temp_data.vex_id) {
-                            return Ok(NoneType);
-                        }
-                    }
-                }
+            let vex_id = VexId::try_from(vex_id.to_string())?;
 
+            let temp_data = TempData::get_from(eval);
+            let ignored = at.as_ref().and_then(|at| at.node()).is_some_and(|node| {
+                temp_data.ignore_markers.is_some_and(|ignore_markers| {
+                    ignore_markers.is_ignored(node.byte_range().start, &vex_id)
+                })
+            });
+            if ignored {
+                return Ok(NoneType);
+            }
+
+            let ret_data = UnfrozenRetainedData::get_from(eval.module());
+            let mut irritation_renderer = IrritationRenderer::new(vex_id, message);
+            if let Some(at) = at {
                 irritation_renderer.set_source(at)
             }
             if let Some(show_also) = show_also {
@@ -294,7 +292,8 @@ mod test {
 
     #[test]
     fn warn_valid() {
-        const VEX_NAME: &str = "name_of_vex";
+        const VEX_NAME: &str = "name-of-vex";
+        const VEX_FILE_NAME: &str = "name_of_vex";
         const FILE_NAME: &str = "main.rs";
         const AT_PATH_LABEL: &str = "file label";
         const AT_NODE_LABEL: &str = "node bin_expr";
@@ -304,7 +303,7 @@ mod test {
 
         let irritations = VexTest::new("arg-combinations")
             .with_scriptlet(
-                format!("vexes/{VEX_NAME}.star"),
+                format!("vexes/{VEX_FILE_NAME}.star"),
                 formatdoc! {r#"
                     def init():
                         vex.observe('open_project', on_open_project)
@@ -328,24 +327,24 @@ mod test {
                         show_also = [(l, '{SHOW_ALSO_L}'), (r, '{SHOW_ALSO_R}')]
                         info = '{INFO}'
 
-                        vex.warn('test-01')
-                        vex.warn('test-00')
-                        vex.warn('test-03', info=info)
-                        vex.warn('test-02', info=info)
-                        vex.warn('test-04', at=at_path_unlabelled)
-                        vex.warn('test-05', at=at_path_labelled)
-                        vex.warn('test-07', at=at_node_unlabelled)
-                        vex.warn('test-06', at=at_node_unlabelled)
-                        vex.warn('test-09', at=at_node_labelled)
-                        vex.warn('test-08', at=at_node_labelled)
-                        vex.warn('test-11', at=at_node_unlabelled, show_also=show_also)
-                        vex.warn('test-10', at=at_node_unlabelled, show_also=show_also)
-                        vex.warn('test-13', at=at_node_labelled, show_also=show_also)
-                        vex.warn('test-12', at=at_node_labelled, show_also=show_also)
-                        vex.warn('test-15', at=at_node_unlabelled, show_also=show_also, info=info)
-                        vex.warn('test-14', at=at_node_unlabelled, show_also=show_also, info=info)
-                        vex.warn('test-17', at=at_node_labelled, show_also=show_also, info=info)
-                        vex.warn('test-16', at=at_node_labelled, show_also=show_also, info=info)
+                        vex.warn('{VEX_NAME}', 'test-01')
+                        vex.warn('{VEX_NAME}', 'test-00')
+                        vex.warn('{VEX_NAME}', 'test-03', info=info)
+                        vex.warn('{VEX_NAME}', 'test-02', info=info)
+                        vex.warn('{VEX_NAME}', 'test-04', at=at_path_unlabelled)
+                        vex.warn('{VEX_NAME}', 'test-05', at=at_path_labelled)
+                        vex.warn('{VEX_NAME}', 'test-07', at=at_node_unlabelled)
+                        vex.warn('{VEX_NAME}', 'test-06', at=at_node_unlabelled)
+                        vex.warn('{VEX_NAME}', 'test-09', at=at_node_labelled)
+                        vex.warn('{VEX_NAME}', 'test-08', at=at_node_labelled)
+                        vex.warn('{VEX_NAME}', 'test-11', at=at_node_unlabelled, show_also=show_also)
+                        vex.warn('{VEX_NAME}', 'test-10', at=at_node_unlabelled, show_also=show_also)
+                        vex.warn('{VEX_NAME}', 'test-13', at=at_node_labelled, show_also=show_also)
+                        vex.warn('{VEX_NAME}', 'test-12', at=at_node_labelled, show_also=show_also)
+                        vex.warn('{VEX_NAME}', 'test-15', at=at_node_unlabelled, show_also=show_also, info=info)
+                        vex.warn('{VEX_NAME}', 'test-14', at=at_node_unlabelled, show_also=show_also, info=info)
+                        vex.warn('{VEX_NAME}', 'test-17', at=at_node_labelled, show_also=show_also, info=info)
+                        vex.warn('{VEX_NAME}', 'test-16', at=at_node_labelled, show_also=show_also, info=info)
                 "#},
             )
             .with_source_file(
@@ -366,16 +365,12 @@ mod test {
         assert_eq!(irritations.len(), 18);
 
         let assert_contains = |irritation: &str, strings: &[&str]| {
-            [VEX_NAME]
-                .as_ref()
-                .iter()
-                .chain(strings)
-                .for_each(|string| {
-                    assert!(
-                        irritation.contains(string),
-                        "could not find {string} in {irritation}"
-                    )
-                })
+            strings.iter().for_each(|string| {
+                assert!(
+                    irritation.contains(string),
+                    "could not find {string} in {irritation}"
+                )
+            })
         };
         assert_contains(&irritations[0], &[VEX_NAME, "test-00"]);
         assert_contains(&irritations[1], &[VEX_NAME, "test-01"]);
@@ -442,7 +437,8 @@ mod test {
 
     #[test]
     fn warn_invalid() {
-        const VEX_NAME: &str = "name_of_vex";
+        const VEX_NAME: &str = "name-of-vex";
+        const VEX_FILE_NAME: &str = "name_of_vex";
         const SHOW_ALSO_L: &str = "node l found here";
         const SHOW_ALSO_R: &str = "node r found here";
         VexTest::new("show-also-without-at")
@@ -465,7 +461,7 @@ mod test {
 
                         show_also = [(l, '{SHOW_ALSO_L}'), (r, '{SHOW_ALSO_R}')]
 
-                        vex.warn('test-2', show_also=show_also)
+                        vex.warn('{VEX_NAME}', 'test-2', show_also=show_also)
 
                     def on_match(event):
                         l = event.captures['l']
@@ -473,7 +469,7 @@ mod test {
 
                         show_also = [(l, '{SHOW_ALSO_L}'), (r, '{SHOW_ALSO_R}')]
 
-                        vex.warn('test-2', at=event.path, show_also=show_also)
+                        vex.warn('{VEX_NAME}', 'test-2', at=event.path, show_also=show_also)
                 "#},
             )
             .with_source_file(
@@ -488,7 +484,7 @@ mod test {
             .returns_error("cannot display `show_also` without an `at` argument");
         VexTest::new("show-also-with-path-at")
             .with_scriptlet(
-                format!("vexes/{VEX_NAME}.star"),
+                format!("vexes/{VEX_FILE_NAME}.star"),
                 formatdoc! {r#"
                     def init():
                         vex.observe('open_project', on_open_project)
@@ -506,7 +502,7 @@ mod test {
 
                         show_also = [(l, '{SHOW_ALSO_L}'), (r, '{SHOW_ALSO_R}')]
 
-                        vex.warn('test-2', at=event.path, show_also=show_also)
+                        vex.warn('{VEX_NAME}', 'test-2', at=event.path, show_also=show_also)
                 "#},
             )
             .with_source_file(
@@ -523,14 +519,17 @@ mod test {
 
     #[test]
     fn warn_sorting() {
-        const VEX_1_NAME: &str = "vex_1";
-        const VEX_2_NAME: &str = "vex_2";
+        const VEX_1_NAME: &str = "vex-1";
+        const VEX_1_FILE_NAME: &str = "vex_1";
+        const VEX_2_NAME: &str = "vex-2";
+        const VEX_2_FILE_NAME: &str = "vex_2";
         const AT: &str = "node bin_expr found here";
         const SHOW_ALSO_L: &str = "node l found here";
         const SHOW_ALSO_R: &str = "node r found here";
         const INFO: &str = "some hopefully useful extra info";
 
-        let vex_source = formatdoc! {r#"
+        let vex_source = |name| {
+            formatdoc! {r#"
             def init():
                 vex.observe('open_project', on_open_project)
 
@@ -551,18 +550,25 @@ mod test {
                 info = '{INFO}'
 
                 # Emit warnings in opposite order to expected.
-                vex.warn('message-six', at=(bin_expr, 'bin_expr'), show_also=[(r, 'r')])
-                vex.warn('message-four', at=(bin_expr, 'bin_expr'), show_also=[(l, 'l')])
-                vex.warn('message-seven', at=(bin_expr, 'bin_expr'), show_also=[(r, 'r')], info=info)
-                vex.warn('message-five', at=(bin_expr, 'bin_expr'), show_also=[(l, 'l')], info=info)
-                vex.warn('message-eight', at=(r, 'r'))
-                vex.warn('message-three', at=(l, 'l'))
-                vex.warn('message-one')
-                vex.warn('message-two')
-        "#};
+                vex.warn('{name}', 'message-six', at=(bin_expr, 'bin_expr'), show_also=[(r, 'r')])
+                vex.warn('{name}', 'message-four', at=(bin_expr, 'bin_expr'), show_also=[(l, 'l')])
+                vex.warn('{name}', 'message-seven', at=(bin_expr, 'bin_expr'), show_also=[(r, 'r')], info=info)
+                vex.warn('{name}', 'message-five', at=(bin_expr, 'bin_expr'), show_also=[(l, 'l')], info=info)
+                vex.warn('{name}', 'message-eight', at=(r, 'r'))
+                vex.warn('{name}', 'message-three', at=(l, 'l'))
+                vex.warn('{name}', 'message-one')
+                vex.warn('{name}', 'message-two')
+        "#}
+        };
         let irritations = VexTest::new("many-origins")
-            .with_scriptlet(format!("vexes/{VEX_2_NAME}.star"), &vex_source)
-            .with_scriptlet(format!("vexes/{VEX_1_NAME}.star"), &vex_source)
+            .with_scriptlet(
+                format!("vexes/{}.star", VEX_2_FILE_NAME),
+                &vex_source(VEX_2_NAME),
+            )
+            .with_scriptlet(
+                format!("vexes/{}.star", VEX_1_FILE_NAME),
+                &vex_source(VEX_1_NAME),
+            )
             .with_source_file(
                 "src/main.rs",
                 indoc! {r#"
@@ -617,15 +623,15 @@ mod test {
                         def init():
                             lenient = vex.lenient
                             def on_open_project(event):
-                                vex.warn("vex.lenient=%s" % lenient)
-                                vex.warn("vex.lenient=%s" % vex.lenient)
+                                vex.warn("test", "vex.lenient=%s" % lenient)
+                                vex.warn("test", "vex.lenient=%s" % vex.lenient)
                             vex.observe('open_project', on_open_project)
 
                             vex.observe('open_project', on_open_project_standard)
                             vex.observe('open_file', on_open_file)
 
                         def on_open_project_standard(event):
-                            vex.warn("vex.lenient=%s" % vex.lenient)
+                            vex.warn("test", "vex.lenient=%s" % vex.lenient)
                             vex.search(
                                 'rust',
                                 '(source_file)',
@@ -633,10 +639,10 @@ mod test {
                             )
 
                         def on_match(event):
-                            vex.warn("vex.lenient=%s" % vex.lenient)
+                            vex.warn("test", "vex.lenient=%s" % vex.lenient)
 
                         def on_open_file(event):
-                            vex.warn("vex.lenient=%s" % vex.lenient)
+                            vex.warn("test", "vex.lenient=%s" % vex.lenient)
                     "#},
                 )
                 .with_source_file(

@@ -128,7 +128,7 @@ impl<'s> VexTest<'s> {
         let root_path = Utf8PathBuf::try_from(root_dir.path().to_path_buf()).unwrap();
 
         if !self.bare {
-            let manifest_content = self.manifest_content.as_deref().unwrap_or_default();
+            let manifest_content = self.manifest_content.as_deref().unwrap_or("[vex]");
             File::create(root_path.join("vex.toml"))
                 .unwrap()
                 .write_all(manifest_content.as_bytes())
@@ -162,7 +162,7 @@ impl<'s> VexTest<'s> {
         };
         let store = PreinitingStore::new(&ctx)?.preinit(preinit_opts)?.init()?;
         if self.fire_test_event {
-            crate::test::run_tests(&ctx, &store, None)?;
+            crate::test::run_tests(&ctx, &store)?;
             Ok(RunData::default())
         } else {
             super::vex(&ctx, &store, self.max_problems)

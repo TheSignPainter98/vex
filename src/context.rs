@@ -82,16 +82,17 @@ impl Context {
                 # underscores.
 
                 lit = event.captures['lit']
-                lit_text = lit.text()
+                lit_str = str(lit)
 
-                if lit_text.startswith('0x') or lit_text.startswith('0b'):
+                if lit_str.startswith('0x') or lit_str.startswith('0b'):
                     return
-                if len(lit_text) <= 6:
+                if len(lit_str) <= 6:
                     return
-                if '_' in lit_text:
+                if '_' in lit_str:
                     return
 
                 vex.warn(
+                    'example',
                     'large unbroken integer literal',
                     at=(lit, 'consider adding underscores')
                 )
@@ -140,7 +141,8 @@ impl Context {
     }
 
     pub fn vex_dir(&self) -> Utf8PathBuf {
-        self.project_root.join(self.manifest.queries_dir.as_str())
+        self.project_root
+            .join(self.manifest.metadata.queries_dir.as_str())
     }
 }
 
@@ -155,22 +157,17 @@ impl Deref for Context {
 #[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub struct Manifest {
+    #[serde(rename = "vex")]
+    pub metadata: Metadata,
+
     #[serde(flatten)]
     pub language_options: LanguageData,
-
-    #[serde(default)]
-    pub queries_dir: QueriesDir,
-
-    #[serde(default, rename = "ignore")]
-    pub ignores: IgnoreData,
-
-    #[serde(default, rename = "allow")]
-    pub allows: Vec<RawFilePattern<String>>,
 }
 
 impl Manifest {
     const FILE_NAME: &'static str = "vex.toml";
     const DEFAULT_CONTENT: &'static str = indoc! {r#"
+        [vex]
         ignore = [ "vex.toml", "vexes/", ".git/", ".gitignore", "/target/" ]
 
         # If this is a C++ project where header files have file-extension .h, uncomment the
@@ -258,6 +255,18 @@ impl Manifest {
 
         Ok((project_root, raw_data))
     }
+}
+
+#[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
+pub struct Metadata {
+    #[serde(default)]
+    pub queries_dir: QueriesDir,
+
+    #[serde(default, rename = "ignore")]
+    pub ignores: IgnoreData,
+
+    #[serde(default, rename = "allow")]
+    pub allows: Vec<RawFilePattern<String>>,
 }
 
 #[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
@@ -354,9 +363,10 @@ mod test {
     fn default_manifest_valid() {
         let init_manifest: Manifest =
             toml_edit::de::from_str(Manifest::DEFAULT_CONTENT).expect("default manifest invalid");
-        assert!(init_manifest.allows.is_empty());
+        assert!(init_manifest.metadata.allows.is_empty());
         assert_eq!(
             init_manifest
+                .metadata
                 .ignores
                 .iter()
                 .map(RawFilePattern::to_string)
@@ -455,7 +465,8 @@ mod test {
         let tempdir = tempfile::tempdir().unwrap();
         let tempdir_path = Utf8PathBuf::try_from(tempdir.path().to_owned())?;
 
-        File::create(tempdir_path.join("vex.toml")).unwrap();
+        let mut manifest = File::create(tempdir_path.join("vex.toml")).unwrap();
+        manifest.write_all("[vex]".as_bytes()).unwrap();
 
         let re = Regex::new("^cannot find vexes directory at .*").unwrap();
         let ctx = Context::acquire_in(&tempdir_path).unwrap();

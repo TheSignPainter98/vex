@@ -2,14 +2,24 @@ use std::{cmp, env, fmt::Display, iter, process};
 
 use camino::Utf8PathBuf;
 use clap::{
-    builder::{StringValueParser, TypedValueParser},
+    builder::{
+        styling::{AnsiColor, Color, Style},
+        StringValueParser, Styles, TypedValueParser,
+    },
     ArgAction, Parser, Subcommand, ValueEnum,
 };
 
 use crate::{error::Error, supported_language::SupportedLanguage};
 
 #[derive(Debug, Parser)]
-#[command(author, version, about, disable_help_flag = true)]
+#[command(
+    author,
+    version,
+    about,
+    disable_help_flag = true,
+    disable_version_flag = true,
+    styles=Self::styles(),
+)]
 pub struct Args {
     #[command(subcommand)]
     pub command: Command,
@@ -21,12 +31,40 @@ pub struct Args {
     /// Print help information, use `--help` for more detail
     #[arg(short, long, action=ArgAction::Help, global=true)]
     help: Option<bool>,
+
+    /// Print version
+    #[arg(long, action=ArgAction::Version)]
+    version: Option<bool>,
 }
 
 impl Args {
     pub fn parse() -> Self {
         parse_overrides();
         <Self as Parser>::parse()
+    }
+
+    fn styles() -> Styles {
+        let header_style = Style::new()
+            .bold()
+            .fg_color(Color::Ansi(AnsiColor::Green).into());
+        let literal_style = Style::new().fg_color(Color::Ansi(AnsiColor::Cyan).into());
+        let command_style = literal_style.bold();
+        Styles::styled()
+            .header(header_style)
+            .error(
+                Style::new()
+                    .bold()
+                    .fg_color(Color::Ansi(AnsiColor::Red).into()),
+            )
+            .usage(header_style)
+            .literal(command_style)
+            .placeholder(literal_style)
+            .valid(literal_style)
+            .invalid(
+                Style::new()
+                    .bold()
+                    .fg_color(Color::Ansi(AnsiColor::Yellow).into()),
+            )
     }
 }
 
@@ -42,14 +80,14 @@ pub enum Command {
     /// Check this project for lint
     Check(CheckCmd),
 
-    /// Print lists of things vex knows about
-    List(ListCmd),
+    /// Print the syntax tree of the given file
+    Dump(DumpCmd),
 
     /// Create new vex project with this directory as the root
     Init(InitCmd),
 
-    /// Print the syntax tree of the given file
-    Parse(ParseCmd),
+    /// Print lists of things vex knows about
+    List(ListCmd),
 
     /// Test available lints
     Test,
@@ -64,9 +102,9 @@ impl Command {
         }
     }
 
-    pub fn into_parse_cmd(self) -> Option<ParseCmd> {
+    pub fn into_dump_cmd(self) -> Option<DumpCmd> {
         match self {
-            Self::Parse(p) => Some(p),
+            Self::Dump(p) => Some(p),
             _ => None,
         }
     }
@@ -88,7 +126,6 @@ pub struct ListCmd {
 
 #[derive(Clone, Debug, PartialEq, Eq, ValueEnum)]
 pub enum ToList {
-    Checks,
     Languages,
 }
 
@@ -246,7 +283,7 @@ const OVERRIDES: [(&[u8], &[u8]); 2] = [
 ];
 
 #[derive(Debug, Default, PartialEq, Eq, Parser)]
-pub struct ParseCmd {
+pub struct DumpCmd {
     /// File to parse
     #[arg(value_name = "file")]
     pub path: Utf8PathBuf,
@@ -368,18 +405,6 @@ mod test {
                 }),
             );
         }
-
-        #[test]
-        fn vexes() {
-            assert_eq!(
-                Args::try_parse_from(["vex", "list", "checks"])
-                    .unwrap()
-                    .into_command(),
-                Command::List(ListCmd {
-                    what: ToList::Checks
-                }),
-            );
-        }
     }
 
     mod check {
@@ -417,35 +442,35 @@ mod test {
         }
     }
 
-    mod parse {
+    mod dump {
         use super::*;
 
         #[test]
         fn requires_path() {
-            Args::try_parse_from(["vex", "parse"]).unwrap_err();
+            Args::try_parse_from(["vex", "dump"]).unwrap_err();
         }
 
         #[test]
         fn relative_path() {
             const PATH: &str = "./src/main.rs";
-            let args = Args::try_parse_from(["vex", "parse", PATH]).unwrap();
-            let parse_cmd = args.into_command().into_parse_cmd().unwrap();
-            assert_eq!(parse_cmd.path, PATH);
+            let args = Args::try_parse_from(["vex", "dump", PATH]).unwrap();
+            let dump_cmd = args.into_command().into_dump_cmd().unwrap();
+            assert_eq!(dump_cmd.path, PATH);
         }
 
         #[test]
         fn absolute_path() {
             const PATH: &str = "/src/main.rs";
-            let args = Args::try_parse_from(["vex", "parse", PATH]).unwrap();
-            let parse_cmd = args.into_command().into_parse_cmd().unwrap();
-            assert_eq!(parse_cmd.path, PATH);
+            let args = Args::try_parse_from(["vex", "dump", PATH]).unwrap();
+            let dump_cmd = args.into_command().into_dump_cmd().unwrap();
+            assert_eq!(dump_cmd.path, PATH);
         }
 
         #[test]
         fn language() {
-            let args = Args::try_parse_from(["vex", "parse", "asdf.foo", "--as", "rust"]).unwrap();
-            let parse_cmd = args.into_command().into_parse_cmd().unwrap();
-            assert_eq!(SupportedLanguage::Rust, parse_cmd.language.unwrap());
+            let args = Args::try_parse_from(["vex", "dump", "asdf.foo", "--as", "rust"]).unwrap();
+            let dump_cmd = args.into_command().into_dump_cmd().unwrap();
+            assert_eq!(SupportedLanguage::Rust, dump_cmd.language.unwrap());
         }
     }
 

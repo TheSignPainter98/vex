@@ -24,7 +24,7 @@ use starlark_derive::{starlark_attrs, starlark_module, starlark_value, StarlarkA
 use strum::EnumIs;
 use tree_sitter::{Node as TSNode, Point, TreeCursor};
 
-use crate::{error::Error, result::Result, source_file::ParsedSourceFile};
+use crate::{result::Result, source_file::ParsedSourceFile};
 
 #[derive(new, Clone, Debug, PartialEq, Eq, ProvidesStaticType, NoSerialize, Allocative)]
 pub struct Node<'v> {
@@ -88,6 +88,12 @@ impl<'v> Node<'v> {
             .map(|ts_node| Self::new(ts_node, self.source_file))
     }
 
+    pub fn to_complete_sexp(&self) -> Result<String> {
+        let mut expr = String::new();
+        NodePrinter::new(&mut expr, WhitespaceStyle::Compact).write_node(self, None)?;
+        Ok(expr)
+    }
+
     #[starlark_module]
     fn methods(builder: &mut MethodsBuilder) {
         fn is_extra<'v>(this: Node<'v>) -> starlark::Result<bool> {
@@ -130,10 +136,8 @@ impl<'v> Node<'v> {
             Ok(this.child_count())
         }
 
-        fn text<'v>(this: Node<'v>) -> starlark::Result<&'v str> {
-            this.utf8_text(this.source_file.content.as_bytes())
-                .map_err(Error::Utf8)
-                .map_err(starlark::Error::new_other)
+        fn expr<'v>(this: Node<'v>) -> starlark::Result<String> {
+            this.to_complete_sexp().map_err(starlark::Error::new_other)
         }
     }
 }
@@ -241,13 +245,9 @@ impl<'v> AllocValue<'v> for Node<'v> {
 impl Display for Node<'_> {
     #[allow(clippy::print_in_format_impl)]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut buf = String::new();
-        if let Err(err) =
-            NodePrinter::new(&mut buf, WhitespaceStyle::Compact).write(self.source_file)
-        {
-            eprintln!("node formatter failed: {err}");
-        }
-        f.write_str(&buf)
+        self.utf8_text(self.source_file.content.as_bytes())
+            .map_err(|_| std::fmt::Error)?
+            .fmt(f)
     }
 }
 
@@ -395,10 +395,10 @@ impl<'w, W: Write> NodePrinter<'w, W> {
 
     pub fn write(&mut self, src_file: &ParsedSourceFile) -> Result<()> {
         let root = Node::new(src_file.tree.root_node(), src_file);
-        self.write_node(root, None)
+        self.write_node(&root, None)
     }
 
-    fn write_node(&mut self, node: Node<'_>, field_name: Option<&'static str>) -> Result<()> {
+    fn write_node(&mut self, node: &Node<'_>, field_name: Option<&'static str>) -> Result<()> {
         let expandable_separator = self.whitespace_style.expandable_separator();
 
         self.write_indent()?;
@@ -418,7 +418,7 @@ impl<'w, W: Write> NodePrinter<'w, W> {
             .try_for_each(|(i, child)| {
                 write!(self.out, "{expandable_separator}")?;
                 let field_name = node.field_name_for_child(i as u32);
-                self.write_node(child, field_name)
+                self.write_node(&child, field_name)
             })?;
         self.curr_indent -= 1;
 
@@ -427,7 +427,7 @@ impl<'w, W: Write> NodePrinter<'w, W> {
             self.write_indent()?;
         }
         write!(self.out, ")")?;
-        self.write_location(&Location::of(&node))?;
+        self.write_location(&Location::of(node))?;
         Ok(())
     }
 
@@ -497,7 +497,7 @@ impl Location {
         }
     }
 
-    pub fn of(node: &Node<'_>) -> Self {
+    pub fn of(node: &TSNode<'_>) -> Self {
         let Point {
             row: start_row,
             column: start_column,
@@ -601,10 +601,47 @@ mod test {
                             bin_expr = event.captures['bin_expr']
 
                             check['type'](bin_expr, 'Node')
-                            check['true'](str(bin_expr).startswith('(')) # Looks like an s-expression
-                            check['true'](str(bin_expr).endswith(')'))   # Looks like an s-expression
                             check['eq'](str(bin_expr), repr(bin_expr))
-                            check['in']('("+")', str(bin_expr))
+                    "#,
+                    check_path = VexTest::CHECK_STARLARK_PATH,
+                },
+            )
+            .with_source_file(
+                "src/main.rs",
+                indoc! {r#"
+                    fn main() {
+                        let x = 1 + (2 + 3);
+                        println!("{x}");
+                    }
+                "#},
+            )
+            .assert_irritation_free();
+    }
+
+    #[test]
+    fn expr() {
+        VexTest::new("expr")
+            .with_scriptlet(
+                "vexes/test.star",
+                formatdoc! {r#"
+                        load('{check_path}', 'check')
+
+                        def init():
+                            vex.observe('open_project', on_open_project)
+
+                        def on_open_project(event):
+                            vex.search(
+                                'rust',
+                                '(binary_expression left: (integer_literal) @l_int) @bin_expr',
+                                on_match,
+                            )
+
+                        def on_match(event):
+                            bin_expr = event.captures['bin_expr']
+                            bin_expr_expr = bin_expr.expr()
+                            check['true'](bin_expr_expr.startswith('(binary_expression')) # Looks like an s-expression
+                            check['true'](bin_expr_expr.endswith(')'))   # Looks like an s-expression
+                            check['in']('("+")', bin_expr_expr)
                     "#,
                     check_path = VexTest::CHECK_STARLARK_PATH,
                 },
@@ -653,7 +690,7 @@ mod test {
                                 'parents',
                                 'previous_sibling',
                                 'previous_siblings',
-                                'text',
+                                'expr',
                             ]
                             check['attrs'](event.captures['bin_expr'], expected_attrs)
                     "#,
@@ -962,48 +999,6 @@ mod test {
                     fn main() {
                         let x = 1 +
                             (2 + 3);
-                        println!("{x}");
-                    }
-                "#},
-            )
-            .assert_irritation_free();
-    }
-
-    #[test]
-    fn text() {
-        VexTest::new("text")
-            .with_scriptlet(
-                "vexes/test.star",
-                formatdoc! {r#"
-                        load('{check_path}', 'check')
-
-                        def init():
-                            vex.observe('open_project', on_open_project)
-
-                        def on_open_project(event):
-                            vex.search(
-                                'rust',
-                                '''
-                                    (binary_expression
-                                        left: (integer_literal) @l_int
-                                        right: (parenthesized_expression)
-                                    ) @bin_expr
-                                ''',
-                                on_match,
-                            )
-
-                        def on_match(event):
-                            bin_expr = event.captures['bin_expr']
-                            check['eq'](bin_expr.text(), '1 + (2 + 3)')
-                    "#,
-                    check_path = VexTest::CHECK_STARLARK_PATH,
-                },
-            )
-            .with_source_file(
-                "src/main.rs",
-                indoc! {r#"
-                    fn main() {
-                        let x = 1 + (2 + 3);
                         println!("{x}");
                     }
                 "#},

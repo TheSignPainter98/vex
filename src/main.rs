@@ -7,11 +7,11 @@ extern crate pretty_assertions;
 mod associations;
 mod cli;
 mod context;
+mod dump;
 mod error;
 mod ignore_markers;
 mod irritation;
 mod logger;
-mod parse;
 mod plural;
 mod query;
 mod result;
@@ -86,9 +86,9 @@ fn run() -> Result<ExitCode> {
 
     match args.command {
         Command::Check(cmd_args) => check(cmd_args),
+        Command::Dump(dump_args) => dump::dump(dump_args),
         Command::List(list_args) => list(list_args),
         Command::Init(init_args) => init(init_args),
-        Command::Parse(parse_args) => parse::parse(parse_args),
         Command::Test => test::test(),
     }?;
 
@@ -115,14 +115,6 @@ fn print_banner() {
 
 fn list(list_args: ListCmd) -> Result<()> {
     match list_args.what {
-        ToList::Checks => {
-            let ctx = Context::acquire()?;
-            let store = PreinitingStore::new(&ctx)?.preinit(PreinitOptions::default())?;
-            store
-                .vexes()
-                .map(|vex| &vex.vex_id)
-                .for_each(|id| println!("{}", id));
-        }
         ToList::Languages => SupportedLanguage::iter().for_each(|lang| println!("{}", lang)),
     }
     Ok(())
@@ -173,6 +165,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
     let files = {
         let mut paths = Vec::new();
         let ignores = ctx
+            .metadata
             .ignores
             .clone()
             .into_inner()
@@ -180,6 +173,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
             .map(|ignore| ignore.compile())
             .collect::<Result<Vec<_>>>()?;
         let allows = ctx
+            .metadata
             .allows
             .clone()
             .into_iter()
@@ -399,17 +393,18 @@ fn walkdir(
             }
         }
 
-        if metadata.is_symlink() {
-            if log_enabled!(log::Level::Info) {
-                let symlink_path = entry_path.strip_prefix(ctx.project_root.as_ref())?;
-                info!("ignoring /{symlink_path} (symlink)");
-            }
-        } else if is_dir {
+        if is_dir {
             walkdir(ctx, &entry_path, ignores, allows, paths)?;
         } else if metadata.is_file() {
             paths.push(entry_path);
-        } else {
-            panic!("unreachable");
+        } else if log_enabled!(log::Level::Info) {
+            let entry_path = entry_path.strip_prefix(ctx.project_root.as_ref())?;
+            let file_type = if metadata.is_symlink() {
+                "symlink"
+            } else {
+                "unknown type"
+            };
+            info!("ignoring /{entry_path} ({file_type})");
         }
     }
 
@@ -423,7 +418,7 @@ fn init(init_args: InitCmd) -> Result<()> {
         cause,
     })?)?;
     Context::init(cwd, init_args.force)?;
-    let queries_dir = Context::acquire()?.manifest.queries_dir;
+    let queries_dir = Context::acquire()?.manifest.metadata.queries_dir;
     printdoc!(
         "
             {}: vex initialised
@@ -453,7 +448,7 @@ mod test_ {
         let irritations = VexTest::new("max-problems")
             .with_max_problems(MaxProblems::Limited(MAX))
             .with_scriptlet(
-                "vexes/var.star",
+                "vexes/test.star",
                 indoc! {r#"
                     def init():
                         vex.observe('open_project', on_open_project)
@@ -466,7 +461,7 @@ mod test_ {
                         )
 
                     def on_match(event):
-                        vex.warn('oh no a number!', at=(event.captures['num'], 'num'))
+                        vex.warn('test', 'oh no a number!', at=(event.captures['num'], 'num'))
                 "#},
             )
             .with_source_file(
@@ -516,7 +511,7 @@ mod test_ {
         let collated_starlark_snippets = collate_snippets("python");
         let collated_rust_snippets = collate_snippets("rust");
         let irritations = VexTest::new("README-snippets")
-            .with_scriptlet("vexes/test.star", collated_starlark_snippets)
+            .with_scriptlet("vexes/distracting_operand.star", collated_starlark_snippets)
             .with_source_file("src/main.rs", collated_rust_snippets)
             .try_run()
             .unwrap()

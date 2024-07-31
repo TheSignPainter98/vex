@@ -5,7 +5,6 @@ use crate::{
         action::Action, event::TestEvent, handler_module::HandlerModule, query_cache::QueryCache,
         Observable, ObserveOptions, PreinitOptions, PreinitingStore, VexingStore,
     },
-    vex::id::PrettyVexId,
 };
 
 pub fn test() -> Result<()> {
@@ -15,11 +14,11 @@ pub fn test() -> Result<()> {
         PreinitingStore::new(&ctx)?.preinit(preinit_opts)?.init()?
     };
 
-    run_tests(&ctx, &store, None)?;
+    run_tests(&ctx, &store)?;
     Ok(())
 }
 
-pub fn run_tests(ctx: &Context, store: &VexingStore, _filter: Option<PrettyVexId>) -> Result<()> {
+pub fn run_tests(ctx: &Context, store: &VexingStore) -> Result<()> {
     let event = TestEvent;
     let handler_module = HandlerModule::new();
     let observe_opts = ObserveOptions {
@@ -50,7 +49,7 @@ mod test {
         VexTest::new("run")
             .with_test_event(true)
             .with_scriptlet(
-                "vexes/asdf.star",
+                "vexes/test.star",
                 formatdoc! {
                     r#"
                         load('{check_path}', 'check')
@@ -75,10 +74,10 @@ mod test {
 
                             bin_expr = event.captures['bin_expr']
                             if event.path.matches('src/main.rs'):
-                                vex.warn('oh no!', at=bin_expr)
+                                vex.warn('test-id', 'oh no!', at=bin_expr)
                             else:
                                 left = event.captures['left']
-                                vex.warn('oh no!',
+                                vex.warn('test-id', 'oh no!',
                                     at=(bin_expr, 'label'),
                                     show_also=[(left, 'l')],
                                     info='waddup',
@@ -120,7 +119,7 @@ mod test {
                             check['neq'](simple_irritation, None)
                             check['neq'](complex_irritation, None)
 
-                            check['eq'](simple_irritation.vex_id, 'asdf')
+                            check['eq'](simple_irritation.vex_id, 'test-id')
                             (src, label) = simple_irritation.at
                             check['type'](src, 'IrritationSource')
                             check['eq'](str(src), 'src/main.rs:5:12-29')
@@ -135,7 +134,7 @@ mod test {
                             check['eq'](simple_irritation.info, None)
                             check['eq'](simple_irritation.show_also, [])
 
-                            check['eq'](complex_irritation.vex_id, 'asdf')
+                            check['eq'](complex_irritation.vex_id, 'test-id')
                             (src, label) = complex_irritation.at
                             check['type'](src, 'IrritationSource')
                             check['eq'](str(src), 'src/other.rs:3:12-17')

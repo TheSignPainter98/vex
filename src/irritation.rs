@@ -11,24 +11,24 @@ use crate::{
     logger,
     scriptlets::{main_annotation::MainAnnotation, Location, Node},
     source_path::PrettyPath,
-    vex::id::PrettyVexId,
+    vex::id::VexId,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Allocative, Serialize, ProvidesStaticType)]
 #[non_exhaustive]
 pub struct Irritation {
-    pub(crate) rendered: String,
-    pretty_vex_id: PrettyVexId,
+    vex_id: VexId,
     message: String,
-    source: Option<(IrritationSource, Option<String>)>,
+    at: Option<(IrritationSource, Option<String>)>,
     show_also: Vec<(IrritationSource, String)>,
     info: Option<String>,
+    pub(crate) rendered: String,
 }
 
 impl Irritation {
-    const PRETTY_VEX_ID_ATTR_NAME: &'static str = "vex_id";
+    const VEX_ID_ATTR_NAME: &'static str = "vex_id";
     const MESSAGE_ATTR_NAME: &'static str = "message";
-    const SOURCE_ATTR_NAME: &'static str = "at";
+    const AT_ATTR_NAME: &'static str = "at";
     const SHOW_ALSO_ATTR_NAME: &'static str = "show_also";
     const INFO_ATTR_NAME: &'static str = "info";
 }
@@ -36,11 +36,11 @@ impl Irritation {
 impl Ord for Irritation {
     fn cmp(&self, other: &Self) -> Ordering {
         let Self {
-            source,
-            pretty_vex_id,
+            vex_id,
+            message,
+            at,
             show_also,
             info,
-            message,
             rendered: _,
         } = self;
 
@@ -53,20 +53,20 @@ impl Ord for Irritation {
             label
         }
         return (
-            source.as_ref().map(loc),
-            pretty_vex_id,
+            at.as_ref().map(loc),
+            vex_id,
             ComparableIterator(show_also.iter().map(loc)),
             info,
-            source.as_ref().map(label),
+            at.as_ref().map(label),
             ComparableIterator(show_also.iter().map(label)),
             message,
         )
             .cmp(&(
-                other.source.as_ref().map(loc),
-                &other.pretty_vex_id,
+                other.at.as_ref().map(loc),
+                &other.vex_id,
                 ComparableIterator(other.show_also.iter().map(loc)),
                 &other.info,
-                other.source.as_ref().map(label),
+                other.at.as_ref().map(label),
                 ComparableIterator(other.show_also.iter().map(label)),
                 &other.message,
             ));
@@ -124,9 +124,9 @@ impl PartialOrd<Self> for Irritation {
 impl<'v> StarlarkValue<'v> for Irritation {
     fn dir_attr(&self) -> Vec<String> {
         [
-            Self::PRETTY_VEX_ID_ATTR_NAME,
+            Self::VEX_ID_ATTR_NAME,
             Self::MESSAGE_ATTR_NAME,
-            Self::SOURCE_ATTR_NAME,
+            Self::AT_ATTR_NAME,
             Self::SHOW_ALSO_ATTR_NAME,
             Self::INFO_ATTR_NAME,
         ]
@@ -137,10 +137,10 @@ impl<'v> StarlarkValue<'v> for Irritation {
 
     fn get_attr(&self, attr: &str, heap: &'v Heap) -> Option<Value<'v>> {
         match attr {
-            Self::PRETTY_VEX_ID_ATTR_NAME => Some(heap.alloc(self.pretty_vex_id.to_string())),
+            Self::VEX_ID_ATTR_NAME => Some(heap.alloc(self.vex_id.to_string())),
             Self::MESSAGE_ATTR_NAME => Some(heap.alloc(&self.message)),
-            Self::SOURCE_ATTR_NAME => Some(
-                self.source
+            Self::AT_ATTR_NAME => Some(
+                self.at
                     .clone()
                     .map(|(src, label)| {
                         let label_value =
@@ -164,9 +164,9 @@ impl<'v> StarlarkValue<'v> for Irritation {
 
     fn has_attr(&self, attr: &str, _heap: &'v Heap) -> bool {
         [
-            Self::PRETTY_VEX_ID_ATTR_NAME,
+            Self::VEX_ID_ATTR_NAME,
             Self::MESSAGE_ATTR_NAME,
-            Self::SOURCE_ATTR_NAME,
+            Self::AT_ATTR_NAME,
             Self::SHOW_ALSO_ATTR_NAME,
             Self::INFO_ATTR_NAME,
         ]
@@ -255,7 +255,7 @@ impl Display for IrritationSource {
 }
 
 pub struct IrritationRenderer<'v> {
-    pretty_vex_id: PrettyVexId,
+    vex_id: VexId,
     message: &'v str,
     source: Option<MainAnnotation<'v>>,
     show_also: Vec<(Node<'v>, &'v str)>,
@@ -263,9 +263,9 @@ pub struct IrritationRenderer<'v> {
 }
 
 impl<'v> IrritationRenderer<'v> {
-    pub fn new(pretty_vex_id: PrettyVexId, message: &'v str) -> Self {
+    pub fn new(vex_id: VexId, message: &'v str) -> Self {
         Self {
-            pretty_vex_id,
+            vex_id,
             message,
             source: None,
             show_also: Vec::with_capacity(0),
@@ -287,7 +287,7 @@ impl<'v> IrritationRenderer<'v> {
 
     pub fn render(self) -> Irritation {
         let Self {
-            pretty_vex_id,
+            vex_id,
             source,
             message,
             show_also,
@@ -297,7 +297,7 @@ impl<'v> IrritationRenderer<'v> {
         let file_name = source.as_ref().map(|source| source.pretty_path().as_str());
         let snippet = Snippet {
             title: Some(Annotation {
-                id: Some(pretty_vex_id.as_str()),
+                id: Some(vex_id.as_ref()),
                 label: Some(message),
                 annotation_type: AnnotationType::Warning,
             }),
@@ -368,7 +368,7 @@ impl<'v> IrritationRenderer<'v> {
 
         let rendered = logger::render_snippet(snippet);
         let message = message.to_string();
-        let source = source.map(|source| match source {
+        let at = source.map(|source| match source {
             MainAnnotation::Path { path, label } => (
                 IrritationSource::whole_file(path.dupe()),
                 label.map(|l| l.to_string()),
@@ -383,12 +383,12 @@ impl<'v> IrritationRenderer<'v> {
             .collect();
         let info = info.map(|e| e.to_string());
         Irritation {
-            rendered,
-            pretty_vex_id,
+            vex_id,
             message,
-            source,
+            at,
             show_also,
             info,
+            rendered,
         }
     }
 }
