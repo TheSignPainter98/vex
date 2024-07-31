@@ -97,12 +97,12 @@ fn print_banner() {
         r#"
 
             oooooo      oooo
-             `888.      .8"
-              `888.    .8"   .ooooo.   ooooo ooo
-               `888.  .8"   d88' `88b   `888.8"
-                `888..8"    888ooo888    `888.
-                 `8888"     888    .o   .8"888.
-                  `88"      `Y8bod8P'  o8o o888o
+             `888.      .8'
+              `888.    .8'   .ooooo.   ooooo ooo
+               `888.  .8'   d88' `88b   `888.8"
+                `888..8'    888ooo888    `888.
+                 `8888'     888    .o   .8"888.
+                  `88'      `Y8bod8P'  o8o o888o
 
             Let the pedantry begin.
 
