@@ -8,12 +8,11 @@ use starlark::{
 use starlark_derive::{starlark_value, NoSerialize, ProvidesStaticType, Trace};
 
 use crate::{
-    context::Context,
     ignore_markers::IgnoreMarkers,
     result::Result,
     scriptlets::{
         action::Action, event::EventKind, extra_data::TempData, handler_module::HandlerModule,
-        print_handler::PrintHandler, query_cache::QueryCache, store::VexingStore,
+        print_handler::PrintHandler, query_cache::QueryCache,
     },
 };
 
@@ -22,15 +21,17 @@ use crate::{
 pub struct ObserverData {
     on_open_project: Vec<Observer>,
     on_open_file: Vec<Observer>,
-    on_test: Vec<Observer>,
+    on_pre_test_run: Vec<Observer>,
+    on_post_test_run: Vec<Observer>,
 }
 
 impl ObserverData {
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            on_open_project: Vec::with_capacity(capacity),
-            on_open_file: Vec::with_capacity(capacity),
-            on_test: Vec::with_capacity(capacity),
+            on_open_project: Vec::with_capacity(capacity / 4),
+            on_open_file: Vec::with_capacity(capacity / 4),
+            on_pre_test_run: Vec::with_capacity(capacity / 4),
+            on_post_test_run: Vec::with_capacity(capacity / 4),
         }
     }
 
@@ -38,7 +39,8 @@ impl ObserverData {
         Self {
             on_open_project: Vec::with_capacity(0),
             on_open_file: Vec::with_capacity(0),
-            on_test: Vec::with_capacity(0),
+            on_pre_test_run: Vec::with_capacity(0),
+            on_post_test_run: Vec::with_capacity(0),
         }
     }
 
@@ -46,9 +48,10 @@ impl ObserverData {
         let Self {
             on_open_project,
             on_open_file,
-            on_test,
+            on_pre_test_run,
+            on_post_test_run,
         } = self;
-        on_open_project.len() + on_open_file.len() + on_test.len()
+        on_open_project.len() + on_open_file.len() + on_pre_test_run.len() + on_post_test_run.len()
     }
 
     pub fn add_open_project_observer(&mut self, observer: Observer) {
@@ -59,19 +62,25 @@ impl ObserverData {
         self.on_open_file.push(observer)
     }
 
-    pub fn add_test_observer(&mut self, observer: Observer) {
-        self.on_test.push(observer)
+    pub fn add_pre_test_run_observer(&mut self, observer: Observer) {
+        self.on_pre_test_run.push(observer)
+    }
+
+    pub fn add_post_test_run_observer(&mut self, observer: Observer) {
+        self.on_post_test_run.push(observer)
     }
 
     pub fn extend(&mut self, other: Self) {
         let Self {
             on_open_project,
             on_open_file,
-            on_test,
+            on_pre_test_run,
+            on_post_test_run,
         } = self;
         on_open_project.extend(other.on_open_project);
         on_open_file.extend(other.on_open_file);
-        on_test.extend(other.on_test);
+        on_pre_test_run.extend(other.on_pre_test_run);
+        on_post_test_run.extend(other.on_post_test_run);
     }
 
     pub fn observers_for(&self, event_kind: EventKind) -> &[Observer] {
@@ -79,7 +88,8 @@ impl ObserverData {
             EventKind::OpenProject => &self.on_open_project,
             EventKind::OpenFile => &self.on_open_file,
             EventKind::Match => panic!("internal error: query_match not observable"),
-            EventKind::Test => &self.on_test,
+            EventKind::PreTestRun => &self.on_pre_test_run,
+            EventKind::PostTestRun => &self.on_post_test_run,
         }
     }
 }
@@ -118,8 +128,6 @@ pub trait Observable {
 
 #[derive(Clone, Debug, Dupe)]
 pub struct ObserveOptions<'v> {
-    pub ctx: Option<&'v Context>,
-    pub store: Option<&'v VexingStore>,
     pub action: Action,
     pub query_cache: &'v QueryCache,
     pub ignore_markers: Option<&'v IgnoreMarkers>,
@@ -133,8 +141,6 @@ impl Observable for Observer {
         opts: ObserveOptions<'_>,
     ) -> Result<()> {
         let temp_data = TempData {
-            ctx: opts.ctx,
-            store: opts.store,
             action: opts.action,
             query_cache: opts.query_cache,
             ignore_markers: opts.ignore_markers,

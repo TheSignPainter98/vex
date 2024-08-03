@@ -102,8 +102,6 @@ impl PreinitingScriptlet {
 
             {
                 let temp_data = TempData {
-                    ctx: None,
-                    store: None,
                     action: Action::Preiniting,
                     query_cache: &QueryCache::new(),
                     ignore_markers: None,
@@ -318,8 +316,6 @@ impl InitingScriptlet {
             let module = HandlerModule::new();
             {
                 let temp_data = TempData {
-                    ctx: None,
-                    store: None,
                     action: Action::Initing,
                     query_cache: &QueryCache::new(),
                     ignore_markers: None,
@@ -348,8 +344,11 @@ impl InitingScriptlet {
                     match event_kind {
                         EventKind::OpenProject => observer_data.add_open_project_observer(observer),
                         EventKind::OpenFile => observer_data.add_open_file_observer(observer),
-                        EventKind::Test => observer_data.add_test_observer(observer),
                         EventKind::Match => panic!("internal error: query_match not observable"),
+                        EventKind::PreTestRun => observer_data.add_pre_test_run_observer(observer),
+                        EventKind::PostTestRun => {
+                            observer_data.add_post_test_run_observer(observer)
+                        }
                     }
                 }
             });

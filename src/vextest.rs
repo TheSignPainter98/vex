@@ -25,7 +25,7 @@ pub struct VexTest<'s> {
     manifest_content: Option<Cow<'s, str>>,
     max_problems: MaxProblems,
     lenient: bool,
-    fire_test_event: bool,
+    fire_test_events: bool,
     scriptlets: BTreeMap<Utf8PathBuf, Cow<'s, str>>,
     source_files: BTreeMap<Utf8PathBuf, Cow<'s, str>>,
 }
@@ -60,8 +60,8 @@ impl<'s> VexTest<'s> {
         self
     }
 
-    pub fn with_test_event(mut self, fire_test_event: bool) -> Self {
-        self.fire_test_event = fire_test_event;
+    pub fn with_test_events(mut self, fire_test_events: bool) -> Self {
+        self.fire_test_events = fire_test_events;
         self
     }
 
@@ -161,7 +161,7 @@ impl<'s> VexTest<'s> {
             lenient: self.lenient,
         };
         let store = PreinitingStore::new(&ctx)?.preinit(preinit_opts)?.init()?;
-        if self.fire_test_event {
+        if self.fire_test_events {
             crate::test::run_tests(&ctx, &store)?;
             Ok(RunData::default())
         } else {

@@ -23,13 +23,14 @@ pub enum EventKind {
     OpenProject,
     OpenFile,
     Match,
-    Test,
+    PreTestRun,
+    PostTestRun,
 }
 
 impl EventKind {
     pub fn parseable(&self) -> bool {
         match self {
-            Self::OpenProject | Self::OpenFile | Self::Test => true,
+            Self::OpenProject | Self::OpenFile | Self::PreTestRun | Self::PostTestRun => true,
             Self::Match => false,
         }
     }
@@ -39,7 +40,8 @@ impl EventKind {
             Self::OpenProject => "open_project",
             Self::OpenFile => "open_file",
             Self::Match => "match",
-            Self::Test => "test",
+            Self::PreTestRun => "pre_test_run",
+            Self::PostTestRun => "post_test_run",
         }
     }
 
@@ -48,7 +50,8 @@ impl EventKind {
             Self::OpenProject => "opening project",
             Self::OpenFile => "opening file",
             Self::Match => "handling match",
-            Self::Test => "testing",
+            Self::PreTestRun => "setting up test run",
+            Self::PostTestRun => "inspecting test run",
         }
     }
 }
@@ -60,17 +63,16 @@ impl FromStr for EventKind {
         match s {
             "open_project" => Ok(Self::OpenProject),
             "open_file" => Ok(Self::OpenFile),
-            "test" => Ok(Self::Test),
+            "pre_test_run" => Ok(Self::PreTestRun),
+            "post_test_run" => Ok(Self::PostTestRun),
             _ => Err(Error::UnknownEvent {
                 name: s.to_owned(),
-                suggestion: {
-                    suggest(
-                        s,
-                        Self::iter()
-                            .filter(Self::parseable)
-                            .map(|event| event.name()),
-                    )
-                },
+                suggestion: suggest(
+                    s,
+                    Self::iter()
+                        .filter(Self::parseable)
+                        .map(|event| event.name()),
+                ),
             }),
         }
     }
@@ -220,22 +222,22 @@ impl Display for MatchEvent<'_> {
 }
 
 #[derive(new, Clone, Dupe, Debug, ProvidesStaticType, NoSerialize, Allocative, Trace)]
-pub struct TestEvent;
+pub struct PreTestRunEvent;
 
-impl TestEvent {
+impl PreTestRunEvent {
     pub fn kind(&self) -> EventKind {
-        EventKind::Test
+        EventKind::PreTestRun
     }
 }
 
-impl Display for TestEvent {
+impl Display for PreTestRunEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         <Self as StarlarkValue>::TYPE.fmt(f)
     }
 }
 
-#[starlark_value(type = "TestEvent")]
-impl<'v> StarlarkValue<'v> for TestEvent {
+#[starlark_value(type = "PreTestRunEvent")]
+impl<'v> StarlarkValue<'v> for PreTestRunEvent {
     fn dir_attr(&self) -> Vec<String> {
         [NAME_ATTR_NAME].into_iter().map(Into::into).collect()
     }
@@ -252,7 +254,46 @@ impl<'v> StarlarkValue<'v> for TestEvent {
     }
 }
 
-impl<'v> AllocValue<'v> for TestEvent {
+impl<'v> AllocValue<'v> for PreTestRunEvent {
+    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+        heap.alloc_simple(self)
+    }
+}
+
+#[derive(new, Clone, Dupe, Debug, ProvidesStaticType, NoSerialize, Allocative, Trace)]
+pub struct PostTestRunEvent;
+
+impl PostTestRunEvent {
+    pub fn kind(&self) -> EventKind {
+        EventKind::PostTestRun
+    }
+}
+
+impl Display for PostTestRunEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        <Self as StarlarkValue>::TYPE.fmt(f)
+    }
+}
+
+#[starlark_value(type = "PostTestRunEvent")]
+impl<'v> StarlarkValue<'v> for PostTestRunEvent {
+    fn dir_attr(&self) -> Vec<String> {
+        [NAME_ATTR_NAME].into_iter().map(Into::into).collect()
+    }
+
+    fn get_attr(&self, attr: &str, heap: &'v Heap) -> Option<Value<'v>> {
+        match attr {
+            NAME_ATTR_NAME => Some(heap.alloc(heap.alloc_str(self.kind().name()))),
+            _ => None,
+        }
+    }
+
+    fn has_attr(&self, attr: &str, _heap: &'v Heap) -> bool {
+        [NAME_ATTR_NAME].contains(&attr)
+    }
+}
+
+impl<'v> AllocValue<'v> for PostTestRunEvent {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
         heap.alloc_simple(self)
     }
@@ -270,7 +311,7 @@ mod test {
         attrs: &'static [&'static str],
     ) {
         VexTest::new("is-triggered")
-            .with_test_event(event_name == "test")
+            .with_test_events(event_name.ends_with("_test_run"))
             .with_scriptlet(
                 "vexes/test.star",
                 formatdoc! {r#"
@@ -306,7 +347,7 @@ mod test {
             )
             .returns_error("error-marker");
         VexTest::new("type-name")
-            .with_test_event(event_name == "test")
+            .with_test_events(event_name.ends_with("_test_run"))
             .with_scriptlet(
                 "vexes/test.star",
                 formatdoc! {r#"
@@ -333,7 +374,7 @@ mod test {
             )
             .assert_irritation_free();
         VexTest::new("attrs")
-            .with_test_event(event_name == "test")
+            .with_test_events(event_name.ends_with("_test_run"))
             .with_scriptlet(
                 "vexes/test.star",
                 formatdoc! {r#"
@@ -453,7 +494,12 @@ mod test {
     }
 
     #[test]
-    fn on_test_event() {
-        test_event_common_properties("test", "TestEvent", &["name"]);
+    fn on_pre_test_run_event() {
+        test_event_common_properties("pre_test_run", "PreTestRunEvent", &["name"]);
+    }
+
+    #[test]
+    fn on_post_test_run_event() {
+        test_event_common_properties("post_test_run", "PostTestRunEvent", &["name"]);
     }
 }

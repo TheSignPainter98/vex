@@ -1,30 +1,23 @@
-use std::{
-    fmt::Display,
-    fs::{self, File},
-    io::Write,
-};
+use std::fmt::Display;
 
 use allocative::Allocative;
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8Path;
 use derive_new::new;
 use starlark::{
     environment::{Methods, MethodsBuilder, MethodsStatic},
     eval::Evaluator,
     starlark_module,
     values::{
-        dict::DictRef, list::UnpackList, none::NoneType, Heap, NoSerialize, ProvidesStaticType,
-        StarlarkValue, StringValue, Value,
+        list::UnpackList, none::NoneType, Heap, NoSerialize, ProvidesStaticType, StarlarkValue,
+        StringValue, Value,
     },
 };
 use starlark_derive::starlark_value;
 
 use crate::{
-    cli::MaxProblems,
-    context::Context,
-    error::{Error, IOAction},
+    error::Error,
     irritation::IrritationRenderer,
     result::Result,
-    run_data::RunData,
     scriptlets::{
         action::Action,
         event::EventKind,
@@ -32,7 +25,6 @@ use crate::{
         intents::UnfrozenIntent,
         main_annotation::MainAnnotation,
         observers::UnfrozenObserver,
-        store::{PreinitOptions, PreinitingStore},
         Node,
     },
     source_path::PrettyPath,
@@ -163,74 +155,23 @@ impl AppObject {
             Ok(NoneType)
         }
 
-        fn run<'v>(
+        fn scan_file<'v>(
             #[starlark(this)] _this: Value<'v>,
-            #[starlark(require=named, default=false)] lenient: bool,
-            #[starlark(require=named)] files: DictRef<'v>,
+            #[starlark(require=pos)] file_name: &'v str,
+            #[starlark(require=pos)] language: &'v str,
+            #[starlark(require=pos)] content: &'v str,
             eval: &mut Evaluator<'_, '_>,
-        ) -> anyhow::Result<RunData> {
-            AppObject::check_attr_available(eval, "vex.run", &[Action::Vexing(EventKind::Test)])?;
-
-            let test_files: Vec<_> = files
-                .iter()
-                .map(|(k, v)| {
-                    let k = k.unpack_str().ok_or_else(|| Error::WrongType {
-                        expected_type: "str",
-                        actual_type: k.get_type(),
-                    })?;
-                    let v = v.unpack_str().ok_or_else(|| Error::WrongType {
-                        expected_type: "str",
-                        actual_type: v.get_type(),
-                    })?;
-                    Ok::<_, Error>((k, v))
-                })
-                .map(|r| {
-                    let (k, v) = r?;
-                    Ok::<_, Error>((Utf8PathBuf::from(k), textwrap::dedent(v)))
-                })
-                .collect::<Result<Vec<_>>>()?;
-
-            let root_dir = tempfile::tempdir().map_err(|cause| Error::IO {
-                path: PrettyPath::new(Utf8Path::new("(temp dir)")),
-                action: IOAction::Create,
-                cause,
-            })?;
-            let root_path = Utf8PathBuf::try_from(root_dir.path().to_path_buf())?;
-            for (path, content) in test_files.into_iter() {
-                let abs_path = root_path.join(&path);
-                let dir = abs_path.parent().unwrap();
-                fs::create_dir_all(dir).map_err(|cause| Error::IO {
-                    path: PrettyPath::new(dir),
-                    action: IOAction::Create,
-                    cause,
-                })?;
-                File::create(abs_path)
-                    .map_err(|cause| Error::IO {
-                        path: PrettyPath::new(&path),
-                        action: IOAction::Create,
-                        cause,
-                    })?
-                    .write_all(content.as_bytes())
-                    .map_err(|cause| Error::IO {
-                        path: PrettyPath::new(&path),
-                        action: IOAction::Write,
-                        cause,
-                    })?;
-            }
-
-            let temp_data = TempData::get_from(eval);
-            let ctx = Context::acquire_in(
-                temp_data
-                    .ctx
-                    .expect("internal error: context not set")
-                    .project_root(),
-            )?;
-            let store = {
-                let preinit_opts = PreinitOptions { lenient };
-                PreinitingStore::new(&ctx)?.preinit(preinit_opts)?.init()?
-            };
-            let sub_ctx = ctx.sub_context(PrettyPath::new(&root_path));
-            Ok(crate::vex(&sub_ctx, &store, MaxProblems::Unlimited)?)
+        ) -> anyhow::Result<NoneType> {
+            let file_name = PrettyPath::new(Utf8Path::new(file_name));
+            let language = language.parse()?;
+            let content = content.to_string();
+            let ret_data = UnfrozenRetainedData::get_from(eval.module());
+            ret_data.declare_intent(UnfrozenIntent::ScanFile {
+                file_name,
+                language,
+                content,
+            });
+            Ok(NoneType)
         }
     }
 

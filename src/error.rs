@@ -58,6 +58,9 @@ pub enum Error {
         reason: InvalidLoadReason,
     },
 
+    #[error("test invalid: {0}")]
+    InvalidTest(String),
+
     #[error("{0}")]
     InvalidWarnCall(&'static str),
 

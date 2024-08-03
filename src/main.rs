@@ -211,8 +211,6 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
         let event = OpenProjectEvent::new(ctx.project_root.dupe());
         let handler_module = HandlerModule::new();
         let observe_opts = ObserveOptions {
-            ctx: Some(ctx),
-            store: Some(store),
             action: Action::Vexing(event.kind()),
             query_cache: &query_cache,
             ignore_markers: None,
@@ -233,6 +231,9 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
                 } => project_queries.push((language, query, on_match)),
                 Intent::Observe { .. } => panic!("internal error: non-init observe"),
                 Intent::Warn(irr) => irritations.push(irr),
+                Intent::ScanFile { .. } => {
+                    panic!("internal error: unexpected ScanFile intent declared")
+                }
             });
         project_queries
     };
@@ -252,8 +253,6 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
             let event = OpenFileEvent::new(path);
             let handler_module = HandlerModule::new();
             let observe_opts = ObserveOptions {
-                ctx: Some(ctx),
-                store: Some(store),
                 action: Action::Vexing(event.kind()),
                 query_cache: &query_cache,
                 ignore_markers: None,
@@ -274,6 +273,9 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
                     } => file_queries.push((language, query, on_match)),
                     Intent::Observe { .. } => panic!("internal error: non-init observe"),
                     Intent::Warn(irr) => irritations.push(irr.clone()),
+                    Intent::ScanFile { .. } => {
+                        panic!("internal error: unexpected ScanFile intent declared")
+                    }
                 });
             file_queries
         };
@@ -311,8 +313,6 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
                             handler_module.heap().alloc(MatchEvent::new(path, captures))
                         };
                         let observe_opts = ObserveOptions {
-                            ctx: Some(ctx),
-                            store: Some(store),
                             action: Action::Vexing(EventKind::Match),
                             query_cache: &query_cache,
                             ignore_markers: Some(&ignore_markers),
@@ -329,6 +329,9 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
                                     panic!("internal error: non-init observe")
                                 }
                                 Intent::Warn(irr) => irritations.push(irr),
+                                Intent::ScanFile { .. } => {
+                                    panic!("internal error: unexpected ScanFile intent declared")
+                                }
                             });
 
                         Ok::<_, Error>(())
