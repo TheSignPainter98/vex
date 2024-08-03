@@ -24,6 +24,10 @@ pub struct Args {
     #[command(subcommand)]
     pub command: Command,
 
+    /// Use quiet output
+    #[arg(short, global = true)]
+    pub quiet: bool,
+
     /// Use verbose output (-vv very verbose)
     #[arg(short, action=ArgAction::Count, value_name="level", global=true)]
     pub verbosity_level: u8,
@@ -359,6 +363,13 @@ mod test {
     #[test]
     fn no_default() {
         Args::try_parse_from(["vex"]).unwrap_err();
+    }
+
+    #[test]
+    fn quiet() {
+        const CMD: &str = "check";
+        assert!(!Args::try_parse_from(["vex", CMD]).unwrap().quiet);
+        assert!(Args::try_parse_from(["vex", CMD, "-q"]).unwrap().quiet);
     }
 
     #[test]

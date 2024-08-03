@@ -5,8 +5,11 @@ use crate::cli::Args;
 
 #[derive(Copy, Clone, Debug, Default)]
 pub enum Verbosity {
+    Quiet,
+
     #[default]
     Terse,
+
     Verbose,
     Trace,
 }
@@ -27,6 +30,7 @@ impl TryFrom<u8> for Verbosity {
 impl From<Verbosity> for Level {
     fn from(verbosity: Verbosity) -> Self {
         match verbosity {
+            Verbosity::Quiet => Self::Error,
             Verbosity::Terse => Self::Warn,
             Verbosity::Verbose => Self::Info,
             Verbosity::Trace => Self::Trace,

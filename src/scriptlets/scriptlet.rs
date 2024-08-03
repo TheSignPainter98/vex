@@ -703,7 +703,7 @@ mod test {
                 let Self { name, path } = self;
                 let path = path.expect("path not set");
                 eprintln!("running test {name} with {path:?}...");
-                println!(r#"load({}, 'unused') "#, path.quote());
+                eprintln!(r"load({}, 'unused')", path.quote());
 
                 const DIR: &str = "/tmp/vex_project";
                 PreinitingScriptlet::new_from_str(
