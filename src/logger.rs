@@ -25,6 +25,13 @@ pub fn exit_code() -> ExitCode {
     }
 }
 
+#[macro_export]
+macro_rules! success {
+    ($($arg:tt)+) => {
+        ::log::warn!(custom=true; $($arg)+)
+    };
+}
+
 struct Logger {
     level: Level,
 }
