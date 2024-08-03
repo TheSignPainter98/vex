@@ -2,6 +2,7 @@
 name = "vex"
 version = "0.1.0"
 edition = "2021"
+description = "A blazingly-fast, hackable linter"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
