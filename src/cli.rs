@@ -25,7 +25,7 @@ pub struct Args {
     pub command: Command,
 
     /// Use quiet output
-    #[arg(short, global = true)]
+    #[arg(short, global = true, conflicts_with = "verbosity_level")]
     pub quiet: bool,
 
     /// Use verbose output (-vv very verbose)
@@ -397,6 +397,12 @@ mod test {
                 .verbosity_level,
             2
         );
+    }
+
+    #[test]
+    fn verbosity_conflict() {
+        const CMD: &str = "check";
+        assert!(Args::try_parse_from(["vex", "-v", "-q", CMD]).is_err());
     }
 
     mod list {
