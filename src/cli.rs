@@ -493,4 +493,14 @@ mod test {
             InitCmd { force: true },
         );
     }
+
+    #[test]
+    fn test() {
+        assert_eq!(
+            Args::try_parse_from(["vex", "test"])
+                .unwrap()
+                .into_command(),
+            Command::Test,
+        )
+    }
 }
