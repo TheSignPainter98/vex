@@ -114,6 +114,9 @@ pub enum Error {
     #[error(transparent)]
     StripPrefix(#[from] path::StripPrefixError),
 
+    #[error("test run invalid")]
+    TestRunInvalid,
+
     #[error(transparent)]
     Toml(#[from] toml_edit::de::Error),
 

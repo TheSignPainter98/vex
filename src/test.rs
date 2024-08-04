@@ -6,7 +6,7 @@ use std::{
 
 use camino::{Utf8Component, Utf8PathBuf};
 use dupe::Dupe;
-use log::{log_enabled, warn};
+use log::{error, log_enabled};
 use starlark::values::FrozenHeap;
 
 use crate::{
@@ -70,13 +70,18 @@ pub(crate) fn run_tests(ctx: &Context, store: &VexingStore) -> Result<()> {
                 }
                 _ => panic!("internal error: unexpected intent: {intent:?}"),
             });
-        if log_enabled!(log::Level::Warn) {
-            seen_file_names
-                .into_iter()
-                .filter(|(_, count)| *count > 0)
-                .for_each(|(file_name, count)| {
-                    warn!("test file '{file_name}' declared {count} times")
-                });
+        let mut test_run_invalid = false;
+        seen_file_names
+            .into_iter()
+            .filter(|(_, count)| *count > 0)
+            .for_each(|(file_name, count)| {
+                test_run_invalid = true;
+                if log_enabled!(log::Level::Error) {
+                    error!("test file '{file_name}' declared {count} times");
+                }
+            });
+        if test_run_invalid {
+            return Err(Error::TestRunInvalid);
         }
         files_to_scan
     };
