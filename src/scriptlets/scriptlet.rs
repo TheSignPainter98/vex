@@ -4,7 +4,6 @@ use camino::{Utf8Component, Utf8Path};
 use const_format::formatcp;
 use dupe::Dupe;
 use lazy_static::lazy_static;
-use log::{log_enabled, warn};
 use regex::Regex;
 use starlark::{
     analysis::AstModuleLint,
@@ -17,6 +16,7 @@ use starlark::{
 
 use crate::{
     error::{Error, IOAction, InvalidLoadReason},
+    logger,
     result::Result,
     scriptlets::{
         action::Action,
@@ -106,7 +106,8 @@ impl PreinitingScriptlet {
                     query_cache: &QueryCache::new(),
                     ignore_markers: None,
                 };
-                let print_handler = PrintHandler::new(path.pretty_path.as_str());
+                let print_handler =
+                    PrintHandler::new(logger::verbosity(), path.pretty_path.as_str());
                 let mut eval = Evaluator::new(&preinited_module);
                 eval.set_loader(&cache);
                 eval.set_print_handler(&print_handler);
@@ -320,7 +321,8 @@ impl InitingScriptlet {
                     query_cache: &QueryCache::new(),
                     ignore_markers: None,
                 };
-                let print_handler = PrintHandler::new(path.pretty_path.as_str());
+                let print_handler =
+                    PrintHandler::new(logger::verbosity(), path.pretty_path.as_str());
                 let mut eval = Evaluator::new(&module);
                 eval.extra = Some(&temp_data);
                 eval.set_print_handler(&print_handler);
@@ -347,8 +349,8 @@ impl InitingScriptlet {
             });
             observer_data
         };
-        if log_enabled!(log::Level::Warn) && observer_data.len() == 0 {
-            warn!("{} observes no events", path.pretty_path);
+        if observer_data.len() == 0 {
+            crate::warn!("{} observes no events", path.pretty_path);
         }
         Ok(observer_data)
     }

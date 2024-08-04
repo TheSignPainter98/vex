@@ -34,7 +34,7 @@ use cli::{InitCmd, ListCmd, MaxProblems, ToList};
 use dupe::Dupe;
 use indoc::printdoc;
 use lazy_static::lazy_static;
-use log::{error, info, log_enabled, trace, warn};
+use log::{info, log_enabled, trace};
 use owo_colors::{OwoColorize, Stream, Style};
 use scriptlets::{
     action::Action, event::EventKind, handler_module::HandlerModule, Observable, ObserveOptions,
@@ -68,9 +68,7 @@ fn main() -> ExitCode {
     match run() {
         Ok(c) => c,
         Err(e) => {
-            if log_enabled!(log::Level::Error) {
-                error!("{e}");
-            }
+            error!("{e}");
             ExitCode::FAILURE
         }
     }
@@ -142,11 +140,9 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
         irritations,
         num_files_scanned,
     } = vex(&ctx, &store, cmd_args.max_problems)?;
-    if log_enabled!(log::Level::Warn) {
-        irritations
-            .iter()
-            .for_each(|irr| warn!(custom=true; "{irr}"));
-    }
+    irritations
+        .iter()
+        .for_each(|irr| warn!(custom=true; "{irr}"));
     if log_enabled!(log::Level::Info) {
         info!(
             "scanned {}",
@@ -159,9 +155,7 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
             .lock()
             .expect("failed to lock NUM_WARNINGS") as usize;
     if num_problems != 0 {
-        if log_enabled!(log::Level::Warn) {
-            warn!("found {}", Plural::new(num_problems, "problem", "problems"));
-        }
+        warn!("found {}", Plural::new(num_problems, "problem", "problems"));
     } else {
         success!(
             "{}: no problems found",

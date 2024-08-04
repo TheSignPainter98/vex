@@ -9,6 +9,7 @@ use starlark_derive::{starlark_value, NoSerialize, ProvidesStaticType, Trace};
 
 use crate::{
     ignore_markers::IgnoreMarkers,
+    logger,
     result::Result,
     scriptlets::{
         action::Action, event::EventKind, extra_data::TempData, handler_module::HandlerModule,
@@ -123,7 +124,7 @@ impl Observable for Observer {
             query_cache: opts.query_cache,
             ignore_markers: opts.ignore_markers,
         };
-        let print_handler = PrintHandler::new(opts.action.name());
+        let print_handler = PrintHandler::new(logger::verbosity(), opts.action.name());
         let mut eval = Evaluator::new(handler_module);
         eval.extra = Some(&temp_data);
         eval.set_print_handler(&print_handler);
