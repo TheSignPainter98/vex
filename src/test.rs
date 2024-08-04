@@ -73,7 +73,7 @@ pub(crate) fn run_tests(ctx: &Context, store: &VexingStore) -> Result<()> {
         let mut test_run_invalid = false;
         seen_file_names
             .into_iter()
-            .filter(|(_, count)| *count > 0)
+            .filter(|(_, count)| *count > 1)
             .for_each(|(file_name, count)| {
                 test_run_invalid = true;
                 if log_enabled!(log::Level::Error) {
