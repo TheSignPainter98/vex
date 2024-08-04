@@ -155,13 +155,19 @@ impl AppObject {
             Ok(NoneType)
         }
 
-        fn scan_file<'v>(
+        fn scan<'v>(
             #[starlark(this)] _this: Value<'v>,
             #[starlark(require=pos)] file_name: &'v str,
             #[starlark(require=pos)] language: &'v str,
             #[starlark(require=pos)] content: &'v str,
             eval: &mut Evaluator<'_, '_>,
         ) -> anyhow::Result<NoneType> {
+            AppObject::check_attr_available(
+                eval,
+                "vex.scan",
+                &[Action::Vexing(EventKind::PreTestRun)],
+            )?;
+
             let file_name = PrettyPath::new(Utf8Path::new(file_name));
             let language = language.parse()?;
             let content = content.to_string();
