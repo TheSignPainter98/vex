@@ -1,9 +1,12 @@
 use std::{
+    collections::BTreeMap,
     fs::{self, File},
     io::Write,
 };
 
 use camino::{Utf8Component, Utf8PathBuf};
+use dupe::Dupe;
+use log::{log_enabled, warn};
 use starlark::values::FrozenHeap;
 
 use crate::{
@@ -49,6 +52,7 @@ pub(crate) fn run_tests(ctx: &Context, store: &VexingStore) -> Result<()> {
         )?;
 
         let mut files_to_scan = Vec::with_capacity(handler_module.intent_count());
+        let mut seen_file_names = BTreeMap::new();
         handler_module
             .into_intents_on(&frozen_heap)?
             .into_iter()
@@ -57,9 +61,23 @@ pub(crate) fn run_tests(ctx: &Context, store: &VexingStore) -> Result<()> {
                     file_name,
                     language,
                     content,
-                } => files_to_scan.push((file_name, language, content)),
+                } => {
+                    seen_file_names
+                        .entry(file_name.dupe())
+                        .and_modify(|count| *count += 1)
+                        .or_insert(1);
+                    files_to_scan.push((file_name, language, content));
+                }
                 _ => panic!("internal error: unexpected intent: {intent:?}"),
             });
+        if log_enabled!(log::Level::Warn) {
+            seen_file_names
+                .into_iter()
+                .filter(|(_, count)| *count > 0)
+                .for_each(|(file_name, count)| {
+                    warn!("test file '{file_name}' declared {count} times")
+                });
+        }
         files_to_scan
     };
 
