@@ -170,7 +170,7 @@ impl AppObject {
 
             let file_name = PrettyPath::new(Utf8Path::new(file_name));
             let language = language.parse()?;
-            let content = content.to_string();
+            let content = textwrap::dedent(content.strip_prefix('\n').unwrap_or(content));
             let ret_data = UnfrozenRetainedData::get_from(eval.module());
             ret_data.declare_intent(UnfrozenIntent::ScanFile {
                 file_name,

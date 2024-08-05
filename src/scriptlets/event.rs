@@ -1,18 +1,26 @@
-use std::{fmt::Display, str::FromStr};
+use std::{
+    collections::{btree_map::Entry, BTreeMap},
+    fmt::Display,
+    str::FromStr,
+};
 
 use allocative::Allocative;
 use derive_new::new;
 use dupe::Dupe;
+use smallvec::{smallvec, SmallVec};
 use starlark::{
     starlark_simple_value,
-    values::{AllocValue, Heap, NoSerialize, ProvidesStaticType, StarlarkValue, Trace, Value},
+    values::{
+        dict::AllocDict, list::AllocList, AllocValue, Heap, NoSerialize, ProvidesStaticType,
+        StarlarkValue, Trace, Value,
+    },
 };
 use starlark_derive::starlark_value;
 use strum::{Display, EnumIter, IntoEnumIterator};
 
 use crate::{
-    error::Error, result::Result, scriptlets::QueryCaptures, source_path::PrettyPath,
-    suggestion::suggest,
+    error::Error, irritation::Irritation, result::Result, scriptlets::QueryCaptures,
+    source_path::PrettyPath, suggestion::suggest,
 };
 
 const PATH_ATTR_NAME: &str = "path";
@@ -260,42 +268,107 @@ impl<'v> AllocValue<'v> for PreTestRunEvent {
     }
 }
 
-#[derive(new, Clone, Dupe, Debug, ProvidesStaticType, NoSerialize, Allocative, Trace)]
-pub struct PostTestRunEvent;
+#[derive(Clone, Debug, ProvidesStaticType, NoSerialize, Allocative, Trace)]
+pub struct PostTestRunEvent<'v> {
+    irritations: Value<'v>,
+}
 
-impl PostTestRunEvent {
+impl<'v> PostTestRunEvent<'v> {
+    const COLLATED_IRRITATIONS_ATTR_NAME: &'static str = "warnings";
+
+    pub fn new(
+        irritations_iter: impl IntoIterator<Item = (Irritation, bool)>,
+        heap: &'v Heap,
+    ) -> Self {
+        let irritations = heap.alloc(CollatedIrritations::new(irritations_iter, heap));
+        Self { irritations }
+    }
+
     pub fn kind(&self) -> EventKind {
         EventKind::PostTestRun
     }
 }
 
-impl Display for PostTestRunEvent {
+impl Display for PostTestRunEvent<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         <Self as StarlarkValue>::TYPE.fmt(f)
     }
 }
 
 #[starlark_value(type = "PostTestRunEvent")]
-impl<'v> StarlarkValue<'v> for PostTestRunEvent {
+impl<'v> StarlarkValue<'v> for PostTestRunEvent<'v> {
     fn dir_attr(&self) -> Vec<String> {
-        [NAME_ATTR_NAME].into_iter().map(Into::into).collect()
+        [NAME_ATTR_NAME, Self::COLLATED_IRRITATIONS_ATTR_NAME]
+            .into_iter()
+            .map(Into::into)
+            .collect()
     }
 
     fn get_attr(&self, attr: &str, heap: &'v Heap) -> Option<Value<'v>> {
         match attr {
             NAME_ATTR_NAME => Some(heap.alloc(heap.alloc_str(self.kind().name()))),
+            Self::COLLATED_IRRITATIONS_ATTR_NAME => Some(self.irritations),
             _ => None,
         }
     }
 
     fn has_attr(&self, attr: &str, _heap: &'v Heap) -> bool {
-        [NAME_ATTR_NAME].contains(&attr)
+        [NAME_ATTR_NAME, Self::COLLATED_IRRITATIONS_ATTR_NAME].contains(&attr)
     }
 }
 
-impl<'v> AllocValue<'v> for PostTestRunEvent {
+impl<'v> AllocValue<'v> for PostTestRunEvent<'v> {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_simple(self)
+        heap.alloc_complex_no_freeze(self)
+    }
+}
+
+#[derive(
+    Clone, Debug, Allocative, ProvidesStaticType, NoSerialize, Trace, derive_more::Display,
+)]
+#[display(fmt = "{entries}")]
+struct CollatedIrritations<'v> {
+    entries: Value<'v>,
+}
+
+impl<'v> CollatedIrritations<'v> {
+    fn new(irritations: impl IntoIterator<Item = (Irritation, bool)>, heap: &'v Heap) -> Self {
+        let mut entry_map: BTreeMap<_, SmallVec<[_; 4]>> = BTreeMap::new();
+        for (irritation, lenient) in irritations {
+            match entry_map.entry(irritation.vex_id().to_string()) {
+                Entry::Occupied(mut entry) => entry.get_mut().push((irritation, lenient)),
+                Entry::Vacant(entry) => {
+                    entry.insert(smallvec![(irritation, lenient)]);
+                }
+            }
+        }
+        let entries = heap.alloc(AllocDict(entry_map.into_iter().map(|(id, irrs)| {
+            (
+                id.to_string(),
+                AllocList(
+                    irrs.into_iter()
+                        .map(|(irr, lenient)| irr.to_value_on(lenient, heap)),
+                ),
+            )
+        })));
+        Self { entries }
+    }
+}
+
+#[starlark_value(type = "CollatedWarnings")]
+impl<'v> StarlarkValue<'v> for CollatedIrritations<'v> {
+    fn at(&self, index: Value<'v>, heap: &'v Heap) -> starlark::Result<Value<'v>> {
+        self.entries.at(index, heap)
+    }
+
+    fn is_in(&self, other: Value<'v>) -> starlark::Result<bool> {
+        self.entries.is_in(other)
+    }
+}
+
+impl<'v> AllocValue<'v> for CollatedIrritations<'v> {
+    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+        heap.alloc_complex_no_freeze(self)
     }
 }
 
@@ -500,6 +573,6 @@ mod test {
 
     #[test]
     fn on_post_test_run_event() {
-        test_event_common_properties("post_test_run", "PostTestRunEvent", &["name"]);
+        test_event_common_properties("post_test_run", "PostTestRunEvent", &["name", "warnings"]);
     }
 }

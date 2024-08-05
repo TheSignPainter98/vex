@@ -2,6 +2,7 @@ use std::{
     collections::BTreeMap,
     fs::{self, File},
     io::Write,
+    iter,
 };
 
 use camino::{Utf8Component, Utf8PathBuf};
@@ -124,7 +125,6 @@ pub(crate) fn run_tests(ctx: &Context, store: &VexingStore) -> Result<()> {
                 cause,
             })?;
     }
-    let sub_ctx = ctx.child_context(PrettyPath::new(&temp_dir_path));
 
     let collect_run_data = |lenient| {
         let sub_store = {
@@ -132,14 +132,20 @@ pub(crate) fn run_tests(ctx: &Context, store: &VexingStore) -> Result<()> {
             // Create new store using the current context to inherit the existing scripts.
             PreinitingStore::new(ctx)?.preinit(preinit_opts)?.init()?
         };
+        let sub_ctx = ctx.child_context(PrettyPath::new(&temp_dir_path));
         crate::vex(&sub_ctx, &sub_store, MaxProblems::Unlimited)
     };
-    let _lenient_data = collect_run_data(true)?;
-    let _nonlenient_data = collect_run_data(false)?;
+    let nonlenient_data = collect_run_data(false)?;
+    let lenient_data = collect_run_data(true)?;
 
     {
-        let event = PostTestRunEvent;
         let handler_module = HandlerModule::new();
+        let irritations = nonlenient_data
+            .irritations
+            .into_iter()
+            .zip(iter::repeat(false))
+            .chain(lenient_data.irritations.into_iter().zip(iter::repeat(true)));
+        let event = PostTestRunEvent::new(irritations, handler_module.heap());
         let observer_opts = ObserveOptions {
             action: Action::Vexing(event.kind()),
             query_cache: &QueryCache::new(),

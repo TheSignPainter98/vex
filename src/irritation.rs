@@ -5,7 +5,9 @@ use annotate_snippets::{Annotation, AnnotationType, Slice, Snippet, SourceAnnota
 use dupe::Dupe;
 use serde::Serialize;
 use starlark::values::{list::AllocList, AllocValue, Heap, StarlarkValue, Value};
-use starlark_derive::{starlark_attrs, starlark_value, ProvidesStaticType, StarlarkAttrs};
+use starlark_derive::{
+    starlark_attrs, starlark_value, NoSerialize, ProvidesStaticType, StarlarkAttrs, Trace,
+};
 
 use crate::{
     logger,
@@ -26,11 +28,44 @@ pub struct Irritation {
 }
 
 impl Irritation {
-    const VEX_ID_ATTR_NAME: &'static str = "vex_id";
-    const MESSAGE_ATTR_NAME: &'static str = "message";
-    const AT_ATTR_NAME: &'static str = "at";
-    const SHOW_ALSO_ATTR_NAME: &'static str = "show_also";
-    const INFO_ATTR_NAME: &'static str = "info";
+    pub fn vex_id(&self) -> &VexId {
+        &self.vex_id
+    }
+
+    pub fn to_value_on<'v>(&self, lenient: bool, heap: &'v Heap) -> Value<'v> {
+        let Self {
+            vex_id,
+            message,
+            at,
+            show_also,
+            info,
+            rendered: _,
+        } = self;
+        let vex_id = heap.alloc(vex_id.as_ref());
+        let lenient = Value::new_bool(lenient);
+        let message = heap.alloc(message);
+        let at = at
+            .as_ref()
+            .map(|(loc, label)| heap.alloc((loc.clone(), label.as_deref())))
+            .unwrap_or_default();
+        let show_also = heap.alloc(AllocList(
+            show_also
+                .iter()
+                .map(|(loc, label)| heap.alloc((loc.clone(), label))),
+        ));
+        let info = info
+            .as_ref()
+            .map(|info| heap.alloc(info))
+            .unwrap_or_default();
+        heap.alloc(IrritationValue {
+            vex_id,
+            lenient,
+            message,
+            at,
+            show_also,
+            info,
+        })
+    }
 }
 
 impl Ord for Irritation {
@@ -120,11 +155,37 @@ impl PartialOrd<Self> for Irritation {
     }
 }
 
+impl Display for Irritation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.rendered)
+    }
+}
+
+#[derive(Clone, Debug, Allocative, Dupe, NoSerialize, ProvidesStaticType, Trace)]
+struct IrritationValue<'v> {
+    vex_id: Value<'v>,
+    lenient: Value<'v>,
+    message: Value<'v>,
+    at: Value<'v>,
+    show_also: Value<'v>,
+    info: Value<'v>,
+}
+
+impl<'v> IrritationValue<'v> {
+    const VEX_ID_ATTR_NAME: &'static str = "vex_id";
+    const LENIENT_ATTR_NAME: &'static str = "lenient";
+    const MESSAGE_ATTR_NAME: &'static str = "message";
+    const AT_ATTR_NAME: &'static str = "at";
+    const SHOW_ALSO_ATTR_NAME: &'static str = "show_also";
+    const INFO_ATTR_NAME: &'static str = "info";
+}
+
 #[starlark_value(type = "Irritation")]
-impl<'v> StarlarkValue<'v> for Irritation {
+impl<'v> StarlarkValue<'v> for IrritationValue<'v> {
     fn dir_attr(&self) -> Vec<String> {
         [
             Self::VEX_ID_ATTR_NAME,
+            Self::LENIENT_ATTR_NAME,
             Self::MESSAGE_ATTR_NAME,
             Self::AT_ATTR_NAME,
             Self::SHOW_ALSO_ATTR_NAME,
@@ -135,29 +196,14 @@ impl<'v> StarlarkValue<'v> for Irritation {
         .collect()
     }
 
-    fn get_attr(&self, attr: &str, heap: &'v Heap) -> Option<Value<'v>> {
+    fn get_attr(&self, attr: &str, _heap: &'v Heap) -> Option<Value<'v>> {
         match attr {
-            Self::VEX_ID_ATTR_NAME => Some(heap.alloc(self.vex_id.to_string())),
-            Self::MESSAGE_ATTR_NAME => Some(heap.alloc(&self.message)),
-            Self::AT_ATTR_NAME => Some(
-                self.at
-                    .clone()
-                    .map(|(src, label)| {
-                        let label_value =
-                            label.map(|l| heap.alloc(l)).unwrap_or_else(Value::new_none);
-                        heap.alloc((src, label_value))
-                    })
-                    .unwrap_or_else(Value::new_none),
-            ),
-            Self::SHOW_ALSO_ATTR_NAME => {
-                Some(heap.alloc(AllocList(self.show_also.iter().cloned())))
-            }
-            Self::INFO_ATTR_NAME => Some(
-                self.info
-                    .clone()
-                    .map(|info| heap.alloc(info))
-                    .unwrap_or_else(Value::new_none),
-            ),
+            Self::VEX_ID_ATTR_NAME => Some(self.vex_id.dupe()),
+            Self::LENIENT_ATTR_NAME => Some(self.lenient.dupe()),
+            Self::MESSAGE_ATTR_NAME => Some(self.message.dupe()),
+            Self::AT_ATTR_NAME => Some(self.at.dupe()),
+            Self::SHOW_ALSO_ATTR_NAME => Some(self.show_also.dupe()),
+            Self::INFO_ATTR_NAME => Some(self.info.dupe()),
             _ => None,
         }
     }
@@ -165,6 +211,7 @@ impl<'v> StarlarkValue<'v> for Irritation {
     fn has_attr(&self, attr: &str, _heap: &'v Heap) -> bool {
         [
             Self::VEX_ID_ATTR_NAME,
+            Self::LENIENT_ATTR_NAME,
             Self::MESSAGE_ATTR_NAME,
             Self::AT_ATTR_NAME,
             Self::SHOW_ALSO_ATTR_NAME,
@@ -174,15 +221,15 @@ impl<'v> StarlarkValue<'v> for Irritation {
     }
 }
 
-impl<'v> AllocValue<'v> for Irritation {
+impl<'v> AllocValue<'v> for IrritationValue<'v> {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_simple(self)
+        heap.alloc_complex_no_freeze(self)
     }
 }
 
-impl Display for Irritation {
+impl Display for IrritationValue<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.rendered.fmt(f)
+        write!(f, "{self:?}")
     }
 }
 
