@@ -32,6 +32,10 @@ impl Irritation {
         &self.vex_id
     }
 
+    pub fn path(&self) -> Option<&PrettyPath> {
+        self.at.as_ref().map(|(loc, _)| &loc.path)
+    }
+
     pub fn to_value_on<'v>(&self, lenient: bool, heap: &'v Heap) -> Value<'v> {
         let Self {
             vex_id,

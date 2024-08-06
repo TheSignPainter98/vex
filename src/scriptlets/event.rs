@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     collections::{btree_map::Entry, BTreeMap},
     fmt::Display,
     str::FromStr,
@@ -333,22 +334,41 @@ struct CollatedIrritations<'v> {
 
 impl<'v> CollatedIrritations<'v> {
     fn new(irritations: impl IntoIterator<Item = (Irritation, bool)>, heap: &'v Heap) -> Self {
-        let mut entry_map: BTreeMap<_, SmallVec<[_; 4]>> = BTreeMap::new();
+        let mut entry_map: BTreeMap<_, BTreeMap<_, SmallVec<[_; 2]>>> = BTreeMap::new();
         for (irritation, lenient) in irritations {
-            match entry_map.entry(irritation.vex_id().to_string()) {
-                Entry::Occupied(mut entry) => entry.get_mut().push((irritation, lenient)),
+            let key = irritation
+                .path()
+                .map(|path| Cow::Owned(path.to_string()))
+                .unwrap_or(Cow::Borrowed("no-file"));
+            match entry_map.entry(key) {
+                Entry::Occupied(mut entry) => {
+                    match entry.get_mut().entry(irritation.vex_id().to_string()) {
+                        Entry::Occupied(mut entry) => entry.get_mut().push((irritation, lenient)),
+                        Entry::Vacant(entry) => {
+                            entry.insert(smallvec![(irritation, lenient)]);
+                        }
+                    }
+                }
                 Entry::Vacant(entry) => {
-                    entry.insert(smallvec![(irritation, lenient)]);
+                    entry.insert(BTreeMap::from_iter([(
+                        irritation.vex_id().to_string(),
+                        smallvec![(irritation, lenient)],
+                    )]));
                 }
             }
         }
-        let entries = heap.alloc(AllocDict(entry_map.into_iter().map(|(id, irrs)| {
+        let entries = heap.alloc(AllocDict(entry_map.into_iter().map(|(path, path_irrs)| {
             (
-                id.to_string(),
-                AllocList(
-                    irrs.into_iter()
-                        .map(|(irr, lenient)| irr.to_value_on(lenient, heap)),
-                ),
+                path.to_string(),
+                AllocDict(path_irrs.into_iter().map(|(id, irrs)| {
+                    (
+                        id,
+                        AllocList(
+                            irrs.into_iter()
+                                .map(|(irr, lenient)| irr.to_value_on(lenient, heap)),
+                        ),
+                    )
+                })),
             )
         })));
         Self { entries }
