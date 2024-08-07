@@ -7,13 +7,13 @@ use std::{
 
 use allocative::Allocative;
 use derive_new::new;
-use dupe::Dupe;
+use dupe::{Dupe, OptionDupedExt};
 use smallvec::{smallvec, SmallVec};
 use starlark::{
     starlark_simple_value,
     values::{
-        dict::AllocDict, list::AllocList, AllocValue, Heap, NoSerialize, ProvidesStaticType,
-        StarlarkValue, Trace, Value,
+        dict::AllocDict, AllocValue, Heap, NoSerialize, ProvidesStaticType, StarlarkValue, Trace,
+        Value, ValueError,
     },
 };
 use starlark_derive::starlark_value;
@@ -281,7 +281,7 @@ impl<'v> PostTestRunEvent<'v> {
         irritations_iter: impl IntoIterator<Item = (Irritation, bool)>,
         heap: &'v Heap,
     ) -> Self {
-        let irritations = heap.alloc(CollatedIrritations::new(irritations_iter, heap));
+        let irritations = heap.alloc(IrritationsByFile::new(irritations_iter, heap));
         Self { irritations }
     }
 
@@ -328,11 +328,11 @@ impl<'v> AllocValue<'v> for PostTestRunEvent<'v> {
     Clone, Debug, Allocative, ProvidesStaticType, NoSerialize, Trace, derive_more::Display,
 )]
 #[display(fmt = "{entries}")]
-struct CollatedIrritations<'v> {
+struct IrritationsByFile<'v> {
     entries: Value<'v>,
 }
 
-impl<'v> CollatedIrritations<'v> {
+impl<'v> IrritationsByFile<'v> {
     fn new(irritations: impl IntoIterator<Item = (Irritation, bool)>, heap: &'v Heap) -> Self {
         let mut entry_map: BTreeMap<_, BTreeMap<_, SmallVec<[_; 2]>>> = BTreeMap::new();
         for (irritation, lenient) in irritations {
@@ -358,25 +358,14 @@ impl<'v> CollatedIrritations<'v> {
             }
         }
         let entries = heap.alloc(AllocDict(entry_map.into_iter().map(|(path, path_irrs)| {
-            (
-                path.to_string(),
-                AllocDict(path_irrs.into_iter().map(|(id, irrs)| {
-                    (
-                        id,
-                        AllocList(
-                            irrs.into_iter()
-                                .map(|(irr, lenient)| irr.to_value_on(lenient, heap)),
-                        ),
-                    )
-                })),
-            )
+            (path.to_string(), IrritationsById::new(path_irrs, heap))
         })));
         Self { entries }
     }
 }
 
-#[starlark_value(type = "CollatedWarnings")]
-impl<'v> StarlarkValue<'v> for CollatedIrritations<'v> {
+#[starlark_value(type = "WarningsByFile")]
+impl<'v> StarlarkValue<'v> for IrritationsByFile<'v> {
     fn at(&self, index: Value<'v>, heap: &'v Heap) -> starlark::Result<Value<'v>> {
         self.entries.at(index, heap)
     }
@@ -386,7 +375,95 @@ impl<'v> StarlarkValue<'v> for CollatedIrritations<'v> {
     }
 }
 
-impl<'v> AllocValue<'v> for CollatedIrritations<'v> {
+impl<'v> AllocValue<'v> for IrritationsByFile<'v> {
+    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+        heap.alloc_complex_no_freeze(self)
+    }
+}
+
+#[derive(
+    Clone, Debug, Allocative, Dupe, NoSerialize, ProvidesStaticType, derive_more::Display, Trace,
+)]
+struct IrritationsById<'v> {
+    entries: Value<'v>,
+}
+
+impl<'v> IrritationsById<'v> {
+    fn new(
+        iter: impl IntoIterator<Item = (String, SmallVec<[(Irritation, bool); 2]>)>,
+        heap: &'v Heap,
+    ) -> Self {
+        let entries = heap.alloc(AllocDict(
+            iter.into_iter()
+                .map(|(id, irrs)| (id, Irritations::new(irrs, heap))),
+        ));
+        Self { entries }
+    }
+}
+
+#[starlark_value(type = "WarningsById")]
+impl<'v> StarlarkValue<'v> for IrritationsById<'v> {
+    fn at(&self, index: Value<'v>, heap: &'v Heap) -> starlark::Result<Value<'v>> {
+        self.entries.at(index, heap)
+    }
+
+    fn is_in(&self, other: Value<'v>) -> starlark::Result<bool> {
+        self.entries.is_in(other)
+    }
+}
+
+impl<'v> AllocValue<'v> for IrritationsById<'v> {
+    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+        heap.alloc_complex_no_freeze(self)
+    }
+}
+
+#[derive(Clone, Debug, Allocative, NoSerialize, ProvidesStaticType, Trace)]
+struct Irritations<'v>(Vec<Value<'v>>);
+
+impl<'v> Irritations<'v> {
+    fn new(iter: impl IntoIterator<Item = (Irritation, bool)>, heap: &'v Heap) -> Self {
+        Self(
+            iter.into_iter()
+                .map(|(irr, lenient)| irr.to_value_on(lenient, heap))
+                .collect(),
+        )
+    }
+}
+
+impl Display for Irritations<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[")?;
+        self.0.iter().try_for_each(|v| write!(f, "{v}"))?;
+        write!(f, "]")
+    }
+}
+
+#[starlark_value(type = "Warnings")]
+impl<'v> StarlarkValue<'v> for Irritations<'v> {
+    fn at(&self, index: Value<'v>, _heap: &'v Heap) -> starlark::Result<Value<'v>> {
+        index
+            .dupe()
+            .unpack_i32()
+            .ok_or_else(|| ValueError::unsupported_with::<(), _>(self, "[]", index).unwrap_err()) // Wtf.
+            .and_then(|index| {
+                self.0
+                    .get(index as usize)
+                    .duped()
+                    .ok_or(ValueError::IndexOutOfBound(index).into())
+            })
+    }
+
+    fn iterate_collect(&self, _heap: &'v Heap) -> starlark::Result<Vec<Value<'v>>> {
+        Ok(self.0.clone())
+    }
+
+    fn is_in(&self, other: Value<'v>) -> starlark::Result<bool> {
+        Ok(self.0.iter().any(|v| v == &other))
+    }
+}
+
+impl<'v> AllocValue<'v> for Irritations<'v> {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
         heap.alloc_complex_no_freeze(self)
     }

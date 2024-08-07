@@ -164,124 +164,180 @@ pub(crate) fn run_tests(ctx: &Context, store: &VexingStore) -> Result<()> {
 #[allow(clippy::module_inception)]
 #[cfg(test)]
 mod test {
-    // use indoc::formatdoc;
-    //
-    // use crate::vextest::VexTest;
+    use indoc::formatdoc;
 
-    // #[test]
-    // fn run() {
-    //     VexTest::new("run")
-    //         .with_test_event(true)
-    //         .with_scriptlet(
-    //             "vexes/test.star",
-    //             formatdoc! {
-    //                 r#"
-    //                     load('{check_path}', 'check')
-    //
-    //                     def init():
-    //                         vex.observe('open_project', on_open_project)
-    //                         vex.observe('test', on_test)
-    //
-    //                     def on_open_project(event):
-    //                         vex.search(
-    //                             'rust',
-    //                             '''
-    //                                 (binary_expression
-    //                                     left: (_) @left
-    //                                 ) @bin_expr
-    //                             ''',
-    //                             on_match,
-    //                         )
-    //
-    //                     def on_match(event):
-    //                         check['true'](vex.lenient)
-    //
-    //                         bin_expr = event.captures['bin_expr']
-    //                         if event.path.matches('src/main.rs'):
-    //                             vex.warn('test-id', 'oh no!', at=bin_expr)
-    //                         else:
-    //                             left = event.captures['left']
-    //                             vex.warn('test-id', 'oh no!',
-    //                                 at=(bin_expr, 'label'),
-    //                                 show_also=[(left, 'l')],
-    //                                 info='waddup',
-    //                             )
-    //
-    //                     def on_test(event):
-    //                         data = vex.run(
-    //                             lenient=True,
-    //                             files={{
-    //                                 'src/main.rs': '''
-    //                                     mod other;
-    //
-    //                                     fn main() {{
-    //                                         let _ = 1 + (2 + (3 + 3));
-    //                                     }}
-    //                                 ''',
-    //                                 'src/other.rs': '''
-    //                                     fn other() {{
-    //                                         let _ = 4 + 4;
-    //                                     }}
-    //                                 ''',
-    //                             }}
-    //                         )
-    //                         check['eq'](data.num_files_scanned, 2)
-    //                         check['eq'](len(data.irritations), 4)
-    //
-    //                         simple_irritation = None
-    //                         complex_irritation = None
-    //                         for irritation in data.irritations:
-    //                             check['type'](irritation, 'Irritation')
-    //                             check['attrs'](irritation, ['at', 'info', 'message', 'show_also', 'vex_id'])
-    //
-    //                             (src, _) = irritation.at
-    //                             if str(src.path) == 'src/main.rs':
-    //                                 if simple_irritation == None:
-    //                                     simple_irritation = irritation
-    //                             elif complex_irritation == None:
-    //                                 complex_irritation = irritation
-    //                         check['neq'](simple_irritation, None)
-    //                         check['neq'](complex_irritation, None)
-    //
-    //                         check['eq'](simple_irritation.vex_id, 'test-id')
-    //                         (src, label) = simple_irritation.at
-    //                         check['type'](src, 'IrritationSource')
-    //                         check['eq'](str(src), 'src/main.rs:5:12-29')
-    //                         check['eq'](str(src.path), 'src/main.rs')
-    //                         loc = src.location
-    //                         check['type'](loc, 'Location')
-    //                         check['eq'](loc.start_row, 5)
-    //                         check['eq'](loc.start_column, 12)
-    //                         check['eq'](loc.end_row, 5)
-    //                         check['eq'](loc.end_column, 29)
-    //                         check['eq'](label, None)
-    //                         check['eq'](simple_irritation.info, None)
-    //                         check['eq'](simple_irritation.show_also, [])
-    //
-    //                         check['eq'](complex_irritation.vex_id, 'test-id')
-    //                         (src, label) = complex_irritation.at
-    //                         check['type'](src, 'IrritationSource')
-    //                         check['eq'](str(src), 'src/other.rs:3:12-17')
-    //                         check['eq'](str(src.path), 'src/other.rs')
-    //                         loc = src.location
-    //                         check['type'](loc, 'Location')
-    //                         check['eq'](loc.start_row, 3)
-    //                         check['eq'](loc.start_column, 12)
-    //                         check['eq'](loc.end_row, 3)
-    //                         check['eq'](loc.end_column, 17)
-    //                         check['type'](label, 'string')
-    //                         check['eq'](label, 'label')
-    //                         show_also = complex_irritation.show_also
-    //                         check['eq'](len(show_also), 1)
-    //                         [(show_also_src, show_also_label)] = show_also
-    //                         check['type'](show_also_src, 'IrritationSource')
-    //                         check['eq'](str(show_also_src), 'src/other.rs:3:12-13')
-    //                         check['eq'](show_also_label, 'l')
-    //                         check['eq'](complex_irritation.info, 'waddup')
-    //                 "#,
-    //                 check_path = VexTest::CHECK_STARLARK_PATH,
-    //             },
-    //         )
-    //         .assert_irritation_free()
-    // }
+    use crate::vextest::VexTest;
+
+    #[test]
+    fn standard_flow() {
+        VexTest::new("run")
+            .with_test_events(true)
+            .with_scriptlet(
+                "vexes/test.star",
+                formatdoc! {
+                    r#"
+                        load('{check_path}', 'check')
+
+                        def init():
+                            vex.observe('open_project', on_open_project)
+                            vex.observe('pre_test_run', on_pre_test_run)
+                            vex.observe('post_test_run', on_post_test_run)
+
+                        def on_open_project(event):
+                            vex.search(
+                                'rust',
+                                '''
+                                    (binary_expression
+                                        right: (_) @right
+                                    ) @bin_expr
+                                ''',
+                                on_match,
+                            )
+
+                        def on_match(event):
+                            bin_expr = event.captures['bin_expr']
+                            right = event.captures['right']
+
+                            vex.warn(
+                                'warning-a',
+                                'warning-a-message',
+                                at=bin_expr,
+                            )
+                            if 'b' in str(right):
+                                vex.warn(
+                                    'warning-b',
+                                    'warning-b-message',
+                                    at=bin_expr,
+                                )
+                            if 'c' in str(right):
+                                vex.warn(
+                                    'warning-c',
+                                    'warning-c-message',
+                                    at=bin_expr,
+                                )
+                            vex.warn(
+                                'warning-d',
+                                'warning-d-message',
+                            )
+
+                        def on_pre_test_run(event):
+                            vex.scan(
+                                'a_and_c.rs',
+                                'rust',
+                                '''
+
+
+                                    // The newlines above are part of the test :D
+
+                                    mod other;
+
+                                    fn main() {{
+                                        let _ = 1 + warning_a_and_c;
+                                    }}
+                                ''',
+                            )
+                            vex.scan(
+                                'b_and_c.rs',
+                                'rust',
+                                '''
+                                    fn other() {{
+                                        let _ = 1 + warning_b_and_c;
+                                    }}
+                                ''',
+                            )
+
+                        def on_post_test_run(event):
+                            expected_warnings = {{
+                                'a_and_c.rs': {{
+                                    'warning-a': [{{
+                                        'id': 'warning-a',
+                                        'message': 'warning-a-message',
+                                        'at': {{
+                                            'location': {{
+                                                'start_row': 8,
+                                            }},
+                                        }},
+                                    }}],
+                                    'warning-c': [{{
+                                        'id': 'warning-c',
+                                        'message': 'warning-c-message',
+                                        'at': {{
+                                            'location': {{
+                                                'start_row': 8,
+                                            }},
+                                        }},
+                                    }}],
+                                }},
+                                'b_and_c.rs': {{
+                                    'warning-b': [{{
+                                        'id': 'warning-b',
+                                        'message': 'warning-b-message',
+                                        'at': {{
+                                            'location': {{
+                                                'start_row': 2,
+                                            }},
+                                        }},
+                                    }}],
+                                    'warning-c': [{{
+                                        'id': 'warning-c',
+                                        'message': 'warning-c-message',
+                                        'at': {{
+                                            'location': {{
+                                                'start_row': 2,
+                                            }},
+                                        }},
+                                    }}],
+                                }},
+                                'no-file': {{
+                                    'warning-d': [{{
+                                        'id': 'warning-d',
+                                        'message': 'warning-d-message',
+                                        'at': None,
+                                    }}]
+                                }}
+                            }}
+
+                            check['type'](event.warnings, 'WarningsByFile')
+                            for file, expected_warnings_by_id in expected_warnings.items():
+                                check['in'](file, event.warnings)
+                                actual_warnings_by_id = event.warnings[file]
+
+                                for (id, expected_warnings) in expected_warnings_by_id.items():
+                                    check['in'](id, actual_warnings_by_id)
+                                    actual_warnings = actual_warnings_by_id[id]
+
+                                    for (actual_warning, expected_warning) in zip(actual_warnings, expected_warnings):
+                                        check['eq'](actual_warning.id, id)
+                                        check['eq'](actual_warning.id, expected_warning['id'])
+                                        check['eq'](actual_warning.message, expected_warning['message'])
+
+                                        expected_at = expected_warning['at']
+                                        actual_at = actual_warning.at
+                                        if expected_at == None:
+                                            check['eq'](actual_at, None)
+                                        else:
+                                            check['type'](actual_at, 'tuple')
+                                            (src, label) = actual_warning.at
+                                            check['type'](src, 'IrritationSource')
+                                            check['eq'](label, None)
+
+                                            actual_location = src.location
+                                            expected_location = expected_at['location']
+                                            check['type'](src.location, 'Location')
+                                            if 'start_row' in expected_location:
+                                                check['eq'](src.location.start_row, expected_location['start_row'])
+                                            if 'start_column' in expected_location:
+                                                check['eq'](src.location.start_column, expected_location['start_column'])
+                                            if 'end_row' in expected_location:
+                                                check['eq'](src.location.end_row, expected_location['end_row'])
+                                            if 'end_column' in expected_location:
+                                                check['eq'](src.location.end_column, expected_location['end_column'])
+                    "#,
+                    check_path = VexTest::CHECK_STARLARK_PATH,
+                },
+            )
+            .assert_irritation_free()
+    }
+    // TODO(kcza): test all warning attributes!, do all with the same ID in the same file to
+    // test the list-making
 }
