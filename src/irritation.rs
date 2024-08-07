@@ -43,7 +43,7 @@ impl Irritation {
             at,
             show_also,
             info,
-            rendered: _,
+            rendered,
         } = self;
         let vex_id = heap.alloc(vex_id.as_ref());
         let lenient = Value::new_bool(lenient);
@@ -61,6 +61,7 @@ impl Irritation {
             .as_ref()
             .map(|info| heap.alloc(info))
             .unwrap_or_default();
+        let rendered = rendered.clone();
         heap.alloc(IrritationValue {
             vex_id,
             lenient,
@@ -68,6 +69,7 @@ impl Irritation {
             at,
             show_also,
             info,
+            rendered,
         })
     }
 }
@@ -165,7 +167,7 @@ impl Display for Irritation {
     }
 }
 
-#[derive(Clone, Debug, Allocative, Dupe, NoSerialize, ProvidesStaticType, Trace)]
+#[derive(Clone, Debug, Allocative, NoSerialize, ProvidesStaticType, Trace)]
 struct IrritationValue<'v> {
     vex_id: Value<'v>,
     lenient: Value<'v>,
@@ -173,6 +175,7 @@ struct IrritationValue<'v> {
     at: Value<'v>,
     show_also: Value<'v>,
     info: Value<'v>,
+    rendered: String,
 }
 
 impl<'v> IrritationValue<'v> {
@@ -233,7 +236,7 @@ impl<'v> AllocValue<'v> for IrritationValue<'v> {
 
 impl Display for IrritationValue<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self:?}")
+        f.write_str(&self.rendered)
     }
 }
 
