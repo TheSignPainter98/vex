@@ -179,7 +179,7 @@ struct IrritationValue<'v> {
 }
 
 impl<'v> IrritationValue<'v> {
-    const VEX_ID_ATTR_NAME: &'static str = "vex_id";
+    const VEX_ID_ATTR_NAME: &'static str = "id";
     const LENIENT_ATTR_NAME: &'static str = "lenient";
     const MESSAGE_ATTR_NAME: &'static str = "message";
     const AT_ATTR_NAME: &'static str = "at";
