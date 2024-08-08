@@ -279,7 +279,7 @@ mod test {
         syntax::{AstModule, Dialect},
     };
 
-    use crate::{error::Error, scriptlets::PrintHandler, vextest::VexTest};
+    use crate::{error::Error, logger, scriptlets::PrintHandler, vextest::VexTest};
 
     use super::*;
 
@@ -321,7 +321,7 @@ mod test {
                 ..Dialect::Standard
             };
             let ast = AstModule::parse("vexes/test.star", code.to_string(), &dialect).unwrap();
-            let print_handler = PrintHandler::new(path.as_str());
+            let print_handler = PrintHandler::new(logger::verbosity(), path.as_str());
             let mut eval = Evaluator::new(&module);
             eval.set_print_handler(&print_handler);
             eval.set_loader(&TestModuleCache);

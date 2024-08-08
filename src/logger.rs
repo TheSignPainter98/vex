@@ -8,7 +8,10 @@ use crate::{result::Result, verbosity::Verbosity};
 pub static NUM_ERRS: Mutex<u32> = Mutex::new(0);
 pub static NUM_WARNINGS: Mutex<u32> = Mutex::new(0);
 
+static mut VERBOSITY: Verbosity = Verbosity::Terse;
+
 pub fn init(level: Verbosity) -> Result<()> {
+    unsafe { VERBOSITY = level };
     let level = level.into();
     log::set_boxed_logger(Box::new(Logger { level }))?;
     log::set_max_level(level.to_level_filter());
@@ -23,6 +26,34 @@ pub fn exit_code() -> ExitCode {
     } else {
         ExitCode::SUCCESS
     }
+}
+
+pub fn verbosity() -> Verbosity {
+    unsafe { VERBOSITY }
+}
+
+#[macro_export]
+macro_rules! error {
+    ($($arg:tt)+) => {{
+        $crate::logger::incr_error_count();
+        ::log::error!($($arg)+)
+    }}
+}
+
+pub fn incr_error_count() {
+    *NUM_ERRS.lock().expect("failed to lock NUM_ERRS") += 1;
+}
+
+#[macro_export]
+macro_rules! warn {
+    ($($arg:tt)+) => {{
+        $crate::logger::incr_warning_count();
+        ::log::warn!($($arg)+)
+    }}
+}
+
+pub fn incr_warning_count() {
+    *NUM_WARNINGS.lock().expect("failed to lock NUM_ERRS") += 1;
 }
 
 #[macro_export]
@@ -50,7 +81,6 @@ impl Log for Logger {
         }
 
         let level = metadata.level();
-
         let kvs = record.key_values();
         if level >= Level::Trace {
             eprintln!("trace: {}", record.args());
@@ -70,12 +100,6 @@ impl Log for Logger {
             };
             eprintln!("{}", render_snippet(snippet));
         };
-
-        match level {
-            Level::Error => *NUM_ERRS.lock().expect("failed to lock NUM_ERRS") += 1,
-            Level::Warn => *NUM_WARNINGS.lock().expect("failed to lock NUM_WARNINGS") += 1,
-            _ => {}
-        }
     }
 
     fn flush(&self) {}
