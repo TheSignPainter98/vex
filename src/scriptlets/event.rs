@@ -454,6 +454,10 @@ impl<'v> StarlarkValue<'v> for Irritations<'v> {
             })
     }
 
+    fn length(&self) -> starlark::Result<i32> {
+        Ok(self.0.len() as i32)
+    }
+
     fn iterate_collect(&self, _heap: &'v Heap) -> starlark::Result<Vec<Value<'v>>> {
         Ok(self.0.clone())
     }

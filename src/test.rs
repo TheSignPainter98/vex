@@ -170,7 +170,7 @@ mod test {
 
     #[test]
     fn standard_flow() {
-        VexTest::new("run")
+        VexTest::new("standard")
             .with_test_events(true)
             .with_scriptlet(
                 "vexes/test.star",
@@ -301,10 +301,12 @@ mod test {
                             for file, expected_warnings_by_id in expected_warnings.items():
                                 check['in'](file, event.warnings)
                                 actual_warnings_by_id = event.warnings[file]
+                                check['type'](actual_warnings_by_id, 'WarningsById')
 
                                 for (id, expected_warnings) in expected_warnings_by_id.items():
                                     check['in'](id, actual_warnings_by_id)
                                     actual_warnings = actual_warnings_by_id[id]
+                                    check['type'](actual_warnings, 'Warnings')
 
                                     for (actual_warning, expected_warning) in zip(actual_warnings, expected_warnings):
                                         check['eq'](actual_warning.id, id)
@@ -338,6 +340,199 @@ mod test {
             )
             .assert_irritation_free()
     }
-    // TODO(kcza): test all warning attributes!, do all with the same ID in the same file to
-    // test the list-making
+
+    #[test]
+    fn attrs() {
+        VexTest::new("standard")
+            .with_test_events(true)
+            .with_scriptlet(
+                "vexes/test.star",
+                formatdoc! {
+                    r#"
+                        load('{check_path}', 'check')
+
+                        def init():
+                            vex.observe('open_project', on_open_project)
+                            vex.observe('pre_test_run', on_pre_test_run)
+                            vex.observe('post_test_run', on_post_test_run)
+
+                        def on_open_project(event):
+                            if vex.lenient:
+                                return
+
+                            vex.search(
+                                'rust',
+                                '''
+                                    (binary_expression
+                                        left: (_) @left
+                                        right: (_) @right
+                                    ) @bin_expr
+                                ''',
+                                on_match,
+                            )
+
+                        def on_match(event):
+                            bin_expr = event.captures['bin_expr']
+                            left = event.captures['left']
+                            right = event.captures['right']
+
+                            vex.warn(
+                                'test',
+                                'just-message',
+                            )
+                            vex.warn(
+                                'test',
+                                'with-at-without-label',
+                                at=bin_expr,
+                            )
+                            vex.warn(
+                                'test',
+                                'with-at-and-label',
+                                at=(bin_expr, 'bin_expr label'),
+                            )
+                            vex.warn(
+                                'test',
+                                'with-at-and-show_also',
+                                at=bin_expr,
+                                show_also=[
+                                    (left, 'left label'),
+                                    (right, 'right label'),
+                                ]
+                            )
+                            vex.warn(
+                                'test',
+                                'with-info',
+                                info='info text',
+                            )
+
+                        def on_pre_test_run(event):
+                            vex.scan(
+                                'test_file.rs',
+                                'rust',
+                                '''
+                                    fn main() {{
+                                        let x = 1 + 1;
+                                    }}
+                                ''',
+                            )
+
+                        def on_post_test_run(event):
+                            expected_warnings = [{{
+                                'id': 'test',
+                                'message': 'just-message',
+                            }}, {{
+                                'id': 'test',
+                                'message': 'with-info',
+                                'info': 'info text',
+                            }}, {{
+                                'id': 'test',
+                                'message': 'with-at-without-label',
+                                'at': {{
+                                    'src': {{
+                                        'location': {{
+                                            'start_row': 2,
+                                        }},
+                                    }},
+                                }},
+                            }}, {{
+                                'id': 'test',
+                                'message': 'with-at-and-label',
+                                'at': {{
+                                    'src': {{
+                                        'location': {{
+                                            'start_row': 2
+                                        }},
+                                    }},
+                                    'label': 'bin_expr label',
+                                }},
+                            }}, {{
+                                'id': 'test',
+                                'message': 'with-at-and-show_also',
+                                'at': {{
+                                    'src': {{
+                                        'location': {{
+                                            'start_row': 2,
+                                        }},
+                                    }},
+                                }},
+                                'show_also': [{{
+                                    'src': {{
+                                        'location': {{
+                                            'start_row': 2,
+                                        }},
+                                    }},
+                                    'label': 'left label',
+                                }}, {{
+                                    'src': {{
+                                        'location': {{
+                                            'start_row': 2,
+                                        }},
+                                    }},
+                                    'label': 'right label',
+                                }}],
+                            }}]
+
+                            no_file_warnings = event.warnings['no-file']['test']
+                            test_file_warnings = event.warnings['test_file.rs']['test']
+                            actual_warnings = []
+                            for warning in no_file_warnings:
+                                actual_warnings.append(warning)
+                            for warning in test_file_warnings:
+                                actual_warnings.append(warning)
+
+                            check['eq'](len(actual_warnings), len(expected_warnings))
+                            for (actual_warning, expected_warning) in zip(actual_warnings, expected_warnings):
+                                check['eq'](actual_warning.id, expected_warning['id'])
+                                check['eq'](actual_warning.message, expected_warning['message'])
+
+                                actual_at = actual_warning.at
+                                if 'at' in expected_warning:
+                                    expected_at = expected_warning['at']
+                                    check['type'](actual_at, 'tuple')
+                                    (actual_src, actual_label) = actual_at
+
+                                    expected_src = expected_at['src']
+                                    check_src(actual_src, expected_src)
+
+                                    if 'label' in expected_at:
+                                        check['eq'](actual_label, expected_at['label'])
+                                    else:
+                                        check['eq'](actual_label, None)
+                                else:
+                                    check['eq'](actual_warning.at, None)
+
+                                if 'show_also' in expected_warning:
+                                    expected_show_also = expected_warning['show_also']
+                                    actual_show_also = actual_warning.show_also
+                                    for (expected_show_also_entry, actual_show_also_entry) in zip(expected_show_also, actual_show_also):
+                                        check['type'](actual_show_also_entry, 'tuple')
+
+                                        (actual_src, actual_label) = actual_show_also_entry
+
+                                        expected_src = expected_show_also_entry['src']
+                                        check_src(actual_src, expected_src)
+
+                                        actual_label = actual_show_also_entry[1]
+                                        if 'label' in expected_show_also_entry:
+                                            check['eq'](actual_label, expected_show_also_entry['label'])
+                                        else:
+                                            check['eq'](actual_label, None)
+
+                        def check_src(actual_src, expected_src):
+                            expected_location = expected_src['location']
+                            actual_location = actual_src.location
+                            if 'start_row' in expected_location:
+                                check['eq'](actual_location.start_row, expected_location['start_row'])
+                            if 'start_column' in expected_location:
+                                check['eq'](actual_location.start_row, expected_location['start_column'])
+                            if 'end_row' in expected_location:
+                                check['eq'](actual_location.start_row, expected_location['end_row'])
+                            if 'end_row' in expected_location:
+                                check['eq'](actual_location.start_row, expected_location['end_row'])
+                    "#,
+                    check_path = VexTest::CHECK_STARLARK_PATH,
+                },
+            )
+            .assert_irritation_free()
+    }
 }
