@@ -5,12 +5,13 @@ use std::{
     iter,
 };
 
-use camino::{Utf8Component, Utf8PathBuf};
+use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
 use dupe::Dupe;
 use log::{error, log_enabled};
 use starlark::values::FrozenHeap;
 
 use crate::{
+    associations::Associations,
     cli::MaxProblems,
     context::Context,
     error::{Error, IOAction},
@@ -22,7 +23,7 @@ use crate::{
         query_cache::QueryCache,
         Intent, Observable, ObserveOptions, PreinitOptions, PreinitingStore, VexingStore,
     },
-    source_path::PrettyPath,
+    source_path::{PrettyPath, SourcePath},
 };
 
 pub fn test() -> Result<()> {
@@ -86,6 +87,23 @@ pub(crate) fn run_tests(ctx: &Context, store: &VexingStore) -> Result<()> {
         }
         files_to_scan
     };
+
+    // TODO(kzca): Remove this constraint once language can be specified.
+    let base_associations = Associations::base();
+    files_to_scan.iter().try_for_each(|(path, language, _)| {
+        let src_path = SourcePath::new_in(Utf8Path::new(path.as_str()), Utf8Path::new(""));
+        let Some(associated_language) = base_associations.get_language(&src_path)? else {
+            return Err(Error::InvalidTest(format!(
+                "file {path} has no language associated with it by default"
+            )));
+        };
+        if *language != associated_language {
+            return Err(Error::InvalidTest(format!(
+                "file {path} declared as {language} but default language association is {associated_language}"
+            )));
+        }
+        Ok(())
+    })?;
 
     let temp_dir = tempfile::tempdir().map_err(|cause| Error::IO {
         path: "(temp file)".into(),
