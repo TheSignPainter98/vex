@@ -523,9 +523,9 @@ mod test {
                                 else:
                                     check['eq'](actual_warning.at, None)
 
+                                actual_show_also = actual_warning.show_also
                                 if 'show_also' in expected_warning:
                                     expected_show_also = expected_warning['show_also']
-                                    actual_show_also = actual_warning.show_also
                                     for (expected_show_also_entry, actual_show_also_entry) in zip(expected_show_also, actual_show_also):
                                         check['type'](actual_show_also_entry, 'tuple')
 
@@ -539,6 +539,15 @@ mod test {
                                             check['eq'](actual_label, expected_show_also_entry['label'])
                                         else:
                                             check['eq'](actual_label, None)
+                                else:
+                                    check['eq'](actual_show_also, [])
+
+                                actual_info = actual_warning.info
+                                if 'info' in expected_warning:
+                                    expected_info = expected_warning['info']
+                                    check['eq'](actual_info, expected_info)
+                                else:
+                                    check['eq'](actual_info, None)
 
                         def check_src(actual_src, expected_src):
                             expected_location = expected_src['location']
