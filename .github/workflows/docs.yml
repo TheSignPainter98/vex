@@ -31,7 +31,6 @@ jobs:
           profile: minimal
           toolchain: 1.75.0
           default: true
-          components: clippy, rustfmt
 
       - name: Install linkcheck
         uses: actions-rs/cargo@v1
