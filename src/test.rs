@@ -319,21 +319,25 @@ mod test {
                                             check['eq'](actual_at, None)
                                         else:
                                             check['type'](actual_at, 'tuple')
-                                            (src, label) = actual_warning.at
-                                            check['type'](src, 'IrritationSource')
-                                            check['eq'](label, None)
+                                            (actual_src, actual_label) = actual_warning.at
+                                            check['type'](actual_src, 'IrritationSource')
+                                            check['eq'](actual_label, None)
 
-                                            actual_location = src.location
-                                            expected_location = expected_at['location']
-                                            check['type'](src.location, 'Location')
-                                            if 'start_row' in expected_location:
-                                                check['eq'](src.location.start_row, expected_location['start_row'])
-                                            if 'start_column' in expected_location:
-                                                check['eq'](src.location.start_column, expected_location['start_column'])
-                                            if 'end_row' in expected_location:
-                                                check['eq'](src.location.end_row, expected_location['end_row'])
-                                            if 'end_column' in expected_location:
-                                                check['eq'](src.location.end_column, expected_location['end_column'])
+                                            expected_src = expected_at
+                                            check_src(actual_src, expected_src)
+
+                        def check_src(actual_src, expected_src):
+                            expected_location = expected_src['location']
+                            actual_location = actual_src.location
+                            check['type'](actual_location, 'Location')
+                            if 'start_row' in expected_location:
+                                check['eq'](actual_location.start_row, expected_location['start_row'])
+                            if 'start_column' in expected_location:
+                                check['eq'](actual_location.start_row, expected_location['start_column'])
+                            if 'end_row' in expected_location:
+                                check['eq'](actual_location.start_row, expected_location['end_row'])
+                            if 'end_row' in expected_location:
+                                check['eq'](actual_location.start_row, expected_location['end_row'])
                     "#,
                     check_path = VexTest::CHECK_STARLARK_PATH,
                 },
@@ -521,6 +525,7 @@ mod test {
                         def check_src(actual_src, expected_src):
                             expected_location = expected_src['location']
                             actual_location = actual_src.location
+                            check['type'](actual_location, 'Location')
                             if 'start_row' in expected_location:
                                 check['eq'](actual_location.start_row, expected_location['start_row'])
                             if 'start_column' in expected_location:
