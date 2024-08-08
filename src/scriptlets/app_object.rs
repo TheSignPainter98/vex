@@ -1,6 +1,7 @@
 use std::fmt::Display;
 
 use allocative::Allocative;
+use camino::Utf8Path;
 use derive_new::new;
 use starlark::{
     environment::{Methods, MethodsBuilder, MethodsStatic},
@@ -26,6 +27,7 @@ use crate::{
         observers::UnfrozenObserver,
         Node,
     },
+    source_path::PrettyPath,
     supported_language::SupportedLanguage,
     vex::id::VexId,
 };
@@ -150,6 +152,31 @@ impl AppObject {
             }
             ret_data.declare_intent(UnfrozenIntent::Warn(irritation_renderer.render()));
 
+            Ok(NoneType)
+        }
+
+        fn scan<'v>(
+            #[starlark(this)] _this: Value<'v>,
+            #[starlark(require=pos)] file_name: &'v str,
+            #[starlark(require=pos)] language: &'v str,
+            #[starlark(require=pos)] content: &'v str,
+            eval: &mut Evaluator<'_, '_>,
+        ) -> anyhow::Result<NoneType> {
+            AppObject::check_attr_available(
+                eval,
+                "vex.scan",
+                &[Action::Vexing(EventKind::PreTestRun)],
+            )?;
+
+            let file_name = PrettyPath::new(Utf8Path::new(file_name));
+            let language = language.parse()?;
+            let content = textwrap::dedent(content.strip_prefix('\n').unwrap_or(content));
+            let ret_data = UnfrozenRetainedData::get_from(eval.module());
+            ret_data.declare_intent(UnfrozenIntent::ScanFile {
+                file_name,
+                language,
+                content,
+            });
             Ok(NoneType)
         }
     }

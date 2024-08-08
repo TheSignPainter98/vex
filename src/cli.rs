@@ -84,14 +84,17 @@ pub enum Command {
     /// Check this project for lint
     Check(CheckCmd),
 
-    /// Print lists of things vex knows about
-    List(ListCmd),
+    /// Print the syntax tree of the given file
+    Dump(DumpCmd),
 
     /// Create new vex project with this directory as the root
     Init(InitCmd),
 
-    /// Print the syntax tree of the given file
-    Dump(DumpCmd),
+    /// Print lists of things vex knows about
+    List(ListCmd),
+
+    /// Test available lints
+    Test,
 }
 
 #[cfg(test)]
@@ -506,5 +509,15 @@ mod test {
                 .unwrap(),
             InitCmd { force: true },
         );
+    }
+
+    #[test]
+    fn test() {
+        assert_eq!(
+            Args::try_parse_from(["vex", "test"])
+                .unwrap()
+                .into_command(),
+            Command::Test,
+        )
     }
 }

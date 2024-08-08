@@ -10,6 +10,7 @@ use derive_more::Display;
 use derive_new::new;
 use dupe::{Dupe, OptionDupedExt};
 use paste::paste;
+use serde::Serialize;
 use starlark::{
     collections::StarlarkHasher,
     environment::{Methods, MethodsBuilder, MethodsStatic},
@@ -474,19 +475,28 @@ impl WhitespaceStyle {
     Ord,
     Hash,
     Allocative,
-    NoSerialize,
+    Serialize,
     ProvidesStaticType,
     StarlarkAttrs,
 )]
 pub struct Location {
-    start_row: usize,
-    start_column: usize,
-    end_row: usize,
-    end_column: usize,
+    pub start_row: usize,
+    pub start_column: usize,
+    pub end_row: usize,
+    pub end_column: usize,
 }
 starlark_simple_value!(Location);
 
 impl Location {
+    pub fn start_of_file() -> Self {
+        Self {
+            start_row: 1,
+            start_column: 1,
+            end_row: 1,
+            end_column: 1,
+        }
+    }
+
     pub fn of(node: &TSNode<'_>) -> Self {
         let Point {
             row: start_row,
@@ -497,9 +507,9 @@ impl Location {
             column: end_column,
         } = node.end_position();
         Self {
-            start_row,
+            start_row: start_row + 1,
             start_column,
-            end_row,
+            end_row: end_row + 1,
             end_column,
         }
     }
@@ -519,14 +529,9 @@ impl Display for Location {
             end_column,
         } = self;
         if start_row == end_row {
-            write!(f, "{}:{start_column}-{end_column}", start_row + 1)
+            write!(f, "{start_row}:{start_column}-{end_column}")
         } else {
-            write!(
-                f,
-                "{}:{start_column} - {}:{end_column}",
-                start_row + 1,
-                end_row + 1
-            )
+            write!(f, "{start_row}:{start_column} - {end_row}:{end_column}",)
         }
     }
 }
@@ -977,9 +982,9 @@ mod test {
                             check['type'](location_1, 'Location')
                             check['eq'](str(location_1), '2:12-13')
                             check['eq'](str(location_1), repr(location_1))
-                            check['eq'](location_1.start_row, 1)
+                            check['eq'](location_1.start_row, 2)
                             check['eq'](location_1.start_column, 12)
-                            check['eq'](location_1.end_row, 1)
+                            check['eq'](location_1.end_row, 2)
                             check['eq'](location_1.end_column, 13)
 
                             location_2 = event.captures['bin_expr'].location

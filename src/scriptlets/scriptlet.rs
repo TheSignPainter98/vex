@@ -334,16 +334,23 @@ impl InitingScriptlet {
             let invocation_data = RetainedData::get_from(&module);
             let intents = invocation_data.intents();
             let mut observer_data = ObserverData::with_capacity(intents.len());
-            intents.iter().for_each(|intent| match intent {
-                Intent::Observe {
-                    event_kind: EventKind::OpenProject,
+            intents.iter().for_each(|intent| {
+                if let Intent::Observe {
+                    event_kind,
                     observer,
-                } => observer_data.add_open_project_observer(observer.dupe()),
-                Intent::Observe {
-                    event_kind: EventKind::OpenFile,
-                    observer,
-                } => observer_data.add_open_file_observer(observer.dupe()),
-                _ => {}
+                } = intent
+                {
+                    let observer = observer.dupe();
+                    match event_kind {
+                        EventKind::OpenProject => observer_data.add_open_project_observer(observer),
+                        EventKind::OpenFile => observer_data.add_open_file_observer(observer),
+                        EventKind::Match => panic!("internal error: query_match not observable"),
+                        EventKind::PreTestRun => observer_data.add_pre_test_run_observer(observer),
+                        EventKind::PostTestRun => {
+                            observer_data.add_post_test_run_observer(observer)
+                        }
+                    }
+                }
             });
             observer_data
         };
