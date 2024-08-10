@@ -74,6 +74,9 @@ pub enum Error {
     #[error(transparent)]
     Language(#[from] tree_sitter::LanguageError),
 
+    #[error("cannot load {0}: file would be outside vexes directory")]
+    LeakyLoadPath(Utf8PathBuf),
+
     #[error("cannot find manifest, try running `vex init` in the project’s root")]
     ManifestNotFound,
 
@@ -261,9 +264,6 @@ pub enum InvalidLoadReason {
 
     #[display(fmt = "load path cannot contain both `./` and `../`")]
     MixedPathOperators,
-
-    #[display(fmt = "load path cannot be relative")]
-    Relative,
 
     #[display(fmt = "load path invalid, see docs")] // TODO(kcza): link to spec once public.
     NonSpecific,

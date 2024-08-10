@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, fs, io::ErrorKind, iter, ops::Deref};
 
-use camino::Utf8PathBuf;
+use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
 use dupe::Dupe;
 use log::{info, log_enabled};
 use starlark::{environment::FrozenModule, eval::FileLoader, values::FrozenHeap};
@@ -110,10 +110,14 @@ impl PreinitingStore {
 
         let frozen_heap = FrozenHeap::new();
         let mut initing_store = Vec::with_capacity(store.len());
-        let mut cache = PreinitedModuleCache::new();
+        let mut loader = Loader::new();
         for scriptlet in store.into_iter() {
-            let preinited_scriptlet = scriptlet.preinit(&opts, &cache, &frozen_heap)?;
-            cache.cache(&preinited_scriptlet);
+            loader.set_current_file(scriptlet.path.pretty_path.dupe());
+            let preinited_scriptlet = scriptlet.preinit(&opts, &loader, &frozen_heap)?;
+            loader.store(
+                preinited_scriptlet.path.pretty_path.dupe(),
+                preinited_scriptlet.preinited_module.dupe(),
+            );
             initing_store.push(preinited_scriptlet);
         }
 
@@ -293,33 +297,70 @@ pub struct PreinitOptions {
     pub lenient: bool,
 }
 
-#[derive(Debug)]
-pub struct PreinitedModuleCache {
-    exports: BTreeMap<PrettyPath, FrozenModule>,
+#[derive(Debug, Default)]
+pub struct Loader {
+    current_path: Option<PrettyPath>,
+    cache: BTreeMap<PrettyPath, FrozenModule>,
 }
 
-impl PreinitedModuleCache {
+impl Loader {
     fn new() -> Self {
-        Self {
-            exports: BTreeMap::new(),
-        }
+        Self::default()
     }
 
-    fn cache(&mut self, scriptlet: &InitingScriptlet) {
-        self.exports.insert(
-            scriptlet.path.pretty_path.dupe(),
-            scriptlet.preinited_module.dupe(),
-        );
+    fn set_current_file(&mut self, current_dir: PrettyPath) {
+        self.current_path = Some(current_dir);
+    }
+
+    fn store(&mut self, path: PrettyPath, module: FrozenModule) {
+        self.cache.insert(path, module);
     }
 }
 
-impl FileLoader for &PreinitedModuleCache {
+impl FileLoader for Loader {
     fn load(&self, path: &str) -> anyhow::Result<starlark::environment::FrozenModule> {
-        let path = PrettyPath::from(path);
-        self.exports
-            .get(&path)
+        // Preconditions:
+        // - path is not empty
+        // - path starts with one ./, many ../ or has no path operators
+        // - path only has path operators at the start.
+
+        let path = Utf8Path::new(path);
+        let mut components = path.components();
+        let current_path = self
+            .current_path
+            .as_ref()
+            .expect("internal error: current_dir not set");
+        let abs_path = match components.next().expect("internal error: load path empty") {
+            Utf8Component::CurDir => {
+                let mut abs_path = Utf8PathBuf::with_capacity(
+                    current_path.as_str().len() + path.as_str().len() - 1,
+                );
+                if let Some(current_dir) = current_path.parent() {
+                    abs_path.push(current_dir);
+                }
+                abs_path.push(&path.as_str()[2..]);
+                PrettyPath::new(&abs_path)
+            }
+            Utf8Component::ParentDir => {
+                let parents = 1 + components
+                    .take_while(|component| matches!(component, Utf8Component::ParentDir))
+                    .count();
+                let Some(parent_dir) = current_path.ancestors().nth(1 + parents) else {
+                    return Err(Error::LeakyLoadPath(path.to_owned()).into());
+                };
+                let abs_path = {
+                    let mut abs_path = parent_dir.to_owned();
+                    abs_path.extend(path.components().skip(parents));
+                    abs_path
+                };
+                PrettyPath::new(&abs_path)
+            }
+            _ => PrettyPath::new(path),
+        };
+        self.cache
+            .get(&PrettyPath::new(&abs_path))
             .map(Dupe::dupe)
-            .ok_or_else(|| Error::NoSuchModule(path).into())
+            .ok_or_else(|| Error::NoSuchModule(PrettyPath::new(path)).into())
     }
 }
 
@@ -380,5 +421,147 @@ impl Deref for VexingStore {
 
     fn deref(&self) -> &Self::Target {
         &self.observer_data
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use indoc::formatdoc;
+    use starlark::{
+        environment::{Globals, Module},
+        eval::Evaluator,
+        syntax::{AstModule, Dialect},
+    };
+
+    use super::*;
+
+    #[test]
+    fn relative_loads() {
+        let make_module = |path| {
+            let module = Module::new();
+            module.set("path", module.heap().alloc(path));
+            module.freeze().unwrap()
+        };
+
+        let mut loader = Loader::new();
+        let known_file_paths = [
+            "foo/bar/sibling.star",
+            "foo/parent.star",
+            "grandparent.star",
+            "foo/qux/cousin.star",
+            "quux/uncle.star",
+        ];
+        known_file_paths
+            .into_iter()
+            .for_each(|path| loader.store(PrettyPath::new(path.into()), make_module(path)));
+
+        Test::file("foo/bar/baz.star")
+            .which_loads("./sibling.star")
+            .with_loader(&mut loader)
+            .gets("foo/bar/sibling.star");
+        Test::file("foo/bar/baz.star")
+            .which_loads("../parent.star")
+            .with_loader(&mut loader)
+            .gets("foo/parent.star");
+        Test::file("foo/bar/baz.star")
+            .which_loads("../../grandparent.star")
+            .with_loader(&mut loader)
+            .gets("grandparent.star");
+        Test::file("foo/bar/baz.star")
+            .which_loads("../qux/cousin.star")
+            .with_loader(&mut loader)
+            .gets("foo/qux/cousin.star");
+        Test::file("foo/bar/baz.star")
+            .which_loads("../../quux/uncle.star")
+            .with_loader(&mut loader)
+            .gets("quux/uncle.star");
+        Test::file("root.star")
+            .which_loads("./grandparent.star")
+            .with_loader(&mut loader)
+            .gets("grandparent.star");
+        Test::file("root.star")
+            .which_loads("./grandparent.star")
+            .with_loader(&mut loader)
+            .gets("grandparent.star");
+        Test::file("foo/bar.star")
+            .which_loads("../quux/uncle.star")
+            .with_loader(&mut loader)
+            .gets("quux/uncle.star");
+
+        Test::file("foo/bar/baz.star")
+            .which_loads("./nonexistent.star")
+            .with_loader(&mut loader)
+            .errors();
+        Test::file("foo/bar/baz.star")
+            .which_loads("../nonexistent.star")
+            .with_loader(&mut loader)
+            .errors();
+        Test::file("foo/bar/baz.star")
+            .which_loads("../../../../../../fugitive.star")
+            .with_loader(&mut loader)
+            .errors();
+
+        // Test structs
+        struct Test<'l> {
+            file: &'static str,
+            to_load: Option<&'static str>,
+            loader: Option<&'l mut Loader>,
+        }
+
+        impl<'l> Test<'l> {
+            fn file(file: &'static str) -> Self {
+                Self {
+                    loader: None,
+                    file,
+                    to_load: None,
+                }
+            }
+
+            fn which_loads(mut self, to_load: &'static str) -> Self {
+                self.to_load = Some(to_load);
+                self
+            }
+
+            fn with_loader(mut self, loader: &'l mut Loader) -> Self {
+                self.loader = Some(loader);
+                self
+            }
+
+            fn gets(self, expected_path: &'static str) {
+                assert_eq!(self.try_run().unwrap(), expected_path);
+            }
+
+            fn errors(self) {
+                self.try_run().unwrap_err();
+            }
+
+            fn try_run(self) -> Result<String> {
+                let Self {
+                    file,
+                    to_load,
+                    loader,
+                } = self;
+                let to_load = to_load.unwrap();
+                let loader = loader.unwrap();
+                loader.set_current_file(file.into());
+
+                let code = formatdoc!(
+                    r#"
+                        load('{to_load}', 'path')
+                        path
+                    "#
+                );
+                let ast = AstModule::parse(file, code, &Dialect::Standard).unwrap();
+                let globals = Globals::standard();
+                let module = Module::new();
+                let mut eval = Evaluator::new(&module);
+                eval.set_loader(loader);
+                Ok(eval
+                    .eval_module(ast, &globals)?
+                    .unpack_str()
+                    .unwrap()
+                    .to_owned())
+            }
+        }
     }
 }

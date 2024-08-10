@@ -26,7 +26,7 @@ use crate::{
         handler_module::HandlerModule,
         print_handler::PrintHandler,
         query_cache::QueryCache,
-        store::PreinitedModuleCache,
+        store::Loader,
         Intent, ObserverData, PreinitOptions,
     },
     source_path::{PrettyPath, SourcePath},
@@ -86,7 +86,7 @@ impl PreinitingScriptlet {
     pub fn preinit(
         self,
         opts: &PreinitOptions,
-        cache: &PreinitedModuleCache,
+        cache: &Loader,
         frozen_heap: &FrozenHeap,
     ) -> Result<InitingScriptlet> {
         let Self {
@@ -108,7 +108,7 @@ impl PreinitingScriptlet {
                 };
                 let print_handler = PrintHandler::new(path.pretty_path.as_str());
                 let mut eval = Evaluator::new(&preinited_module);
-                eval.set_loader(&cache);
+                eval.set_loader(cache);
                 eval.set_print_handler(&print_handler);
                 eval.extra = Some(&temp_data);
                 eval.eval_module(ast, &Self::globals(*lenient))?;
@@ -170,10 +170,6 @@ impl LoadStatementModule<'_> {
         let is_unix_absolute = cfg!(target_os = "windows") && self_as_path.starts_with("/"); // Ensure consistent messaging.
         if self_as_path.is_absolute() || is_unix_absolute {
             return Err(invalid_load(InvalidLoadReason::Absolute));
-        }
-
-        if self.0.starts_with("./") || self.0.starts_with("../") {
-            return Err(invalid_load(InvalidLoadReason::Relative));
         }
 
         let extension = self_as_path.extension();
@@ -733,32 +729,30 @@ mod test {
             .path("abcdefghijklmnopqrstuvwxyz_0123456789.star")
             .ok();
         LoadTest::new("nested").path("aaa/bbb/ccc.star").ok();
-        // TODO(kcza): reinstate these.
-        // LoadTest::new("relative-toplevel").path("./aaa.star").ok();
-        // LoadTest::new("relative-nested")
-        //     .path("./aaa/bbb/ccc.star")
-        //     .ok();
-        // LoadTest::new("parent-toplevel").path("../aaa.star").ok();
-        // LoadTest::new("parent-nested")
-        //     .path("../../../aaa/bbb/ccc.star")
-        //     .ok();
+        LoadTest::new("relative-toplevel").path("./aaa.star").ok();
+        LoadTest::new("relative-nested")
+            .path("./aaa/bbb/ccc.star")
+            .ok();
+        LoadTest::new("parent-toplevel").path("../aaa.star").ok();
+        LoadTest::new("parent-nested")
+            .path("../../../aaa/bbb/ccc.star")
+            .ok();
 
         LoadTest::new("dash")
             .path("---.star")
             .causes("load path can only contain a-z, 0-9, `_`, `.` and `/`, found `-`");
-        // TODO(kcza): reinstate these.
-        // LoadTest::new("backslashes")
-        //     .path(r".\\.\\aaa.star")
-        //     .causes(r"load path can only contain a-z, 0-9, `_`, `.` and `/`, found `\`");
-        // LoadTest::new("extra-starting-current-dir")
-        //     .path("././aaa.star")
-        //     .causes("load path cannot contain multiple `./`");
-        // LoadTest::new("current-dir-in-parent-dir")
-        //     .path(".././aaa.star")
-        //     .causes("load path cannot contain both `./` and `../`");
-        // LoadTest::new("parent-op-in-current-dir")
-        //     .path("./../aaa.star")
-        //     .causes("load path cannot contain both `./` and `../`");
+        LoadTest::new("backslashes")
+            .path(r".\\.\\aaa.star")
+            .causes(r"load path can only contain a-z, 0-9, `_`, `.` and `/`, found `\`");
+        LoadTest::new("extra-starting-current-dir")
+            .path("././aaa.star")
+            .causes("load path cannot contain multiple `./`");
+        LoadTest::new("current-dir-in-parent-dir")
+            .path(".././aaa.star")
+            .causes("load path cannot contain both `./` and `../`");
+        LoadTest::new("parent-op-in-current-dir")
+            .path("./../aaa.star")
+            .causes("load path cannot contain both `./` and `../`");
         LoadTest::new("midway-current-dir")
             .path("aaa/./bbb.star")
             .causes("load path can only have path operators at the start");
