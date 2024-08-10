@@ -33,9 +33,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use cli::{InitCmd, ListCmd, MaxProblems, ToList};
 use dupe::Dupe;
 use indoc::printdoc;
-use lazy_static::lazy_static;
 use log::{info, log_enabled, trace};
-use owo_colors::{OwoColorize, Stream, Style};
 use scriptlets::{
     action::Action, event::EventKind, handler_module::HandlerModule, Observable, ObserveOptions,
 };
@@ -123,10 +121,6 @@ fn list(list_args: ListCmd) -> Result<()> {
     Ok(())
 }
 
-lazy_static! {
-    static ref SUCCESS_STYLE: Style = Style::new().green().bold();
-}
-
 fn check(cmd_args: CheckCmd) -> Result<()> {
     let ctx = Context::acquire()?;
     let store = {
@@ -157,10 +151,7 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
     if num_problems != 0 {
         warn!("found {}", Plural::new(num_problems, "problem", "problems"));
     } else {
-        success!(
-            "{}: no problems found",
-            "success".if_supports_color(Stream::Stdout, |text| text.style(*SUCCESS_STYLE))
-        );
+        success!("no problems found");
     }
 
     Ok(())
@@ -431,13 +422,12 @@ fn init(init_args: InitCmd) -> Result<()> {
     })?)?;
     Context::init(cwd, init_args.force)?;
     let queries_dir = Context::acquire()?.manifest.metadata.queries_dir;
-    printdoc!(
+    success!(
         "
-            {}: vex initialised
+            vex initialised
             now add style rules in ./{}/
             for an example, open ./{}/{EXAMPLE_VEX_FILE}
         ",
-        "success".if_supports_color(Stream::Stdout, |text| text.style(*SUCCESS_STYLE)),
         queries_dir.as_str(),
         queries_dir.as_str(),
     );

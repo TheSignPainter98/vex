@@ -1,7 +1,9 @@
 use std::{process::ExitCode, sync::Mutex};
 
 use annotate_snippets::{AnnotationType, Renderer, Snippet};
+use lazy_static::lazy_static;
 use log::{kv::Key, Level, Log, Metadata, Record};
+use owo_colors::Style;
 
 use crate::{result::Result, verbosity::Verbosity};
 
@@ -55,7 +57,17 @@ lazy_static! {
 #[macro_export]
 macro_rules! success {
     ($($arg:tt)+) => {
-        ::log::warn!(custom=true; $($arg)+)
+        {
+            use ::owo_colors::OwoColorize;
+            paste::paste!{
+                ::log::warn!(
+                    custom=true;
+                    "{}: {}",
+                    "success".if_supports_color(::owo_colors::Stream::Stdout, |text| text.style(*$crate::logger::SUCCESS_STYLE)),
+                    format!($($arg)+),
+                )
+            }
+        }
     };
 }
 
