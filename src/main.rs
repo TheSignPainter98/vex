@@ -66,7 +66,7 @@ fn main() -> ExitCode {
     match run() {
         Ok(c) => c,
         Err(e) => {
-            error!("{e}");
+            crate::error!("{e}");
             ExitCode::FAILURE
         }
     }
@@ -136,7 +136,7 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
     } = vex(&ctx, &store, cmd_args.max_problems)?;
     irritations
         .iter()
-        .for_each(|irr| warn!(custom=true; "{irr}"));
+        .for_each(|irr| crate::warn!(custom=true; "{irr}"));
     if log_enabled!(log::Level::Info) {
         info!(
             "scanned {}",
@@ -149,7 +149,7 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
             .lock()
             .expect("failed to lock NUM_WARNINGS") as usize;
     if num_problems != 0 {
-        warn!("found {}", Plural::new(num_problems, "problem", "problems"));
+        crate::warn!("found {}", Plural::new(num_problems, "problem", "problems"));
     } else {
         success!("no problems found");
     }

@@ -2,7 +2,7 @@ use std::{fs, ops::Range};
 
 use allocative::Allocative;
 use dupe::Dupe;
-use log::{info, log_enabled, warn};
+use log::{info, log_enabled};
 use tree_sitter::{Node as TSNode, Parser, QueryCursor, Tree};
 
 use crate::{
@@ -126,7 +126,7 @@ impl ParsedSourceFile {
                 debug_assert!(!qcaps.is_empty());
                 if qcaps.len() == 1 {
                     let marker_node = qcaps[0].node;
-                    warn!(
+                    crate::warn!(
                         "{}:{} ignore marker not associated with any block",
                         self.path.pretty_path,
                         Location::of(&Node::new(marker_node, self)),
@@ -163,7 +163,7 @@ impl ParsedSourceFile {
                         RecoverableResult::Ok(filter) => filter,
                         RecoverableResult::Recovered(filter, errs) => {
                             for err in errs {
-                                warn!(
+                                crate::warn!(
                                     "{}:{}: {}",
                                     self.path,
                                     Location::of(&Node::new(node, self)),
@@ -175,7 +175,7 @@ impl ParsedSourceFile {
                         RecoverableResult::Err(err) => return Err(err),
                     };
                     if filter.is_empty() {
-                        warn!(
+                        crate::warn!(
                             "{}:{}: no vex ids specified",
                             self.path,
                             Location::of(&Node::new(node, self)),
