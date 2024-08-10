@@ -35,25 +35,21 @@ pub fn verbosity() -> Verbosity {
 #[macro_export]
 macro_rules! error {
     ($($arg:tt)+) => {{
-        $crate::logger::incr_error_count();
+        *$crate::logger::NUM_ERRS.lock().expect("failed to lock NUM_ERRS") += 1;
         ::log::error!($($arg)+)
     }}
-}
-
-pub fn incr_error_count() {
-    *NUM_ERRS.lock().expect("failed to lock NUM_ERRS") += 1;
 }
 
 #[macro_export]
 macro_rules! warn {
     ($($arg:tt)+) => {{
-        $crate::logger::incr_warning_count();
+        *$crate::logger::NUM_WARNINGS.lock().expect("failed to lock NUM_WARNINGS") += 1;
         ::log::warn!($($arg)+)
     }}
 }
 
-pub fn incr_warning_count() {
-    *NUM_WARNINGS.lock().expect("failed to lock NUM_ERRS") += 1;
+lazy_static! {
+    pub static ref SUCCESS_STYLE: Style = Style::new().green().bold();
 }
 
 #[macro_export]
