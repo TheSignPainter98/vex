@@ -67,7 +67,7 @@ fn main() -> ExitCode {
         Ok(c) => c,
         Err(e) => {
             crate::error!("{e}");
-            ExitCode::FAILURE
+            ExitCode::from(u8::MAX)
         }
     }
 }
