@@ -1,9 +1,10 @@
 use clap::{error::ErrorKind as ClapErrorKind, CommandFactory};
 use log::Level;
+use strum::EnumIs;
 
 use crate::cli::Args;
 
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default, EnumIs)]
 pub enum Verbosity {
     Quiet,
 

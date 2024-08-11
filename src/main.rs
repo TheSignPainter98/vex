@@ -35,9 +35,8 @@ use camino::{Utf8Path, Utf8PathBuf};
 use cli::{InitCmd, ListCmd, MaxProblems, ToList};
 use dupe::Dupe;
 use indoc::printdoc;
-use lazy_static::lazy_static;
-use log::{error, info, log_enabled, trace, warn};
-use owo_colors::{OwoColorize, Stream, Style};
+use log::{info, log_enabled, trace};
+use scriptlets::InitOptions;
 use source_file::SourceFile;
 use strum::IntoEnumIterator;
 use tree_sitter::QueryCursor;
@@ -57,7 +56,7 @@ use crate::{
         intents::Intent,
         query_cache::QueryCache,
         query_captures::QueryCaptures,
-        Observable, ObserveOptions, PreinitOptions, PreinitingStore, VexingStore,
+        Observable, ObserveOptions, PreinitOptions, PreinitingStore, PrintHandler, VexingStore,
     },
     source_path::{PrettyPath, SourcePath},
     supported_language::SupportedLanguage,
@@ -70,10 +69,8 @@ fn main() -> ExitCode {
     match run() {
         Ok(c) => c,
         Err(e) => {
-            if log_enabled!(log::Level::Error) {
-                error!("{e}");
-            }
-            ExitCode::FAILURE
+            crate::error!("{e}");
+            ExitCode::from(u8::MAX)
         }
     }
 }
@@ -128,28 +125,28 @@ fn list(list_args: ListCmd) -> Result<()> {
     Ok(())
 }
 
-lazy_static! {
-    static ref SUCCESS_STYLE: Style = Style::new().green().bold();
-}
-
 fn check(cmd_args: CheckCmd) -> Result<()> {
     let ctx = Context::acquire()?;
     let store = {
+        let verbosity = logger::verbosity();
         let preinit_opts = PreinitOptions {
             lenient: cmd_args.lenient,
+            verbosity,
         };
-        PreinitingStore::new(&ctx)?.preinit(preinit_opts)?.init()?
+        let init_opts = InitOptions { verbosity };
+        PreinitingStore::new(&ctx)?
+            .preinit(preinit_opts)?
+            .init(init_opts)?
     };
 
+    let verbosity = logger::verbosity();
     let RunData {
         irritations,
         num_files_scanned,
-    } = vex(&ctx, &store, cmd_args.max_problems)?;
-    if log_enabled!(log::Level::Warn) {
-        irritations
-            .iter()
-            .for_each(|irr| warn!(custom=true; "{irr}"));
-    }
+    } = vex(&ctx, &store, cmd_args.max_problems, verbosity)?;
+    irritations
+        .iter()
+        .for_each(|irr| crate::warn!(custom=true; "{irr}"));
     if log_enabled!(log::Level::Info) {
         info!(
             "scanned {}",
@@ -162,20 +159,20 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
             .lock()
             .expect("failed to lock NUM_WARNINGS") as usize;
     if num_problems != 0 {
-        if log_enabled!(log::Level::Warn) {
-            warn!("found {}", Plural::new(num_problems, "problem", "problems"));
-        }
+        crate::warn!("found {}", Plural::new(num_problems, "problem", "problems"));
     } else {
-        success!(
-            "{}: no problems found",
-            "success".if_supports_color(Stream::Stdout, |text| text.style(*SUCCESS_STYLE))
-        );
+        success!("no problems found");
     }
 
     Ok(())
 }
 
-fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<RunData> {
+fn vex(
+    ctx: &Context,
+    store: &VexingStore,
+    max_problems: MaxProblems,
+    verbosity: Verbosity,
+) -> Result<RunData> {
     let files = {
         let mut paths = Vec::new();
         let ignores = ctx
@@ -228,6 +225,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
             action: Action::Vexing(event.kind()),
             query_cache: &query_cache,
             ignore_markers: None,
+            print_handler: &PrintHandler::new(verbosity, event.kind().name()),
         };
         store.observers_for(event.kind()).observe(
             &handler_module,
@@ -270,6 +268,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
                 action: Action::Vexing(event.kind()),
                 query_cache: &query_cache,
                 ignore_markers: None,
+                print_handler: &PrintHandler::new(verbosity, event.kind().name()),
             };
             store.observers_for(event.kind()).observe(
                 &handler_module,
@@ -330,6 +329,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
                             action: Action::Vexing(EventKind::Match),
                             query_cache: &query_cache,
                             ignore_markers: Some(&ignore_markers),
+                            print_handler: &PrintHandler::new(verbosity, EventKind::Match.name()),
                         };
                         on_match.observe(&handler_module, event, observe_opts)?;
                         handler_module
@@ -436,13 +436,12 @@ fn init(init_args: InitCmd) -> Result<()> {
     })?)?;
     Context::init(cwd, init_args.force)?;
     let queries_dir = Context::acquire()?.manifest.metadata.queries_dir;
-    printdoc!(
+    success!(
         "
-            {}: vex initialised
+            vex initialised
             now add style rules in ./{}/
             for an example, open ./{}/{EXAMPLE_VEX_FILE}
         ",
-        "success".if_supports_color(Stream::Stdout, |text| text.style(*SUCCESS_STYLE)),
         queries_dir.as_str(),
         queries_dir.as_str(),
     );
