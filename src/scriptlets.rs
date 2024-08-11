@@ -19,4 +19,4 @@ pub use self::observers::{Observable, ObserveOptions, Observer, ObserverData};
 pub use self::print_handler::PrintHandler;
 pub use self::query_captures::QueryCaptures;
 pub use self::scriptlet::LoadStatementModule;
-pub use self::store::{PreinitOptions, PreinitingStore, VexingStore, InitOptions};
+pub use self::store::{InitOptions, PreinitOptions, PreinitingStore, VexingStore};
