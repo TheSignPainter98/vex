@@ -350,7 +350,8 @@ mod test {
 
     use crate::{
         cli::MaxProblems,
-        scriptlets::{PreinitOptions, PreinitingStore},
+        scriptlets::{InitOptions, PreinitOptions, PreinitingStore},
+        verbosity::Verbosity,
         RunData,
     };
 
@@ -398,7 +399,7 @@ mod test {
             .unwrap()
             .preinit(PreinitOptions::default())
             .unwrap()
-            .init()
+            .init(InitOptions::default())
             .unwrap();
 
         // Already inited, no-force
@@ -417,7 +418,7 @@ mod test {
             .unwrap()
             .preinit(PreinitOptions::default())
             .unwrap()
-            .init()
+            .init(InitOptions::default())
             .unwrap();
 
         Ok(())
@@ -447,8 +448,9 @@ mod test {
         let ctx = Context::acquire_in(&tempdir_path)?;
         let store = PreinitingStore::new(&ctx)?
             .preinit(PreinitOptions::default())?
-            .init()?;
-        let RunData { irritations, .. } = crate::vex(&ctx, &store, MaxProblems::Unlimited)?;
+            .init(InitOptions::default())?;
+        let RunData { irritations, .. } =
+            crate::vex(&ctx, &store, MaxProblems::Unlimited, Verbosity::default())?;
         assert_yaml_snapshot!(irritations
             .into_iter()
             .map(|irr| irr.to_string())

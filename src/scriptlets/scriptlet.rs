@@ -4,7 +4,6 @@ use camino::{Utf8Component, Utf8Path};
 use const_format::formatcp;
 use dupe::Dupe;
 use lazy_static::lazy_static;
-use log::{log_enabled, warn};
 use regex::Regex;
 use starlark::{
     analysis::AstModuleLint,
@@ -26,7 +25,7 @@ use crate::{
         handler_module::HandlerModule,
         print_handler::PrintHandler,
         query_cache::QueryCache,
-        store::Loader,
+        store::{InitOptions, Loader},
         Intent, ObserverData, PreinitOptions,
     },
     source_path::{PrettyPath, SourcePath},
@@ -94,7 +93,7 @@ impl PreinitingScriptlet {
             ast,
             loads_files: _,
         } = self;
-        let PreinitOptions { lenient } = opts;
+        let PreinitOptions { lenient, verbosity } = opts;
 
         let preinited_module = {
             let preinited_module = Module::new();
@@ -106,7 +105,7 @@ impl PreinitingScriptlet {
                     query_cache: &QueryCache::new(),
                     ignore_markers: None,
                 };
-                let print_handler = PrintHandler::new(path.pretty_path.as_str());
+                let print_handler = PrintHandler::new(*verbosity, path.pretty_path.as_str());
                 let mut eval = Evaluator::new(&preinited_module);
                 eval.set_loader(cache);
                 eval.set_print_handler(&print_handler);
@@ -298,11 +297,12 @@ pub struct InitingScriptlet {
 }
 
 impl InitingScriptlet {
-    pub fn init(self, frozen_heap: &FrozenHeap) -> Result<ObserverData> {
+    pub fn init(self, opts: &InitOptions, frozen_heap: &FrozenHeap) -> Result<ObserverData> {
         let Self {
             path,
             preinited_module,
         } = self;
+        let InitOptions { verbosity } = opts;
 
         let Some(init) = preinited_module.get_option("init")? else {
             return Ok(ObserverData::empty());
@@ -316,7 +316,7 @@ impl InitingScriptlet {
                     query_cache: &QueryCache::new(),
                     ignore_markers: None,
                 };
-                let print_handler = PrintHandler::new(path.pretty_path.as_str());
+                let print_handler = PrintHandler::new(*verbosity, path.pretty_path.as_str());
                 let mut eval = Evaluator::new(&module);
                 eval.extra = Some(&temp_data);
                 eval.set_print_handler(&print_handler);
@@ -350,8 +350,8 @@ impl InitingScriptlet {
             });
             observer_data
         };
-        if log_enabled!(log::Level::Warn) && observer_data.len() == 0 {
-            warn!("{} observes no events", path.pretty_path);
+        if observer_data.len() == 0 {
+            crate::warn!("{} observes no events", path.pretty_path);
         }
         Ok(observer_data)
     }

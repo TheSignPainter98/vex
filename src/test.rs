@@ -15,22 +15,33 @@ use crate::{
     cli::MaxProblems,
     context::Context,
     error::{Error, IOAction},
+    logger,
     result::Result,
     scriptlets::{
         action::Action,
         event::{PostTestRunEvent, PreTestRunEvent},
         handler_module::HandlerModule,
         query_cache::QueryCache,
-        Intent, Observable, ObserveOptions, PreinitOptions, PreinitingStore, VexingStore,
+        InitOptions, Intent, Observable, ObserveOptions, PreinitOptions, PreinitingStore,
+        PrintHandler, VexingStore,
     },
     source_path::{PrettyPath, SourcePath},
+    verbosity::Verbosity,
 };
 
 pub fn test() -> Result<()> {
     let ctx = Context::acquire()?;
     let store = {
-        let preinit_opts = PreinitOptions::default();
-        PreinitingStore::new(&ctx)?.preinit(preinit_opts)?.init()?
+        let preinit_opts = PreinitOptions {
+            verbosity: Verbosity::Quiet,
+            ..PreinitOptions::default()
+        };
+        let init_opts = InitOptions {
+            verbosity: Verbosity::Quiet,
+        };
+        PreinitingStore::new(&ctx)?
+            .preinit(preinit_opts)?
+            .init(init_opts)?
     };
 
     run_tests(&ctx, &store)?;
@@ -46,6 +57,7 @@ pub(crate) fn run_tests(ctx: &Context, store: &VexingStore) -> Result<()> {
             action: Action::Vexing(event.kind()),
             query_cache: &QueryCache::new(),
             ignore_markers: None,
+            print_handler: &PrintHandler::new(logger::verbosity(), event.kind().name()),
         };
         store.observers_for(event.kind()).observe(
             &handler_module,
@@ -146,12 +158,21 @@ pub(crate) fn run_tests(ctx: &Context, store: &VexingStore) -> Result<()> {
 
     let collect_run_data = |lenient| {
         let sub_store = {
-            let preinit_opts = PreinitOptions { lenient };
+            let verbosity = Verbosity::Quiet;
+            let preinit_opts = PreinitOptions { lenient, verbosity };
+            let init_opts = InitOptions { verbosity };
             // Create new store using the current context to inherit the existing scripts.
-            PreinitingStore::new(ctx)?.preinit(preinit_opts)?.init()?
+            PreinitingStore::new(ctx)?
+                .preinit(preinit_opts)?
+                .init(init_opts)?
         };
         let sub_ctx = ctx.child_context(PrettyPath::new(&temp_dir_path));
-        crate::vex(&sub_ctx, &sub_store, MaxProblems::Unlimited)
+        crate::vex(
+            &sub_ctx,
+            &sub_store,
+            MaxProblems::Unlimited,
+            Verbosity::Quiet,
+        )
     };
     let nonlenient_data = collect_run_data(false)?;
     let lenient_data = collect_run_data(true)?;
@@ -168,6 +189,7 @@ pub(crate) fn run_tests(ctx: &Context, store: &VexingStore) -> Result<()> {
             action: Action::Vexing(event.kind()),
             query_cache: &QueryCache::new(),
             ignore_markers: None,
+            print_handler: &PrintHandler::new(logger::verbosity(), event.kind().name()),
         };
         store.observers_for(event.kind()).observe(
             &handler_module,

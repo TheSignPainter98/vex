@@ -2,7 +2,7 @@ use std::{fs, ops::Range};
 
 use allocative::Allocative;
 use dupe::Dupe;
-use log::{info, log_enabled, warn};
+use log::{info, log_enabled};
 use tree_sitter::{Node as TSNode, Parser, QueryCursor, Tree};
 
 use crate::{
@@ -124,9 +124,9 @@ impl ParsedSourceFile {
             .map(|qmatch| qmatch.captures)
             .inspect(|qcaps| {
                 debug_assert!(!qcaps.is_empty());
-                if qcaps.len() == 1 && log_enabled!(log::Level::Warn) {
+                if qcaps.len() == 1 {
                     let marker_node = qcaps[0].node;
-                    warn!(
+                    crate::warn!(
                         "{}:{} ignore marker not associated with any block",
                         self.path.pretty_path,
                         Location::of(&Node::new(marker_node, self)),
@@ -162,22 +162,20 @@ impl ParsedSourceFile {
                     let filter = match VexIdFilter::try_from_iter(raw_parts) {
                         RecoverableResult::Ok(filter) => filter,
                         RecoverableResult::Recovered(filter, errs) => {
-                            if log_enabled!(log::Level::Warn) {
-                                for err in errs {
-                                    warn!(
-                                        "{}:{}: {}",
-                                        self.path,
-                                        Location::of(&Node::new(node, self)),
-                                        err
-                                    );
-                                }
+                            for err in errs {
+                                crate::warn!(
+                                    "{}:{}: {}",
+                                    self.path,
+                                    Location::of(&Node::new(node, self)),
+                                    err
+                                );
                             }
                             filter
                         }
                         RecoverableResult::Err(err) => return Err(err),
                     };
-                    if filter.is_empty() && log_enabled!(log::Level::Warn) {
-                        warn!(
+                    if filter.is_empty() {
+                        crate::warn!(
                             "{}:{}: no vex ids specified",
                             self.path,
                             Location::of(&Node::new(node, self)),

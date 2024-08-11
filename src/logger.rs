@@ -1,14 +1,19 @@
 use std::{process::ExitCode, sync::Mutex};
 
 use annotate_snippets::{AnnotationType, Renderer, Snippet};
+use lazy_static::lazy_static;
 use log::{kv::Key, Level, Log, Metadata, Record};
+use owo_colors::Style;
 
 use crate::{result::Result, verbosity::Verbosity};
 
 pub static NUM_ERRS: Mutex<u32> = Mutex::new(0);
 pub static NUM_WARNINGS: Mutex<u32> = Mutex::new(0);
 
+static mut VERBOSITY: Verbosity = Verbosity::Terse;
+
 pub fn init(level: Verbosity) -> Result<()> {
+    unsafe { VERBOSITY = level };
     let level = level.into();
     log::set_boxed_logger(Box::new(Logger { level }))?;
     log::set_max_level(level.to_level_filter());
@@ -25,10 +30,42 @@ pub fn exit_code() -> ExitCode {
     }
 }
 
+pub fn verbosity() -> Verbosity {
+    unsafe { VERBOSITY }
+}
+
+#[macro_export]
+macro_rules! error {
+    ($($arg:tt)+) => {{
+        *$crate::logger::NUM_ERRS.lock().expect("failed to lock NUM_ERRS") += 1;
+        ::log::error!($($arg)+)
+    }}
+}
+
+#[macro_export]
+macro_rules! warn {
+    ($($arg:tt)+) => {{
+        *$crate::logger::NUM_WARNINGS.lock().expect("failed to lock NUM_WARNINGS") += 1;
+        ::log::warn!($($arg)+)
+    }}
+}
+
+lazy_static! {
+    pub static ref SUCCESS_STYLE: Style = Style::new().green().bold();
+}
+
 #[macro_export]
 macro_rules! success {
     ($($arg:tt)+) => {
-        ::log::warn!(custom=true; $($arg)+)
+        {
+            use ::owo_colors::OwoColorize;
+            ::log::warn!(
+                custom=true;
+                "{}: {}",
+                "success".if_supports_color(::owo_colors::Stream::Stdout, |text| text.style(*$crate::logger::SUCCESS_STYLE)),
+                format!($($arg)+),
+            )
+        }
     };
 }
 
@@ -50,7 +87,6 @@ impl Log for Logger {
         }
 
         let level = metadata.level();
-
         let kvs = record.key_values();
         if level >= Level::Trace {
             eprintln!("trace: {}", record.args());
@@ -70,12 +106,6 @@ impl Log for Logger {
             };
             eprintln!("{}", render_snippet(snippet));
         };
-
-        match level {
-            Level::Error => *NUM_ERRS.lock().expect("failed to lock NUM_ERRS") += 1,
-            Level::Warn => *NUM_WARNINGS.lock().expect("failed to lock NUM_WARNINGS") += 1,
-            _ => {}
-        }
     }
 
     fn flush(&self) {}
