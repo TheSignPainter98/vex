@@ -13,7 +13,8 @@ use crate::{
     cli::MaxProblems,
     context::Context,
     result::Result,
-    scriptlets::{PreinitOptions, PreinitingStore},
+    scriptlets::{InitOptions, PreinitOptions, PreinitingStore},
+    verbosity::Verbosity,
     RunData,
 };
 
@@ -157,15 +158,20 @@ impl<'s> VexTest<'s> {
         if !self.bare {
             fs::create_dir(ctx.vex_dir()).ok();
         }
+        let verbosity = Verbosity::default();
         let preinit_opts = PreinitOptions {
             lenient: self.lenient,
+            verbosity,
         };
-        let store = PreinitingStore::new(&ctx)?.preinit(preinit_opts)?.init()?;
+        let init_opts = InitOptions { verbosity };
+        let store = PreinitingStore::new(&ctx)?
+            .preinit(preinit_opts)?
+            .init(init_opts)?;
         if self.fire_test_events {
             crate::test::run_tests(&ctx, &store)?;
             Ok(RunData::default())
         } else {
-            super::vex(&ctx, &store, self.max_problems)
+            super::vex(&ctx, &store, self.max_problems, verbosity)
         }
     }
 
