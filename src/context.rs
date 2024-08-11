@@ -109,6 +109,13 @@ impl Context {
         Ok(())
     }
 
+    pub fn child_context(&self, project_root: PrettyPath) -> Context {
+        Context {
+            project_root,
+            manifest: self.manifest.clone(),
+        }
+    }
+
     pub fn associations(&self) -> Result<Associations> {
         let mut ret = Associations::base();
         self.manifest
@@ -144,7 +151,7 @@ impl Deref for Context {
     }
 }
 
-#[derive(Debug, Default, Deserialise, Serialise, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub struct Manifest {
     #[serde(rename = "vex")]
@@ -247,7 +254,7 @@ impl Manifest {
     }
 }
 
-#[derive(Debug, Default, Deserialise, Serialise, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
 pub struct Metadata {
     #[serde(default)]
     pub queries_dir: QueriesDir,
@@ -259,7 +266,7 @@ pub struct Metadata {
     pub allows: Vec<RawFilePattern<String>>,
 }
 
-#[derive(Debug, Deserialise, Serialise, PartialEq)]
+#[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
 pub struct LanguageData(HashMap<SupportedLanguage, LanguageOptions>);
 
 impl Default for LanguageData {
@@ -291,7 +298,7 @@ pub struct LanguageOptions {
     file_associations: Vec<RawFilePattern<String>>,
 }
 
-#[derive(Debug, Deserialise, Serialise, PartialEq)]
+#[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
 pub struct QueriesDir(String);
 
 impl QueriesDir {

@@ -7,6 +7,7 @@ use derive_more::Display;
 use starlark::values::{AllocValue, Freeze, StarlarkValue, Value};
 use starlark_derive::{starlark_value, NoSerialize, ProvidesStaticType, Trace};
 
+use crate::source_path::PrettyPath;
 use crate::{
     irritation::Irritation,
     query::Query,
@@ -21,6 +22,10 @@ pub struct UnfrozenIntents<'v>(RefCell<Vec<UnfrozenIntent<'v>>>);
 impl<'v> UnfrozenIntents<'v> {
     pub fn new() -> Self {
         Self(RefCell::new(Vec::with_capacity(10)))
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.borrow().len()
     }
 
     pub fn declare(&self, intent: UnfrozenIntent<'v>) {
@@ -78,6 +83,11 @@ pub enum UnfrozenIntent<'v> {
         observer: UnfrozenObserver<'v>,
     },
     Warn(Irritation),
+    ScanFile {
+        file_name: PrettyPath,
+        language: SupportedLanguage,
+        content: String,
+    },
 }
 
 impl<'v> Freeze for UnfrozenIntent<'v> {
@@ -108,6 +118,15 @@ impl<'v> Freeze for UnfrozenIntent<'v> {
                 }
             }
             Self::Warn(irr) => Intent::Warn(irr),
+            Self::ScanFile {
+                file_name,
+                language,
+                content,
+            } => Intent::ScanFile {
+                file_name,
+                language,
+                content,
+            },
         })
     }
 }
@@ -162,4 +181,9 @@ pub enum Intent {
         observer: Observer,
     },
     Warn(Irritation),
+    ScanFile {
+        file_name: PrettyPath,
+        language: SupportedLanguage,
+        content: String,
+    },
 }

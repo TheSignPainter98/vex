@@ -3,7 +3,7 @@ use std::{cmp, env, fmt::Display, iter, process};
 use camino::Utf8PathBuf;
 use clap::{
     builder::{
-        styling::{AnsiColor, Color, Style},
+        styling::{AnsiColor, Effects},
         StringValueParser, Styles, TypedValueParser,
     },
     ArgAction, Parser, Subcommand, ValueEnum,
@@ -48,27 +48,15 @@ impl Args {
     }
 
     fn styles() -> Styles {
-        let header_style = Style::new()
-            .bold()
-            .fg_color(Color::Ansi(AnsiColor::Green).into());
-        let literal_style = Style::new().fg_color(Color::Ansi(AnsiColor::Cyan).into());
-        let command_style = literal_style.bold();
+        // Match cargo output style
         Styles::styled()
-            .header(header_style)
-            .error(
-                Style::new()
-                    .bold()
-                    .fg_color(Color::Ansi(AnsiColor::Red).into()),
-            )
-            .usage(header_style)
-            .literal(command_style)
-            .placeholder(literal_style)
-            .valid(literal_style)
-            .invalid(
-                Style::new()
-                    .bold()
-                    .fg_color(Color::Ansi(AnsiColor::Yellow).into()),
-            )
+            .header(AnsiColor::Green.on_default().effects(Effects::BOLD))
+            .usage(AnsiColor::Green.on_default().effects(Effects::BOLD))
+            .literal(AnsiColor::Cyan.on_default().effects(Effects::BOLD))
+            .placeholder(AnsiColor::Cyan.on_default())
+            .error(AnsiColor::Red.on_default().effects(Effects::BOLD))
+            .valid(AnsiColor::Cyan.on_default().effects(Effects::BOLD))
+            .invalid(AnsiColor::Yellow.on_default().effects(Effects::BOLD))
     }
 }
 
@@ -84,14 +72,17 @@ pub enum Command {
     /// Check this project for lint
     Check(CheckCmd),
 
-    /// Print lists of things vex knows about
-    List(ListCmd),
+    /// Print the syntax tree of the given file
+    Dump(DumpCmd),
 
     /// Create new vex project with this directory as the root
     Init(InitCmd),
 
-    /// Print the syntax tree of the given file
-    Dump(DumpCmd),
+    /// Print lists of things vex knows about
+    List(ListCmd),
+
+    /// Test available lints
+    Test,
 }
 
 #[cfg(test)]
@@ -506,5 +497,15 @@ mod test {
                 .unwrap(),
             InitCmd { force: true },
         );
+    }
+
+    #[test]
+    fn test() {
+        assert_eq!(
+            Args::try_parse_from(["vex", "test"])
+                .unwrap()
+                .into_command(),
+            Command::Test,
+        )
     }
 }

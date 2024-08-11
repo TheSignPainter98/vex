@@ -22,13 +22,17 @@ use crate::{
 pub struct ObserverData {
     on_open_project: Vec<Observer>,
     on_open_file: Vec<Observer>,
+    on_pre_test_run: Vec<Observer>,
+    on_post_test_run: Vec<Observer>,
 }
 
 impl ObserverData {
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            on_open_project: Vec::with_capacity(capacity),
-            on_open_file: Vec::with_capacity(capacity),
+            on_open_project: Vec::with_capacity(capacity / 4),
+            on_open_file: Vec::with_capacity(capacity / 4),
+            on_pre_test_run: Vec::with_capacity(capacity / 4),
+            on_post_test_run: Vec::with_capacity(capacity / 4),
         }
     }
 
@@ -36,6 +40,8 @@ impl ObserverData {
         Self {
             on_open_project: Vec::with_capacity(0),
             on_open_file: Vec::with_capacity(0),
+            on_pre_test_run: Vec::with_capacity(0),
+            on_post_test_run: Vec::with_capacity(0),
         }
     }
 
@@ -43,8 +49,10 @@ impl ObserverData {
         let Self {
             on_open_project,
             on_open_file,
+            on_pre_test_run,
+            on_post_test_run,
         } = self;
-        on_open_project.len() + on_open_file.len()
+        on_open_project.len() + on_open_file.len() + on_pre_test_run.len() + on_post_test_run.len()
     }
 
     pub fn add_open_project_observer(&mut self, observer: Observer) {
@@ -55,13 +63,25 @@ impl ObserverData {
         self.on_open_file.push(observer)
     }
 
+    pub fn add_pre_test_run_observer(&mut self, observer: Observer) {
+        self.on_pre_test_run.push(observer)
+    }
+
+    pub fn add_post_test_run_observer(&mut self, observer: Observer) {
+        self.on_post_test_run.push(observer)
+    }
+
     pub fn extend(&mut self, other: Self) {
         let Self {
             on_open_project,
             on_open_file,
+            on_pre_test_run,
+            on_post_test_run,
         } = self;
         on_open_project.extend(other.on_open_project);
         on_open_file.extend(other.on_open_file);
+        on_pre_test_run.extend(other.on_pre_test_run);
+        on_post_test_run.extend(other.on_post_test_run);
     }
 
     pub fn observers_for(&self, event_kind: EventKind) -> &[Observer] {
@@ -69,6 +89,8 @@ impl ObserverData {
             EventKind::OpenProject => &self.on_open_project,
             EventKind::OpenFile => &self.on_open_file,
             EventKind::Match => panic!("internal error: query_match not observable"),
+            EventKind::PreTestRun => &self.on_pre_test_run,
+            EventKind::PostTestRun => &self.on_post_test_run,
         }
     }
 }

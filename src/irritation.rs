@@ -4,29 +4,249 @@ use allocative::Allocative;
 use annotate_snippets::{Annotation, AnnotationType, Slice, Snippet, SourceAnnotation};
 use dupe::Dupe;
 use serde::Serialize;
+use starlark::values::{list::AllocList, AllocValue, Heap, StarlarkValue, Value};
+use starlark_derive::{
+    starlark_attrs, starlark_value, NoSerialize, ProvidesStaticType, StarlarkAttrs, Trace,
+};
 
 use crate::{
     logger,
-    scriptlets::{main_annotation::MainAnnotation, Node},
+    scriptlets::{main_annotation::MainAnnotation, Location, Node},
     source_path::PrettyPath,
     vex::id::VexId,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Allocative, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Allocative, Serialize, ProvidesStaticType)]
 #[non_exhaustive]
 pub struct Irritation {
-    code_source: Option<IrritationSource>,
     vex_id: VexId,
-    other_code_sources: Vec<IrritationSource>,
-    info_present: bool,
+    message: String,
+    at: Option<(IrritationSource, Option<String>)>,
+    show_also: Vec<(IrritationSource, String)>,
+    info: Option<String>,
     pub(crate) rendered: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Allocative, Serialize)]
+impl Irritation {
+    pub fn vex_id(&self) -> &VexId {
+        &self.vex_id
+    }
+
+    pub fn path(&self) -> Option<&PrettyPath> {
+        self.at.as_ref().map(|(loc, _)| &loc.path)
+    }
+
+    pub fn to_value_on<'v>(&self, lenient: bool, heap: &'v Heap) -> Value<'v> {
+        let Self {
+            vex_id,
+            message,
+            at,
+            show_also,
+            info,
+            rendered,
+        } = self;
+        let vex_id = heap.alloc(vex_id.as_ref());
+        let lenient = Value::new_bool(lenient);
+        let message = heap.alloc(message);
+        let at = at
+            .as_ref()
+            .map(|(loc, label)| heap.alloc((loc.clone(), label.as_deref())))
+            .unwrap_or_default();
+        let show_also = heap.alloc(AllocList(
+            show_also
+                .iter()
+                .map(|(loc, label)| heap.alloc((loc.clone(), label))),
+        ));
+        let info = info
+            .as_ref()
+            .map(|info| heap.alloc(info))
+            .unwrap_or_default();
+        let rendered = rendered.clone();
+        heap.alloc(IrritationValue {
+            vex_id,
+            lenient,
+            message,
+            at,
+            show_also,
+            info,
+            rendered,
+        })
+    }
+}
+
+impl Ord for Irritation {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let Self {
+            vex_id,
+            message,
+            at,
+            show_also,
+            info,
+            rendered: _,
+        } = self;
+
+        fn loc<S, T>(annot: &(S, T)) -> &S {
+            let (loc, _) = annot;
+            loc
+        }
+        fn label<S, T>(annot: &(S, T)) -> &T {
+            let (_, label) = annot;
+            label
+        }
+        return (
+            at.as_ref().map(loc),
+            vex_id,
+            ComparableIterator(show_also.iter().map(loc)),
+            info,
+            at.as_ref().map(label),
+            ComparableIterator(show_also.iter().map(label)),
+            message,
+        )
+            .cmp(&(
+                other.at.as_ref().map(loc),
+                &other.vex_id,
+                ComparableIterator(other.show_also.iter().map(loc)),
+                &other.info,
+                other.at.as_ref().map(label),
+                ComparableIterator(other.show_also.iter().map(label)),
+                &other.message,
+            ));
+
+        // ComparableIterator implements Ord on the lexicographic order of its contents.
+        #[derive(Clone)]
+        struct ComparableIterator<I>(I);
+
+        impl<I, T> Ord for ComparableIterator<I>
+        where
+            I: Iterator<Item = T> + Clone,
+            T: Ord,
+        {
+            fn cmp(&self, other: &Self) -> Ordering {
+                self.0.clone().cmp(other.0.clone())
+            }
+        }
+
+        impl<I, T> PartialOrd for ComparableIterator<I>
+        where
+            I: Iterator<Item = T> + Clone,
+            T: Ord,
+        {
+            fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+                Some(self.cmp(other))
+            }
+        }
+
+        impl<I, T> Eq for ComparableIterator<I>
+        where
+            I: Iterator<Item = T> + Clone,
+            T: Eq,
+        {
+        }
+
+        impl<I, T> PartialEq for ComparableIterator<I>
+        where
+            I: Iterator<Item = T> + Clone,
+            T: Eq,
+        {
+            fn eq(&self, other: &Self) -> bool {
+                self.0.to_owned().eq(other.0.clone())
+            }
+        }
+    }
+}
+
+impl PartialOrd<Self> for Irritation {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Display for Irritation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.rendered)
+    }
+}
+
+#[derive(Clone, Debug, Allocative, NoSerialize, ProvidesStaticType, Trace)]
+struct IrritationValue<'v> {
+    vex_id: Value<'v>,
+    lenient: Value<'v>,
+    message: Value<'v>,
+    at: Value<'v>,
+    show_also: Value<'v>,
+    info: Value<'v>,
+    rendered: String,
+}
+
+impl<'v> IrritationValue<'v> {
+    const VEX_ID_ATTR_NAME: &'static str = "id";
+    const LENIENT_ATTR_NAME: &'static str = "lenient";
+    const MESSAGE_ATTR_NAME: &'static str = "message";
+    const AT_ATTR_NAME: &'static str = "at";
+    const SHOW_ALSO_ATTR_NAME: &'static str = "show_also";
+    const INFO_ATTR_NAME: &'static str = "info";
+}
+
+#[starlark_value(type = "Irritation")]
+impl<'v> StarlarkValue<'v> for IrritationValue<'v> {
+    fn dir_attr(&self) -> Vec<String> {
+        [
+            Self::VEX_ID_ATTR_NAME,
+            Self::LENIENT_ATTR_NAME,
+            Self::MESSAGE_ATTR_NAME,
+            Self::AT_ATTR_NAME,
+            Self::SHOW_ALSO_ATTR_NAME,
+            Self::INFO_ATTR_NAME,
+        ]
+        .into_iter()
+        .map(Into::into)
+        .collect()
+    }
+
+    fn get_attr(&self, attr: &str, _heap: &'v Heap) -> Option<Value<'v>> {
+        match attr {
+            Self::VEX_ID_ATTR_NAME => Some(self.vex_id.dupe()),
+            Self::LENIENT_ATTR_NAME => Some(self.lenient.dupe()),
+            Self::MESSAGE_ATTR_NAME => Some(self.message.dupe()),
+            Self::AT_ATTR_NAME => Some(self.at.dupe()),
+            Self::SHOW_ALSO_ATTR_NAME => Some(self.show_also.dupe()),
+            Self::INFO_ATTR_NAME => Some(self.info.dupe()),
+            _ => None,
+        }
+    }
+
+    fn has_attr(&self, attr: &str, _heap: &'v Heap) -> bool {
+        [
+            Self::VEX_ID_ATTR_NAME,
+            Self::LENIENT_ATTR_NAME,
+            Self::MESSAGE_ATTR_NAME,
+            Self::AT_ATTR_NAME,
+            Self::SHOW_ALSO_ATTR_NAME,
+            Self::INFO_ATTR_NAME,
+        ]
+        .contains(&attr)
+    }
+}
+
+impl<'v> AllocValue<'v> for IrritationValue<'v> {
+    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+        heap.alloc_complex_no_freeze(self)
+    }
+}
+
+impl Display for IrritationValue<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.rendered)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Allocative, Serialize, StarlarkAttrs, ProvidesStaticType)]
 pub struct IrritationSource {
     path: PrettyPath,
+    #[starlark(skip)]
     #[allocative(skip)]
     byte_range: Range<usize>,
+    location: Location,
 }
 
 impl IrritationSource {
@@ -34,6 +254,7 @@ impl IrritationSource {
         Self {
             path: node.source_file.path.pretty_path.dupe(),
             byte_range: node.byte_range(),
+            location: Location::of(node),
         }
     }
 
@@ -41,6 +262,7 @@ impl IrritationSource {
         Self {
             path,
             byte_range: 0..0,
+            location: Location::start_of_file(),
         }
     }
 }
@@ -61,9 +283,28 @@ impl PartialOrd for IrritationSource {
     }
 }
 
-impl Display for Irritation {
+impl Dupe for IrritationSource {
+    // Fields:
+    // .path: Dupe
+    // .byte_range: !Dupe but cheap
+    // .location: Dupe
+}
+
+#[starlark_value(type = "IrritationSource")]
+impl<'v> StarlarkValue<'v> for IrritationSource {
+    starlark_attrs!();
+}
+
+impl<'v> AllocValue<'v> for IrritationSource {
+    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+        heap.alloc_simple(self)
+    }
+}
+
+impl Display for IrritationSource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.rendered.fmt(f)
+        let Self { path, location, .. } = self;
+        write!(f, "{path}:{location}")
     }
 }
 
@@ -179,21 +420,28 @@ impl<'v> IrritationRenderer<'v> {
                 .collect(),
         };
 
-        let code_source = source.as_ref().map(|source| match source {
-            MainAnnotation::Path { path, .. } => IrritationSource::whole_file(path.dupe()),
-            MainAnnotation::Node { node, .. } => IrritationSource::at(node),
-        });
-        let other_code_sources = show_also
-            .iter()
-            .map(|(node, _)| IrritationSource::at(node))
-            .collect();
-        let info_present = info.is_some();
         let rendered = logger::render_snippet(snippet);
+        let message = message.to_string();
+        let at = source.map(|source| match source {
+            MainAnnotation::Path { path, label } => (
+                IrritationSource::whole_file(path.dupe()),
+                label.map(|l| l.to_string()),
+            ),
+            MainAnnotation::Node { node, label } => {
+                (IrritationSource::at(&node), label.map(|l| l.to_string()))
+            }
+        });
+        let show_also = show_also
+            .into_iter()
+            .map(|(node, label)| (IrritationSource::at(&node), label.to_string()))
+            .collect();
+        let info = info.map(|e| e.to_string());
         Irritation {
             vex_id,
-            code_source,
-            other_code_sources,
-            info_present,
+            message,
+            at,
+            show_also,
+            info,
             rendered,
         }
     }

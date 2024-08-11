@@ -23,6 +23,11 @@ impl HandlerModule {
         Self { module }
     }
 
+    pub fn intent_count(&self) -> usize {
+        let ret_data = UnfrozenRetainedData::get_from(&self.module);
+        ret_data.intent_count()
+    }
+
     pub fn into_intents_on(self, frozen_heap: &FrozenHeap) -> Result<Intents> {
         let Self { module, .. } = self;
         let module = module.freeze()?;

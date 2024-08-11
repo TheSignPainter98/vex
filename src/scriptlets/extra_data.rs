@@ -41,6 +41,10 @@ impl<'v> UnfrozenRetainedData<'v> {
             .expect("Module extra has wrong type")
     }
 
+    pub fn intent_count(&self) -> usize {
+        self.intents.len()
+    }
+
     pub fn declare_intent(&self, intent: UnfrozenIntent<'v>) {
         self.intents.declare(intent)
     }

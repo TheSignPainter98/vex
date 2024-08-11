@@ -15,11 +15,13 @@ mod logger;
 mod plural;
 mod query;
 mod result;
+mod run_data;
 mod scriptlets;
 mod source_file;
 mod source_path;
 mod suggestion;
 mod supported_language;
+mod test;
 mod trigger;
 mod verbosity;
 mod vex;
@@ -34,9 +36,6 @@ use cli::{InitCmd, ListCmd, MaxProblems, ToList};
 use dupe::Dupe;
 use indoc::printdoc;
 use log::{info, log_enabled, trace};
-use scriptlets::{
-    action::Action, event::EventKind, handler_module::HandlerModule, Observable, ObserveOptions,
-};
 use source_file::SourceFile;
 use strum::IntoEnumIterator;
 use tree_sitter::QueryCursor;
@@ -45,15 +44,18 @@ use crate::{
     cli::{Args, CheckCmd, Command},
     context::{Context, EXAMPLE_VEX_FILE},
     error::{Error, IOAction},
-    irritation::Irritation,
     plural::Plural,
     result::Result,
+    run_data::RunData,
     scriptlets::{
+        action::Action,
+        event::EventKind,
         event::{MatchEvent, OpenFileEvent, OpenProjectEvent},
+        handler_module::HandlerModule,
         intents::Intent,
         query_cache::QueryCache,
         query_captures::QueryCaptures,
-        PreinitOptions, PreinitingStore, VexingStore,
+        Observable, ObserveOptions, PreinitOptions, PreinitingStore, VexingStore,
     },
     source_path::{PrettyPath, SourcePath},
     supported_language::SupportedLanguage,
@@ -88,9 +90,10 @@ fn run() -> Result<ExitCode> {
 
     match args.command {
         Command::Check(cmd_args) => check(cmd_args),
+        Command::Dump(dump_args) => dump::dump(dump_args),
         Command::List(list_args) => list(list_args),
         Command::Init(init_args) => init(init_args),
-        Command::Dump(dump_args) => dump::dump(dump_args),
+        Command::Test => test::test(),
     }?;
 
     Ok(logger::exit_code())
@@ -155,19 +158,6 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
     }
 
     Ok(())
-}
-
-#[derive(Debug)]
-struct RunData {
-    irritations: Vec<Irritation>,
-    num_files_scanned: usize,
-}
-
-impl RunData {
-    #[cfg(test)]
-    fn into_irritations(self) -> Vec<Irritation> {
-        self.irritations
-    }
 }
 
 fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<RunData> {
@@ -240,6 +230,9 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
                 } => project_queries.push((language, query, on_match)),
                 Intent::Observe { .. } => panic!("internal error: non-init observe"),
                 Intent::Warn(irr) => irritations.push(irr),
+                Intent::ScanFile { .. } => {
+                    panic!("internal error: unexpected ScanFile intent declared")
+                }
             });
         project_queries
     };
@@ -279,6 +272,9 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
                     } => file_queries.push((language, query, on_match)),
                     Intent::Observe { .. } => panic!("internal error: non-init observe"),
                     Intent::Warn(irr) => irritations.push(irr.clone()),
+                    Intent::ScanFile { .. } => {
+                        panic!("internal error: unexpected ScanFile intent declared")
+                    }
                 });
             file_queries
         };
@@ -332,6 +328,9 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
                                     panic!("internal error: non-init observe")
                                 }
                                 Intent::Warn(irr) => irritations.push(irr),
+                                Intent::ScanFile { .. } => {
+                                    panic!("internal error: unexpected ScanFile intent declared")
+                                }
                             });
 
                         Ok::<_, Error>(())
@@ -435,7 +434,7 @@ fn init(init_args: InitCmd) -> Result<()> {
 }
 
 #[cfg(test)]
-mod test {
+mod test_ {
     use indoc::indoc;
     use insta::assert_yaml_snapshot;
     use joinery::JoinableIterator;
