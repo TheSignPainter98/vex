@@ -75,7 +75,7 @@ pub enum Error {
     Language(#[from] tree_sitter::LanguageError),
 
     #[error("cannot load {0}: file would be outside vexes directory")]
-    LeakyLoadPath(Utf8PathBuf),
+    PathOutOfBounds(Utf8PathBuf),
 
     #[error("cannot find manifest, try running `vex init` in the project’s root")]
     ManifestNotFound,

@@ -300,7 +300,7 @@ pub struct PreinitOptions {
 #[derive(Debug, Default)]
 pub struct Loader {
     current_path: Option<PrettyPath>,
-    cache: BTreeMap<PrettyPath, FrozenModule>,
+    module_store: BTreeMap<PrettyPath, FrozenModule>,
 }
 
 impl Loader {
@@ -313,7 +313,7 @@ impl Loader {
     }
 
     fn store(&mut self, path: PrettyPath, module: FrozenModule) {
-        self.cache.insert(path, module);
+        self.module_store.insert(path, module);
     }
 }
 
@@ -346,10 +346,12 @@ impl FileLoader for Loader {
                     .take_while(|component| matches!(component, Utf8Component::ParentDir))
                     .count();
                 let Some(parent_dir) = current_path.ancestors().nth(1 + parents) else {
-                    return Err(Error::LeakyLoadPath(path.to_owned()).into());
+                    return Err(Error::PathOutOfBounds(path.to_owned()).into());
                 };
                 let abs_path = {
-                    let mut abs_path = parent_dir.to_owned();
+                    let max_capacity = current_path.as_str().len() + 1 + path.as_str().len();
+                    let mut abs_path = Utf8PathBuf::with_capacity(max_capacity);
+                    abs_path.push(parent_dir);
                     abs_path.extend(path.components().skip(parents));
                     abs_path
                 };
@@ -357,7 +359,7 @@ impl FileLoader for Loader {
             }
             _ => PrettyPath::new(path),
         };
-        self.cache
+        self.module_store
             .get(&PrettyPath::new(&abs_path))
             .map(Dupe::dupe)
             .ok_or_else(|| Error::NoSuchModule(PrettyPath::new(path)).into())
@@ -437,12 +439,6 @@ mod test {
 
     #[test]
     fn relative_loads() {
-        let make_module = |path| {
-            let module = Module::new();
-            module.set("path", module.heap().alloc(path));
-            module.freeze().unwrap()
-        };
-
         let mut loader = Loader::new();
         let known_file_paths = [
             "foo/bar/sibling.star",
@@ -451,9 +447,13 @@ mod test {
             "foo/qux/cousin.star",
             "quux/uncle.star",
         ];
-        known_file_paths
-            .into_iter()
-            .for_each(|path| loader.store(PrettyPath::new(path.into()), make_module(path)));
+        known_file_paths.into_iter().for_each(|path| {
+            let module = Module::new();
+            module.set("path", module.heap().alloc(path));
+            let frozen_module = module.freeze().unwrap();
+
+            loader.store(PrettyPath::new(path.into()), frozen_module)
+        });
 
         Test::file("foo/bar/baz.star")
             .which_loads("./sibling.star")
@@ -502,13 +502,13 @@ mod test {
             .errors();
 
         // Test structs
-        struct Test<'l> {
+        struct Test<'loader> {
             file: &'static str,
             to_load: Option<&'static str>,
-            loader: Option<&'l mut Loader>,
+            loader: Option<&'loader mut Loader>,
         }
 
-        impl<'l> Test<'l> {
+        impl<'loader> Test<'loader> {
             fn file(file: &'static str) -> Self {
                 Self {
                     loader: None,
@@ -522,7 +522,7 @@ mod test {
                 self
             }
 
-            fn with_loader(mut self, loader: &'l mut Loader) -> Self {
+            fn with_loader(mut self, loader: &'loader mut Loader) -> Self {
                 self.loader = Some(loader);
                 self
             }
@@ -552,12 +552,11 @@ mod test {
                     "#
                 );
                 let ast = AstModule::parse(file, code, &Dialect::Standard).unwrap();
-                let globals = Globals::standard();
                 let module = Module::new();
                 let mut eval = Evaluator::new(&module);
                 eval.set_loader(loader);
                 Ok(eval
-                    .eval_module(ast, &globals)?
+                    .eval_module(ast, &Globals::standard())?
                     .unpack_str()
                     .unwrap()
                     .to_owned())
