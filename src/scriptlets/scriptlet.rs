@@ -16,7 +16,6 @@ use starlark::{
 
 use crate::{
     error::{Error, IOAction, InvalidLoadReason},
-    logger,
     result::Result,
     scriptlets::{
         action::Action,
@@ -26,7 +25,7 @@ use crate::{
         handler_module::HandlerModule,
         print_handler::PrintHandler,
         query_cache::QueryCache,
-        store::PreinitedModuleCache,
+        store::{InitOptions, PreinitedModuleCache},
         Intent, ObserverData, PreinitOptions,
     },
     source_path::{PrettyPath, SourcePath},
@@ -94,7 +93,7 @@ impl PreinitingScriptlet {
             ast,
             loads_files: _,
         } = self;
-        let PreinitOptions { lenient } = opts;
+        let PreinitOptions { lenient, verbosity } = opts;
 
         let preinited_module = {
             let preinited_module = Module::new();
@@ -106,8 +105,7 @@ impl PreinitingScriptlet {
                     query_cache: &QueryCache::new(),
                     ignore_markers: None,
                 };
-                let print_handler =
-                    PrintHandler::new(logger::verbosity(), path.pretty_path.as_str());
+                let print_handler = PrintHandler::new(*verbosity, path.pretty_path.as_str());
                 let mut eval = Evaluator::new(&preinited_module);
                 eval.set_loader(&cache);
                 eval.set_print_handler(&print_handler);
@@ -303,11 +301,12 @@ pub struct InitingScriptlet {
 }
 
 impl InitingScriptlet {
-    pub fn init(self, frozen_heap: &FrozenHeap) -> Result<ObserverData> {
+    pub fn init(self, opts: &InitOptions, frozen_heap: &FrozenHeap) -> Result<ObserverData> {
         let Self {
             path,
             preinited_module,
         } = self;
+        let InitOptions { verbosity } = opts;
 
         let Some(init) = preinited_module.get_option("init")? else {
             return Ok(ObserverData::empty());
@@ -321,8 +320,7 @@ impl InitingScriptlet {
                     query_cache: &QueryCache::new(),
                     ignore_markers: None,
                 };
-                let print_handler =
-                    PrintHandler::new(logger::verbosity(), path.pretty_path.as_str());
+                let print_handler = PrintHandler::new(*verbosity, path.pretty_path.as_str());
                 let mut eval = Evaluator::new(&module);
                 eval.extra = Some(&temp_data);
                 eval.set_print_handler(&print_handler);

@@ -9,7 +9,6 @@ use starlark_derive::{starlark_value, NoSerialize, ProvidesStaticType, Trace};
 
 use crate::{
     ignore_markers::IgnoreMarkers,
-    logger,
     result::Result,
     scriptlets::{
         action::Action, event::EventKind, extra_data::TempData, handler_module::HandlerModule,
@@ -132,6 +131,7 @@ pub struct ObserveOptions<'v> {
     pub action: Action,
     pub query_cache: &'v QueryCache,
     pub ignore_markers: Option<&'v IgnoreMarkers>,
+    pub print_handler: &'v PrintHandler<'v>,
 }
 
 impl Observable for Observer {
@@ -141,15 +141,20 @@ impl Observable for Observer {
         event: Value<'v>,
         opts: ObserveOptions<'_>,
     ) -> Result<()> {
+        let ObserveOptions {
+            action,
+            query_cache,
+            ignore_markers,
+            print_handler,
+        } = opts;
         let temp_data = TempData {
-            action: opts.action,
-            query_cache: opts.query_cache,
-            ignore_markers: opts.ignore_markers,
+            action,
+            query_cache,
+            ignore_markers,
         };
-        let print_handler = PrintHandler::new(logger::verbosity(), opts.action.name());
         let mut eval = Evaluator::new(handler_module);
         eval.extra = Some(&temp_data);
-        eval.set_print_handler(&print_handler);
+        eval.set_print_handler(print_handler);
 
         let func = self.callback.dupe().to_value(); // TODO(kcza): check thread safety! Can this unfrozen
                                                     // function mutate upvalues if it is a closure?

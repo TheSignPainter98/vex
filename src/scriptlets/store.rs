@@ -14,6 +14,7 @@ use crate::{
         ObserverData,
     },
     source_path::{PrettyPath, SourcePath},
+    verbosity::Verbosity,
 };
 
 type StoreIndex = usize;
@@ -291,6 +292,7 @@ impl PreinitingStore {
 #[derive(Debug, Default)]
 pub struct PreinitOptions {
     pub lenient: bool,
+    pub verbosity: Verbosity,
 }
 
 #[derive(Debug)]
@@ -330,14 +332,14 @@ pub struct InitingStore {
 }
 
 impl InitingStore {
-    pub fn init(self) -> Result<VexingStore> {
+    pub fn init(self, opts: InitOptions) -> Result<VexingStore> {
         let Self { store, frozen_heap } = self;
         let num_scripts = store.len();
 
         let observer_data = store.into_iter().try_fold(
             ObserverData::with_capacity(4 * num_scripts),
             |mut data, scriptlet| {
-                data.extend(scriptlet.init(&frozen_heap)?);
+                data.extend(scriptlet.init(&opts, &frozen_heap)?);
                 Ok::<_, Error>(data)
             },
         )?;
@@ -348,6 +350,11 @@ impl InitingStore {
             frozen_heap,
         })
     }
+}
+
+#[derive(Debug, Default)]
+pub struct InitOptions {
+    pub verbosity: Verbosity,
 }
 
 #[derive(Debug)]

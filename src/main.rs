@@ -36,6 +36,7 @@ use cli::{InitCmd, ListCmd, MaxProblems, ToList};
 use dupe::Dupe;
 use indoc::printdoc;
 use log::{info, log_enabled, trace};
+use scriptlets::InitOptions;
 use source_file::SourceFile;
 use strum::IntoEnumIterator;
 use tree_sitter::QueryCursor;
@@ -55,7 +56,7 @@ use crate::{
         intents::Intent,
         query_cache::QueryCache,
         query_captures::QueryCaptures,
-        Observable, ObserveOptions, PreinitOptions, PreinitingStore, VexingStore,
+        Observable, ObserveOptions, PreinitOptions, PreinitingStore, PrintHandler, VexingStore,
     },
     source_path::{PrettyPath, SourcePath},
     supported_language::SupportedLanguage,
@@ -127,16 +128,22 @@ fn list(list_args: ListCmd) -> Result<()> {
 fn check(cmd_args: CheckCmd) -> Result<()> {
     let ctx = Context::acquire()?;
     let store = {
+        let verbosity = logger::verbosity();
         let preinit_opts = PreinitOptions {
             lenient: cmd_args.lenient,
+            verbosity,
         };
-        PreinitingStore::new(&ctx)?.preinit(preinit_opts)?.init()?
+        let init_opts = InitOptions { verbosity };
+        PreinitingStore::new(&ctx)?
+            .preinit(preinit_opts)?
+            .init(init_opts)?
     };
 
+    let verbosity = logger::verbosity();
     let RunData {
         irritations,
         num_files_scanned,
-    } = vex(&ctx, &store, cmd_args.max_problems)?;
+    } = vex(&ctx, &store, cmd_args.max_problems, verbosity)?;
     irritations
         .iter()
         .for_each(|irr| crate::warn!(custom=true; "{irr}"));
@@ -160,7 +167,12 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
     Ok(())
 }
 
-fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<RunData> {
+fn vex(
+    ctx: &Context,
+    store: &VexingStore,
+    max_problems: MaxProblems,
+    verbosity: Verbosity,
+) -> Result<RunData> {
     let files = {
         let mut paths = Vec::new();
         let ignores = ctx
@@ -213,6 +225,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
             action: Action::Vexing(event.kind()),
             query_cache: &query_cache,
             ignore_markers: None,
+            print_handler: &PrintHandler::new(verbosity, event.kind().name()),
         };
         store.observers_for(event.kind()).observe(
             &handler_module,
@@ -255,6 +268,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
                 action: Action::Vexing(event.kind()),
                 query_cache: &query_cache,
                 ignore_markers: None,
+                print_handler: &PrintHandler::new(verbosity, event.kind().name()),
             };
             store.observers_for(event.kind()).observe(
                 &handler_module,
@@ -315,6 +329,7 @@ fn vex(ctx: &Context, store: &VexingStore, max_problems: MaxProblems) -> Result<
                             action: Action::Vexing(EventKind::Match),
                             query_cache: &query_cache,
                             ignore_markers: Some(&ignore_markers),
+                            print_handler: &PrintHandler::new(verbosity, EventKind::Match.name()),
                         };
                         on_match.observe(&handler_module, event, observe_opts)?;
                         handler_module

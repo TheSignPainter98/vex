@@ -13,12 +13,10 @@ pub mod query_captures;
 mod scriptlet;
 mod store;
 
-pub use intents::{Intent, Intents};
-pub use node::{Location, Node, NodePrinter, WhitespaceStyle};
-pub use observers::{Observable, ObserveOptions, Observer, ObserverData};
-pub use query_captures::QueryCaptures;
-pub use scriptlet::LoadStatementModule;
-pub use store::{PreinitOptions, PreinitingStore, VexingStore};
-
-#[cfg(test)]
-pub use print_handler::PrintHandler;
+pub use self::intents::{Intent, Intents};
+pub use self::node::{Location, Node, NodePrinter, WhitespaceStyle};
+pub use self::observers::{Observable, ObserveOptions, Observer, ObserverData};
+pub use self::print_handler::PrintHandler;
+pub use self::query_captures::QueryCaptures;
+pub use self::scriptlet::LoadStatementModule;
+pub use self::store::{PreinitOptions, PreinitingStore, VexingStore, InitOptions};

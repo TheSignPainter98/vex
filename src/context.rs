@@ -350,7 +350,7 @@ mod test {
 
     use crate::{
         cli::MaxProblems,
-        scriptlets::{PreinitOptions, PreinitingStore},
+        scriptlets::{InitOptions, PreinitOptions, PreinitingStore},
         RunData,
     };
 
@@ -398,7 +398,7 @@ mod test {
             .unwrap()
             .preinit(PreinitOptions::default())
             .unwrap()
-            .init()
+            .init(InitOptions::default())
             .unwrap();
 
         // Already inited, no-force
