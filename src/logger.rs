@@ -59,14 +59,12 @@ macro_rules! success {
     ($($arg:tt)+) => {
         {
             use ::owo_colors::OwoColorize;
-            paste::paste!{
-                ::log::warn!(
-                    custom=true;
-                    "{}: {}",
-                    "success".if_supports_color(::owo_colors::Stream::Stdout, |text| text.style(*$crate::logger::SUCCESS_STYLE)),
-                    format!($($arg)+),
-                )
-            }
+            ::log::warn!(
+                custom=true;
+                "{}: {}",
+                "success".if_supports_color(::owo_colors::Stream::Stdout, |text| text.style(*$crate::logger::SUCCESS_STYLE)),
+                format!($($arg)+),
+            )
         }
     };
 }
