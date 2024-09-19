@@ -74,17 +74,11 @@ pub enum Error {
     #[error(transparent)]
     Language(#[from] tree_sitter::LanguageError),
 
-    #[error("cannot load {0}: file would be outside vexes directory")]
-    PathOutOfBounds(Utf8PathBuf),
-
     #[error("cannot find manifest, try running `vex init` in the project’s root")]
     ManifestNotFound,
 
     #[error("cannot discern language of {0}")]
     NoKnownLanguage(PrettyPath),
-
-    #[error("cannot find module '{0}'")]
-    NoSuchModule(PrettyPath),
 
     #[error("cannot find vexes directory at {0}")]
     NoVexesDir(Utf8PathBuf),
@@ -94,6 +88,9 @@ pub enum Error {
 
     #[error(transparent)]
     ParseInt(#[from] num::ParseIntError),
+
+    #[error("cannot load '{0}': path is out of bounds")]
+    PathOutOfBounds(Utf8PathBuf),
 
     #[error(r#"cannot compile "{pattern}": {} at position {}"#, cause.msg, cause.pos - cause_pos_offset)]
     Pattern {
@@ -232,6 +229,9 @@ pub enum InvalidLoadReason {
     #[display(fmt = "load path cannot contain multiple `./`")]
     MultipleCurDirs,
 
+    #[display(fmt = "file does not exist")]
+    NoSuchFile,
+
     #[display(fmt = "load path cannot contain successive dots in file component")]
     SuccessiveDots,
 
@@ -266,5 +266,5 @@ pub enum InvalidLoadReason {
     MixedPathOperators,
 
     #[display(fmt = "load path invalid, see docs")] // TODO(kcza): link to spec once public.
-    NonSpecific,
+    MiscInvalidPath,
 }

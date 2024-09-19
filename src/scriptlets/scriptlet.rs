@@ -1,6 +1,6 @@
-use std::{collections::HashSet, fs};
+use std::{borrow::Cow, collections::HashSet, fs};
 
-use camino::{Utf8Component, Utf8Path};
+use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
 use const_format::formatcp;
 use dupe::Dupe;
 use lazy_static::lazy_static;
@@ -56,8 +56,12 @@ impl PreinitingScriptlet {
         let loads_files = ast
             .loads()
             .into_iter()
-            .map(|load| PrettyPath::from(load.module_id))
-            .collect();
+            .map(|load| {
+                LoadStatementModule::new(load.module_id, &path.pretty_path)?
+                    .to_abs(&path.abs_path)
+                    .map(|path| PrettyPath::new(&path))
+            })
+            .collect::<Result<_>>()?;
         Ok(Self {
             path,
             ast,
@@ -68,8 +72,7 @@ impl PreinitingScriptlet {
     fn validate_loads(ast: &AstModule, path: &PrettyPath) -> Result<()> {
         ast.loads()
             .iter()
-            .map(|l| LoadStatementModule(l.module_id))
-            .try_for_each(|m| m.validate(path))
+            .try_for_each(|l| LoadStatementModule::validate(Utf8Path::new(l.module_id), path))
     }
 
     #[allow(unused)]
@@ -138,26 +141,31 @@ impl PreinitingScriptlet {
     }
 }
 
-pub struct LoadStatementModule<'a>(&'a str);
+pub struct LoadStatementModule<'a>(&'a Utf8Path);
 
-impl LoadStatementModule<'_> {
+impl<'a> LoadStatementModule<'a> {
     pub const MIN_COMPONENT_LEN: usize = 3;
 
-    pub fn validate(&self, current_file: &PrettyPath) -> Result<()> {
-        let self_as_path = Utf8Path::new(self.0);
-        let components = self_as_path.components().collect::<Vec<_>>();
+    pub fn new(path: &'a str, current_file: &PrettyPath) -> Result<Self> {
+        let path = Utf8Path::new(path);
+        Self::validate(path, current_file)?;
+        Ok(Self(path))
+    }
+
+    fn validate(path: &Utf8Path, current_file: &PrettyPath) -> Result<()> {
+        let components = path.components().collect::<Vec<_>>();
         let invalid_load = |reason| Error::InvalidLoad {
-            load: self.0.to_string(),
+            load: path.to_string(),
             module: current_file.dupe(),
             reason,
         };
 
-        if self.0.is_empty() {
+        if path.as_str().is_empty() {
             return Err(invalid_load(InvalidLoadReason::Empty));
         }
 
-        if let Some(forbidden_char) = self
-            .0
+        if let Some(forbidden_char) = path
+            .as_str()
             .chars()
             .find(|c| !matches!(c, 'a'..='z' | '0'..='9' | '/' | '.' | '_'))
         {
@@ -166,14 +174,14 @@ impl LoadStatementModule<'_> {
             )));
         }
 
-        let is_unix_absolute = cfg!(target_os = "windows") && self_as_path.starts_with("/"); // Ensure consistent messaging.
-        if self_as_path.is_absolute() || is_unix_absolute {
+        let is_unix_absolute = cfg!(target_os = "windows") && path.starts_with("/"); // Ensure consistent messaging.
+        if path.is_absolute() || is_unix_absolute {
             return Err(invalid_load(InvalidLoadReason::Absolute));
         }
 
-        let extension = self_as_path.extension();
+        let extension = path.extension();
         if !matches!(extension, Some("star")) {
-            if self.0.len() == ".star".len() {
+            if path.as_str().len() == ".star".len() {
                 // Override error message for slightly more intuitive one.
                 return Err(invalid_load(InvalidLoadReason::TooShortStem));
             }
@@ -188,7 +196,7 @@ impl LoadStatementModule<'_> {
             return Err(invalid_load(InvalidLoadReason::TooShortComponent));
         }
 
-        let Some(stem) = self_as_path.file_stem() else {
+        let Some(stem) = path.file_stem() else {
             return Err(invalid_load(InvalidLoadReason::Dir));
         };
         if stem.len() < Self::MIN_COMPONENT_LEN {
@@ -230,11 +238,11 @@ impl LoadStatementModule<'_> {
             return Err(invalid_load(InvalidLoadReason::IncorrectExtension));
         }
 
-        if self.0.contains("//") {
+        if path.as_str().contains("//") {
             return Err(invalid_load(InvalidLoadReason::DoubleSlash));
         }
 
-        let dumb_components = self.0.split('/').collect::<Vec<_>>();
+        let dumb_components = path.as_str().split('/').collect::<Vec<_>>();
         match components.first().expect("internal error: path empty") {
             Utf8Component::CurDir => {
                 if dumb_components[1..].contains(&".") {
@@ -259,7 +267,7 @@ impl LoadStatementModule<'_> {
             }
         }
 
-        if self.0.contains("__") {
+        if path.as_str().contains("__") {
             return Err(invalid_load(InvalidLoadReason::SuccessiveUnderscores));
         }
 
@@ -282,11 +290,44 @@ impl LoadStatementModule<'_> {
                 .unwrap()
             };
         };
-        if !VALID_PATH.is_match(self.0) {
-            return Err(invalid_load(InvalidLoadReason::NonSpecific));
+        if !VALID_PATH.is_match(path.as_str()) {
+            return Err(invalid_load(InvalidLoadReason::MiscInvalidPath));
         }
 
         Ok(())
+    }
+
+    pub fn to_abs(&'a self, source: &Utf8Path) -> Result<Cow<'a, Utf8Path>> {
+        let mut target_components = self.0.components();
+        match target_components
+            .next()
+            .expect("internal error: target is empty")
+        {
+            Utf8Component::CurDir => {
+                let mut ret =
+                    Utf8PathBuf::with_capacity(source.as_str().len() + self.0.as_str().len() - 1);
+                if let Some(source_dir) = source.parent() {
+                    ret.push(source_dir);
+                }
+                ret.push(&self.0.as_str()[2..]);
+                Ok(ret.into())
+            }
+            Utf8Component::ParentDir => {
+                let parents = 1 + target_components
+                    .take_while(|component| matches!(component, Utf8Component::ParentDir))
+                    .count();
+                let Some(parent_dir) = source.ancestors().nth(1 + parents) else {
+                    return Err(Error::PathOutOfBounds(self.0.into()));
+                };
+
+                let mut ret =
+                    Utf8PathBuf::with_capacity(source.as_str().len() + 1 + self.0.as_str().len());
+                ret.push(parent_dir);
+                ret.extend(self.0.components().skip(parents));
+                Ok(ret.into())
+            }
+            _ => Ok(self.0.into()),
+        }
     }
 }
 
@@ -359,10 +400,12 @@ impl InitingScriptlet {
 
 #[cfg(test)]
 mod test {
+    use std::iter;
+
     use camino::Utf8Path;
-    use const_format::formatcp;
     use indoc::{formatdoc, indoc};
     use insta::assert_snapshot;
+    use joinery::JoinableIterator;
     use uniquote::Quote;
 
     use crate::{
@@ -649,7 +692,7 @@ mod test {
             .assert_irritation_free();
         VexTest::new("nonexistent-loads")
             .with_scriptlet("vexes/test.star", "load('i_do_not_exist.star', 'x')")
-            .returns_error(r"cannot find module 'i_do_not_exist\.star'");
+            .returns_error(r"cannot load i_do_not_exist\.star: file does not exist");
         VexTest::new("cycle-loop")
             .with_scriptlet("vexes/test.star", "load('test.star', '_')")
             .returns_error(r"import cycle detected: test\.star -> test\.star");
@@ -690,11 +733,11 @@ mod test {
                 self
             }
 
-            fn ok(self) {
+            fn assert_ok(self) {
                 self.run().unwrap();
             }
 
-            fn causes(self, message: &'static str) {
+            fn assert_causes(self, message: &'static str) {
                 let expected_message = format!(
                     "cannot load {}: {message}",
                     self.path.expect("path not set").replace(r"\\", r"\")
@@ -708,11 +751,14 @@ mod test {
                 eprintln!("running test {name} with {path:?}...");
                 eprintln!(r"load({}, 'unused')", path.quote());
 
-                const DIR: &str = "/tmp/vex_project";
+                let dir_parts = iter::once("/tmp/vex_project")
+                    .chain(iter::repeat("dir").take(path.match_indices("../").count()))
+                    .join_with('/')
+                    .to_string();
                 PreinitingScriptlet::new_from_str(
                     SourcePath::new(
-                        Utf8Path::new(formatcp!("{DIR}/test.star")),
-                        Utf8Path::new(DIR),
+                        Utf8Path::new(&format!("{dir_parts}/test.star")),
+                        Utf8Path::new(&dir_parts),
                     ),
                     formatdoc! {
                         r#"
@@ -727,109 +773,113 @@ mod test {
 
         LoadTest::new("toplevel")
             .path("abcdefghijklmnopqrstuvwxyz_0123456789.star")
-            .ok();
-        LoadTest::new("nested").path("aaa/bbb/ccc.star").ok();
-        LoadTest::new("relative-toplevel").path("./aaa.star").ok();
+            .assert_ok();
+        LoadTest::new("nested").path("aaa/bbb/ccc.star").assert_ok();
+        LoadTest::new("relative-toplevel")
+            .path("./aaa.star")
+            .assert_ok();
         LoadTest::new("relative-nested")
             .path("./aaa/bbb/ccc.star")
-            .ok();
-        LoadTest::new("parent-toplevel").path("../aaa.star").ok();
+            .assert_ok();
+        LoadTest::new("parent-toplevel")
+            .path("../aaa.star")
+            .assert_ok();
         LoadTest::new("parent-nested")
             .path("../../../aaa/bbb/ccc.star")
-            .ok();
+            .assert_ok();
 
         LoadTest::new("dash")
             .path("---.star")
-            .causes("load path can only contain a-z, 0-9, `_`, `.` and `/`, found `-`");
+            .assert_causes("load path can only contain a-z, 0-9, `_`, `.` and `/`, found `-`");
         LoadTest::new("backslashes")
             .path(r".\\.\\aaa.star")
-            .causes(r"load path can only contain a-z, 0-9, `_`, `.` and `/`, found `\`");
+            .assert_causes(r"load path can only contain a-z, 0-9, `_`, `.` and `/`, found `\`");
         LoadTest::new("extra-starting-current-dir")
             .path("././aaa.star")
-            .causes("load path cannot contain multiple `./`");
+            .assert_causes("load path cannot contain multiple `./`");
         LoadTest::new("current-dir-in-parent-dir")
             .path(".././aaa.star")
-            .causes("load path cannot contain both `./` and `../`");
+            .assert_causes("load path cannot contain both `./` and `../`");
         LoadTest::new("parent-op-in-current-dir")
             .path("./../aaa.star")
-            .causes("load path cannot contain both `./` and `../`");
+            .assert_causes("load path cannot contain both `./` and `../`");
         LoadTest::new("midway-current-dir")
             .path("aaa/./bbb.star")
-            .causes("load path can only have path operators at the start");
+            .assert_causes("load path can only have path operators at the start");
         LoadTest::new("midway-parent-dir")
             .path("aaa/../bbb.star")
-            .causes("load path can only have path operators at the start");
+            .assert_causes("load path can only have path operators at the start");
         LoadTest::new("successive-slashes")
             .path("aaa//bbb.star")
-            .causes("load path cannot contain `//`");
+            .assert_causes("load path cannot contain `//`");
         LoadTest::new("empty")
             .path("")
-            .causes("load path cannot be empty");
+            .assert_causes("load path cannot be empty");
         LoadTest::new("absolute-unix")
             .path("/aaa.star")
-            .causes("load path cannot be absolute");
+            .assert_causes("load path cannot be absolute");
         LoadTest::new("absolute-windows-uppercase")
             .path("C:/aaa.star")
-            .causes("load path can only contain a-z, 0-9, `_`, `.` and `/`, found `C`");
+            .assert_causes("load path can only contain a-z, 0-9, `_`, `.` and `/`, found `C`");
         LoadTest::new("absolute-windows-lowercase")
             .path("c:/aaa.star")
-            .causes("load path can only contain a-z, 0-9, `_`, `.` and `/`, found `:`");
+            .assert_causes("load path can only contain a-z, 0-9, `_`, `.` and `/`, found `:`");
         LoadTest::new("wrong-extension")
             .path("aaa.starlark")
-            .causes("load path must have the `.star` extension");
+            .assert_causes("load path must have the `.star` extension");
         LoadTest::new("short-components")
             .path("aa/bb/ccc.star")
-            .causes("load path components must be at least 3 characters");
+            .assert_causes("load path components must be at least 3 characters");
         LoadTest::new("short-stem")
             .path("aa.star")
-            .causes("load path stem must be at least 3 characters");
+            .assert_causes("load path stem must be at least 3 characters");
         LoadTest::new("nested-short-stem")
             .path("aaa/bbb/cc.star")
-            .causes("load path stem must be at least 3 characters");
+            .assert_causes("load path stem must be at least 3 characters");
         LoadTest::new("uppercase-firbidden")
             .path("AAA.star")
-            .causes("load path can only contain a-z, 0-9, `_`, `.` and `/`, found `A`");
+            .assert_causes("load path can only contain a-z, 0-9, `_`, `.` and `/`, found `A`");
         LoadTest::new("invalid-rune-emoji")
             .path("🤸🪑🏌️.star")
-            .causes("load path can only contain a-z, 0-9, `_`, `.` and `/`, found `🤸`");
+            .assert_causes("load path can only contain a-z, 0-9, `_`, `.` and `/`, found `🤸`");
         LoadTest::new("no-stem")
             .path(".star")
-            .causes("load path stem must be at least 3 characters");
+            .assert_causes("load path stem must be at least 3 characters");
         LoadTest::new("hidden-files")
             .path(".secret.star")
-            .causes("load path cannot have hidden components");
+            .assert_causes("load path cannot have hidden components");
         LoadTest::new("hidden-dirs")
             .path("aaa/.secret/aaa.star")
-            .causes("load path cannot have hidden components");
+            .assert_causes("load path cannot have hidden components");
         LoadTest::new("midway-dots")
             .path("aaa/b.b/ccc.star")
-            .causes("load path can only have a `.` in the file extension");
+            .assert_causes("load path can only have a `.` in the file extension");
         LoadTest::new("many-extensions")
             .path("aaa/bbb.tar.star")
-            .causes("load path must have the `.star` extension");
+            .assert_causes("load path must have the `.star` extension");
         LoadTest::new("successive-dots-as-component")
             .path("aaa/.../bbb.star")
-            .causes("load path cannot contain successive dots in file component");
+            .assert_causes("load path cannot contain successive dots in file component");
         LoadTest::new("successive-dots-in-component")
             .path("aaa..bbb.star")
-            .causes("load path cannot contain successive dots in file component");
+            .assert_causes("load path cannot contain successive dots in file component");
         LoadTest::new("successive-underscores")
             .path("a__a.star")
-            .causes("load path cannot contain successive underscores");
+            .assert_causes("load path cannot contain successive underscores");
         LoadTest::new("leading-underscore")
             .path("_aaa.star")
-            .causes("load path cannot have underscores at component-ends");
+            .assert_causes("load path cannot have underscores at component-ends");
         LoadTest::new("midway-leading-underscore")
             .path("aaa/_bbb.star")
-            .causes("load path cannot have underscores at component-ends");
+            .assert_causes("load path cannot have underscores at component-ends");
         LoadTest::new("trailing-underscore")
             .path("aaa_/bbb.star")
-            .causes("load path cannot have underscores at component-ends");
+            .assert_causes("load path cannot have underscores at component-ends");
         LoadTest::new("trailing-underscore-before-extension")
             .path("aaa/bbb_.star")
-            .causes("load path cannot have underscores at end of stem");
+            .assert_causes("load path cannot have underscores at end of stem");
         LoadTest::new("underscore-before-dot")
             .path("aaa/b_.b.star")
-            .causes("load path must have the `.star` extension");
+            .assert_causes("load path must have the `.star` extension");
     }
 }

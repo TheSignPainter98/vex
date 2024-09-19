@@ -279,7 +279,12 @@ mod test {
         syntax::{AstModule, Dialect},
     };
 
-    use crate::{error::Error, logger, scriptlets::PrintHandler, vextest::VexTest};
+    use crate::{
+        error::{Error, InvalidLoadReason},
+        logger,
+        scriptlets::PrintHandler,
+        vextest::VexTest,
+    };
 
     use super::*;
 
@@ -322,9 +327,10 @@ mod test {
             };
             let ast = AstModule::parse("vexes/test.star", code.to_string(), &dialect).unwrap();
             let print_handler = PrintHandler::new(logger::verbosity(), path.as_str());
+            let loader = TestModuleCache::new("vexes/test.star");
             let mut eval = Evaluator::new(&module);
             eval.set_print_handler(&print_handler);
-            eval.set_loader(&TestModuleCache);
+            eval.set_loader(&loader);
             eval.eval_module(ast, &Self::globals()).map(|_| ())
         }
 
@@ -337,13 +343,28 @@ mod test {
         }
     }
 
-    struct TestModuleCache;
+    struct TestModuleCache {
+        current_path: PrettyPath,
+    }
+
+    impl TestModuleCache {
+        fn new(current_path: impl AsRef<str>) -> Self {
+            let current_path = PrettyPath::new(Utf8Path::new(current_path.as_ref()));
+            Self { current_path }
+        }
+    }
 
     impl FileLoader for TestModuleCache {
         fn load(&self, path: &str) -> anyhow::Result<starlark::environment::FrozenModule> {
+            let Self { current_path } = self;
             if path != VexTest::CHECK_STARLARK_PATH {
                 let path = PrettyPath::from(path);
-                return Err(Error::NoSuchModule(path).into());
+                return Err(Error::InvalidLoad {
+                    load: path.to_string(),
+                    module: current_path.dupe(),
+                    reason: InvalidLoadReason::NoSuchFile,
+                }
+                .into());
             }
             lazy_static! {
                 static ref CHECK_MODULE: FrozenModule = {

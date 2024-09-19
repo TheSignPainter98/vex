@@ -1,17 +1,17 @@
 use std::{collections::BTreeMap, fs, io::ErrorKind, iter, ops::Deref};
 
-use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
+use camino::{Utf8Path, Utf8PathBuf};
 use dupe::Dupe;
 use log::{info, log_enabled};
 use starlark::{environment::FrozenModule, eval::FileLoader, values::FrozenHeap};
 
 use crate::{
     context::Context,
-    error::{Error, IOAction},
+    error::{Error, IOAction, InvalidLoadReason},
     result::Result,
     scriptlets::{
         scriptlet::{InitingScriptlet, PreinitingScriptlet},
-        ObserverData,
+        LoadStatementModule, ObserverData,
     },
     source_path::{PrettyPath, SourcePath},
     verbosity::Verbosity,
@@ -103,7 +103,6 @@ impl PreinitingStore {
     }
 
     pub fn preinit(mut self, opts: PreinitOptions) -> Result<InitingStore> {
-        self.check_loads()?;
         self.sort();
         self.linearise_store()?;
 
@@ -113,7 +112,7 @@ impl PreinitingStore {
         let mut initing_store = Vec::with_capacity(store.len());
         let mut loader = Loader::new();
         for scriptlet in store.into_iter() {
-            loader.set_current_file(scriptlet.path.pretty_path.dupe());
+            loader.set_current_path(scriptlet.path.pretty_path.dupe());
             let preinited_scriptlet = scriptlet.preinit(&opts, &loader, &frozen_heap)?;
             loader.store(
                 preinited_scriptlet.path.pretty_path.dupe(),
@@ -126,19 +125,6 @@ impl PreinitingStore {
             store: initing_store,
             frozen_heap,
         })
-    }
-
-    fn check_loads(&self) -> Result<()> {
-        // TODO(kcza): use relative loads
-        let mut unknown_loads = self.store.iter().flat_map(|s| {
-            s.loads()
-                .iter()
-                .filter(|l| self.path_indices.get(l).is_none())
-        });
-        if let Some(unknown_module) = unknown_loads.next() {
-            return Err(Error::NoSuchModule(unknown_module.dupe()));
-        }
-        Ok(())
     }
 
     fn sort(&mut self) {
@@ -172,7 +158,7 @@ impl PreinitingStore {
             }
         }
 
-        let load_edges = self.get_load_edges();
+        let load_edges = self.get_load_edges()?;
         let loaded_by_edges = self.get_loaded_by_edges(&load_edges);
         let n = self.store.len();
         let mut explored = vec![false; n];
@@ -193,7 +179,7 @@ impl PreinitingStore {
         // Presence of an import cycle will prevent some nodes entering the
         // linearisation.
         if linearised.len() != self.store.len() {
-            return Err(Error::ImportCycle(self.find_cycle()));
+            return Err(Error::ImportCycle(self.find_cycle()?));
         }
         linearised
             .into_iter()
@@ -204,7 +190,7 @@ impl PreinitingStore {
         Ok(())
     }
 
-    fn find_cycle(&self) -> Vec<PrettyPath> {
+    fn find_cycle(&self) -> Result<Vec<PrettyPath>> {
         fn undirected_dfs(
             stack: &mut Vec<StoreIndex>,
             explored: &mut Vec<bool>,
@@ -241,7 +227,7 @@ impl PreinitingStore {
 
         let mut stack = vec![];
         let edges = {
-            let mut edges = self.get_load_edges();
+            let mut edges = self.get_load_edges()?;
             self.get_loaded_by_edges(&edges)
                 .into_iter()
                 .enumerate()
@@ -258,24 +244,33 @@ impl PreinitingStore {
                 break;
             }
         }
-        cycle
+        Ok(cycle
             .unwrap()
             .into_iter()
             .map(|idx| self.store[idx].path.pretty_path.dupe())
-            .collect()
+            .collect())
     }
 
-    fn get_load_edges(&self) -> Vec<Vec<StoreIndex>> {
+    fn get_load_edges(&self) -> Result<Vec<Vec<StoreIndex>>> {
         self.store
             .iter()
             .map(|s| {
                 let mut adjacent = s
                     .loads()
                     .iter()
-                    .map(|m| *self.path_indices.get(m).unwrap())
-                    .collect::<Vec<_>>();
+                    .map(|m| {
+                        self.path_indices
+                            .get(m)
+                            .ok_or_else(|| Error::InvalidLoad {
+                                load: m.to_string(),
+                                module: s.path.pretty_path.dupe(),
+                                reason: InvalidLoadReason::NoSuchFile,
+                            })
+                            .map(|idx| *idx)
+                    })
+                    .collect::<Result<Vec<_>>>()?;
                 adjacent.sort();
-                adjacent
+                Ok(adjacent)
             })
             .collect()
     }
@@ -310,8 +305,8 @@ impl Loader {
         Self::default()
     }
 
-    fn set_current_file(&mut self, current_dir: PrettyPath) {
-        self.current_path = Some(current_dir);
+    fn set_current_path(&mut self, current_path: PrettyPath) {
+        self.current_path = Some(current_path);
     }
 
     fn store(&mut self, path: PrettyPath, module: FrozenModule) {
@@ -321,50 +316,25 @@ impl Loader {
 
 impl FileLoader for Loader {
     fn load(&self, path: &str) -> anyhow::Result<starlark::environment::FrozenModule> {
-        // Preconditions:
-        // - path is not empty
-        // - path starts with one ./, many ../ or has no path operators
-        // - path only has path operators at the start.
-
+        println!("loading {path} from {:?}", self.current_path);
         let path = Utf8Path::new(path);
-        let mut components = path.components();
         let current_path = self
             .current_path
             .as_ref()
             .expect("internal error: current_dir not set");
-        let abs_path = match components.next().expect("internal error: load path empty") {
-            Utf8Component::CurDir => {
-                let mut abs_path = Utf8PathBuf::with_capacity(
-                    current_path.as_str().len() + path.as_str().len() - 1,
-                );
-                if let Some(current_dir) = current_path.parent() {
-                    abs_path.push(current_dir);
-                }
-                abs_path.push(&path.as_str()[2..]);
-                PrettyPath::new(&abs_path)
-            }
-            Utf8Component::ParentDir => {
-                let parents = 1 + components
-                    .take_while(|component| matches!(component, Utf8Component::ParentDir))
-                    .count();
-                let Some(parent_dir) = current_path.ancestors().nth(1 + parents) else {
-                    return Err(Error::PathOutOfBounds(path.to_owned()).into());
-                };
-                let abs_path = {
-                    let max_capacity = current_path.as_str().len() + 1 + path.as_str().len();
-                    let mut abs_path = Utf8PathBuf::with_capacity(max_capacity);
-                    abs_path.push(parent_dir);
-                    abs_path.extend(path.components().skip(parents));
-                    abs_path
-                };
-                PrettyPath::new(&abs_path)
-            }
-            _ => PrettyPath::new(path),
-        };
+        let load_stmt = LoadStatementModule::new(path.as_str(), current_path)?;
+        let abs_path = load_stmt.to_abs(current_path.as_ref())?;
         self.module_store
             .get(&PrettyPath::new(&abs_path))
             .map(Dupe::dupe)
-            .ok_or_else(|| Error::NoSuchModule(PrettyPath::new(path)).into())
+            .ok_or_else(|| {
+                Error::InvalidLoad {
+                    load: path.to_string(),
+                    module: current_path.dupe(),
+                    reason: InvalidLoadReason::NoSuchFile,
+                }
+                .into()
+            })
     }
 }
 
@@ -498,15 +468,15 @@ mod test {
         Test::file("foo/bar/baz.star")
             .which_loads("./nonexistent.star")
             .with_loader(&mut loader)
-            .errors();
+            .causes("cannot load ./nonexistent.star: file does not exist");
         Test::file("foo/bar/baz.star")
             .which_loads("../nonexistent.star")
             .with_loader(&mut loader)
-            .errors();
+            .causes("cannot load ../nonexistent.star: file does not exist");
         Test::file("foo/bar/baz.star")
             .which_loads("../../../../../../fugitive.star")
             .with_loader(&mut loader)
-            .errors();
+            .causes("cannot load '../../../../../../fugitive.star': path is out of bounds");
 
         // Test structs
         struct Test<'loader> {
@@ -538,8 +508,9 @@ mod test {
                 assert_eq!(self.try_run().unwrap(), expected_path);
             }
 
-            fn errors(self) {
-                self.try_run().unwrap_err();
+            fn causes(self, error: &str) {
+                let err = self.try_run().unwrap_err().to_string();
+                assert!(err.contains(error), "unexpected error: {err}");
             }
 
             fn try_run(self) -> Result<String> {
@@ -550,7 +521,7 @@ mod test {
                 } = self;
                 let to_load = to_load.unwrap();
                 let loader = loader.unwrap();
-                loader.set_current_file(file.into());
+                loader.set_current_path(file.into());
 
                 let code = formatdoc!(
                     r#"
