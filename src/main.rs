@@ -38,6 +38,7 @@ use indoc::printdoc;
 use log::{info, log_enabled, trace};
 use scriptlets::InitOptions;
 use source_file::SourceFile;
+use source_path::PrettyPath;
 use strum::IntoEnumIterator;
 use tree_sitter::QueryCursor;
 
@@ -58,7 +59,7 @@ use crate::{
         query_captures::QueryCaptures,
         Observable, ObserveOptions, PreinitOptions, PreinitingStore, PrintHandler, VexingStore,
     },
-    source_path::{PrettyPath, SourcePath},
+    source_path::SourcePath,
     supported_language::SupportedLanguage,
     trigger::FilePattern,
     verbosity::Verbosity,
@@ -134,7 +135,7 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
             verbosity,
         };
         let init_opts = InitOptions { verbosity };
-        PreinitingStore::new(&ctx)?
+        PreinitingStore::new_in_dir(&ctx.vex_dir())?
             .preinit(preinit_opts)?
             .init(init_opts)?
     };
@@ -430,7 +431,7 @@ fn walkdir(
 
 fn init(init_args: InitCmd) -> Result<()> {
     let cwd = Utf8PathBuf::try_from(env::current_dir().map_err(|cause| Error::IO {
-        path: PrettyPath::new(Utf8Path::new(".")),
+        path: PrettyPath::from("."),
         action: IOAction::Read,
         cause,
     })?)?;

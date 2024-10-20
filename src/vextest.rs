@@ -164,7 +164,7 @@ impl<'s> VexTest<'s> {
             verbosity,
         };
         let init_opts = InitOptions { verbosity };
-        let store = PreinitingStore::new(&ctx)?
+        let store = PreinitingStore::new_in_dir(&ctx.vex_dir())?
             .preinit(preinit_opts)?
             .init(init_opts)?;
         if self.fire_test_events {

@@ -39,7 +39,7 @@ pub fn test() -> Result<()> {
         let init_opts = InitOptions {
             verbosity: Verbosity::Quiet,
         };
-        PreinitingStore::new(&ctx)?
+        PreinitingStore::new_in_dir(&ctx.vex_dir())?
             .preinit(preinit_opts)?
             .init(init_opts)?
     };
@@ -162,7 +162,7 @@ pub(crate) fn run_tests(ctx: &Context, store: &VexingStore) -> Result<()> {
             let preinit_opts = PreinitOptions { lenient, verbosity };
             let init_opts = InitOptions { verbosity };
             // Create new store using the current context to inherit the existing scripts.
-            PreinitingStore::new(ctx)?
+            PreinitingStore::new_in_dir(&ctx.vex_dir())?
                 .preinit(preinit_opts)?
                 .init(init_opts)?
         };

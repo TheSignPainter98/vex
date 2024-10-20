@@ -1,6 +1,6 @@
 use std::env;
 
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8PathBuf;
 
 use crate::{
     associations::Associations,
@@ -15,7 +15,7 @@ use crate::{
 
 pub fn dump(cmd: DumpCmd) -> Result<()> {
     let cwd = Utf8PathBuf::try_from(env::current_dir().map_err(|e| Error::IO {
-        path: PrettyPath::new(Utf8Path::new(&cmd.path)),
+        path: PrettyPath::new(&cmd.path),
         action: IOAction::Read,
         cause: e,
     })?)?;
@@ -56,7 +56,10 @@ mod test {
     use indoc::indoc;
     use tempfile::TempDir;
 
-    use crate::{cli::Args, source_file::ParsedSourceFile, supported_language::SupportedLanguage};
+    use crate::{
+        cli::Args, source_file::ParsedSourceFile, source_path::PrettyPath,
+        supported_language::SupportedLanguage,
+    };
 
     use super::*;
 

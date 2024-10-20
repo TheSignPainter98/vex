@@ -1,6 +1,6 @@
-use std::{collections::HashSet, fs};
+use std::collections::{BTreeMap, HashSet};
 
-use camino::{Utf8Component, Utf8Path};
+use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
 use const_format::formatcp;
 use dupe::Dupe;
 use lazy_static::lazy_static;
@@ -15,7 +15,7 @@ use starlark::{
 };
 
 use crate::{
-    error::{Error, IOAction, InvalidLoadReason},
+    error::{Error, InvalidLoadReason},
     result::Result,
     scriptlets::{
         action::Action,
@@ -25,51 +25,32 @@ use crate::{
         handler_module::HandlerModule,
         print_handler::PrintHandler,
         query_cache::QueryCache,
-        store::{InitOptions, PreinitedModuleCache},
+        store::{InitOptions, PreinitedModuleStore},
         Intent, ObserverData, PreinitOptions,
     },
-    source_path::{PrettyPath, SourcePath},
+    source_path::PrettyPath,
 };
 
 #[derive(Debug)]
 pub struct PreinitingScriptlet {
-    pub path: SourcePath,
+    pub path: Utf8PathBuf,
     ast: AstModule,
-    loads_files: HashSet<PrettyPath>,
+    loads: BTreeMap<String, LoadPath>,
 }
 
 impl PreinitingScriptlet {
-    pub fn new(path: SourcePath) -> Result<Self> {
-        let code = fs::read_to_string(path.abs_path.as_str()).map_err(|cause| Error::IO {
-            path: path.pretty_path.dupe(),
-            action: IOAction::Read,
-            cause,
-        })?;
-        Self::new_from_str(path, code)
-    }
-
-    fn new_from_str(path: SourcePath, code: impl Into<String>) -> Result<Self> {
-        let code = code.into();
-
+    pub fn new(path: Utf8PathBuf, code: String) -> Result<Self> {
         let ast = AstModule::parse(path.as_str(), code, &Dialect::Standard)?;
-        Self::validate_loads(&ast, &path.pretty_path)?;
-        let loads_files = ast
+        let loads = ast
             .loads()
             .into_iter()
-            .map(|load| PrettyPath::from(load.module_id))
-            .collect();
-        Ok(Self {
-            path,
-            ast,
-            loads_files,
-        })
-    }
-
-    fn validate_loads(ast: &AstModule, path: &PrettyPath) -> Result<()> {
-        ast.loads()
-            .iter()
-            .map(|l| LoadStatementModule(l.module_id))
-            .try_for_each(|m| m.validate(path))
+            .map(|load| load.module_id.to_owned())
+            .map(|raw_load| {
+                let load_path = LoadPath::new(&path, &raw_load)?;
+                Ok((raw_load, load_path))
+            })
+            .collect::<Result<_>>()?;
+        Ok(Self { path, ast, loads })
     }
 
     #[allow(unused)]
@@ -85,13 +66,13 @@ impl PreinitingScriptlet {
     pub fn preinit(
         self,
         opts: &PreinitOptions,
-        cache: &PreinitedModuleCache,
+        cache: &PreinitedModuleStore,
         frozen_heap: &FrozenHeap,
     ) -> Result<InitingScriptlet> {
         let Self {
             path,
             ast,
-            loads_files: _,
+            loads: _,
         } = self;
         let PreinitOptions { lenient, verbosity } = opts;
 
@@ -105,7 +86,7 @@ impl PreinitingScriptlet {
                     query_cache: &QueryCache::new(),
                     ignore_markers: None,
                 };
-                let print_handler = PrintHandler::new(*verbosity, path.pretty_path.as_str());
+                let print_handler = PrintHandler::new(*verbosity, path.as_str());
                 let mut eval = Evaluator::new(&preinited_module);
                 eval.set_loader(&cache);
                 eval.set_print_handler(&print_handler);
@@ -133,31 +114,49 @@ impl PreinitingScriptlet {
         HashSet::from_iter(["vex".to_string()])
     }
 
-    pub fn loads(&self) -> &HashSet<PrettyPath> {
-        &self.loads_files
+    pub fn loads(&self) -> &BTreeMap<String, LoadPath> {
+        &self.loads
     }
 }
 
-pub struct LoadStatementModule<'a>(&'a str);
+#[derive(Debug)]
+pub struct LoadPath(Utf8PathBuf);
 
-impl LoadStatementModule<'_> {
+impl LoadPath {
     pub const MIN_COMPONENT_LEN: usize = 3;
 
-    pub fn validate(&self, current_file: &PrettyPath) -> Result<()> {
-        let self_as_path = Utf8Path::new(self.0);
-        let components = self_as_path.components().collect::<Vec<_>>();
+    pub fn path(&self) -> &Utf8Path {
+        &self.0
+    }
+
+    fn new(from: &Utf8Path, load: &str) -> Result<Self> {
+        let load_path = Utf8Path::new(load);
+        Self::validate_raw(from, load_path)?;
+        let resolved_path = if matches!(
+            load_path.components().next(),
+            Some(Utf8Component::CurDir) | Some(Utf8Component::ParentDir)
+        ) {
+            Self::path_in_dir(from, load)?
+        } else {
+            load_path.to_owned()
+        };
+        Ok(Self(resolved_path))
+    }
+
+    fn validate_raw(from: &Utf8Path, load: &Utf8Path) -> Result<()> {
+        let components = load.components().collect::<Vec<_>>();
         let invalid_load = |reason| Error::InvalidLoad {
-            load: self.0.to_string(),
-            module: current_file.dupe(),
+            load: load.to_string(),
+            module: PrettyPath::new(from),
             reason,
         };
 
-        if self.0.is_empty() {
+        if load.as_str().is_empty() {
             return Err(invalid_load(InvalidLoadReason::Empty));
         }
 
-        if let Some(forbidden_char) = self
-            .0
+        if let Some(forbidden_char) = load
+            .as_str()
             .chars()
             .find(|c| !matches!(c, 'a'..='z' | '0'..='9' | '/' | '.' | '_'))
         {
@@ -166,18 +165,14 @@ impl LoadStatementModule<'_> {
             )));
         }
 
-        let is_unix_absolute = cfg!(target_os = "windows") && self_as_path.starts_with("/"); // Ensure consistent messaging.
-        if self_as_path.is_absolute() || is_unix_absolute {
+        let is_unix_absolute = cfg!(target_os = "windows") && load.starts_with("/"); // Ensure consistent messaging.
+        if load.is_absolute() || is_unix_absolute {
             return Err(invalid_load(InvalidLoadReason::Absolute));
         }
 
-        if self.0.starts_with("./") || self.0.starts_with("../") {
-            return Err(invalid_load(InvalidLoadReason::Relative));
-        }
-
-        let extension = self_as_path.extension();
+        let extension = load.extension();
         if !matches!(extension, Some("star")) {
-            if self.0.len() == ".star".len() {
+            if load.as_str().len() == ".star".len() {
                 // Override error message for slightly more intuitive one.
                 return Err(invalid_load(InvalidLoadReason::TooShortStem));
             }
@@ -192,7 +187,7 @@ impl LoadStatementModule<'_> {
             return Err(invalid_load(InvalidLoadReason::TooShortComponent));
         }
 
-        let Some(stem) = self_as_path.file_stem() else {
+        let Some(stem) = load.file_stem() else {
             return Err(invalid_load(InvalidLoadReason::Dir));
         };
         if stem.len() < Self::MIN_COMPONENT_LEN {
@@ -234,11 +229,11 @@ impl LoadStatementModule<'_> {
             return Err(invalid_load(InvalidLoadReason::IncorrectExtension));
         }
 
-        if self.0.contains("//") {
+        if load.as_str().contains("//") {
             return Err(invalid_load(InvalidLoadReason::DoubleSlash));
         }
 
-        let dumb_components = self.0.split('/').collect::<Vec<_>>();
+        let dumb_components = load.as_str().split('/').collect::<Vec<_>>();
         match components.first().expect("internal error: path empty") {
             Utf8Component::CurDir => {
                 if dumb_components[1..].contains(&".") {
@@ -263,7 +258,7 @@ impl LoadStatementModule<'_> {
             }
         }
 
-        if self.0.contains("__") {
+        if load.as_str().contains("__") {
             return Err(invalid_load(InvalidLoadReason::SuccessiveUnderscores));
         }
 
@@ -286,17 +281,44 @@ impl LoadStatementModule<'_> {
                 .unwrap()
             };
         };
-        if !VALID_PATH.is_match(self.0) {
+        if !VALID_PATH.is_match(load.as_str()) {
             return Err(invalid_load(InvalidLoadReason::NonSpecific));
         }
 
         Ok(())
     }
+
+    fn path_in_dir(from: &Utf8Path, load: &str) -> Result<Utf8PathBuf> {
+        let invalid_load = |reason| Error::InvalidLoad {
+            load: load.to_owned(),
+            module: PrettyPath::new(from),
+            reason,
+        };
+
+        let dir = from.parent().unwrap_or(&Utf8Path::new(""));
+        let mut clean_path_components = Vec::with_capacity(10);
+        for component in dir.components().chain(Utf8Path::new(load).components()) {
+            match component {
+                Utf8Component::CurDir => {}
+                Utf8Component::RootDir | Utf8Component::Prefix(_) | Utf8Component::Normal(_) => {
+                    clean_path_components.push(component)
+                }
+                Utf8Component::ParentDir => {
+                    if clean_path_components.is_empty() {
+                        return Err(invalid_load(InvalidLoadReason::OutsideDirectory));
+                    }
+                    clean_path_components.pop();
+                }
+            }
+        }
+
+        Ok(Utf8PathBuf::from_iter(clean_path_components))
+    }
 }
 
 #[derive(Debug)]
 pub struct InitingScriptlet {
-    pub path: SourcePath,
+    pub path: Utf8PathBuf,
     pub preinited_module: FrozenModule,
 }
 
@@ -320,7 +342,7 @@ impl InitingScriptlet {
                     query_cache: &QueryCache::new(),
                     ignore_markers: None,
                 };
-                let print_handler = PrintHandler::new(*verbosity, path.pretty_path.as_str());
+                let print_handler = PrintHandler::new(*verbosity, path.as_str());
                 let mut eval = Evaluator::new(&module);
                 eval.extra = Some(&temp_data);
                 eval.set_print_handler(&print_handler);
@@ -355,7 +377,7 @@ impl InitingScriptlet {
             observer_data
         };
         if observer_data.len() == 0 {
-            crate::warn!("{} observes no events", path.pretty_path);
+            crate::warn!("{} observes no events", path);
         }
         Ok(observer_data)
     }
@@ -363,16 +385,13 @@ impl InitingScriptlet {
 
 #[cfg(test)]
 mod test {
-    use camino::Utf8Path;
+    use camino::Utf8PathBuf;
     use const_format::formatcp;
     use indoc::{formatdoc, indoc};
     use insta::assert_snapshot;
     use uniquote::Quote;
 
-    use crate::{
-        result::Result, scriptlets::scriptlet::PreinitingScriptlet, source_path::SourcePath,
-        vextest::VexTest,
-    };
+    use crate::{result::Result, scriptlets::scriptlet::PreinitingScriptlet, vextest::VexTest};
 
     #[test]
     fn global_names_consistent() {
@@ -662,14 +681,23 @@ mod test {
             .with_scriptlet("vexes/111.star", r#"load('222.star', '_')"#)
             .with_scriptlet("vexes/222.star", r#"load('111.star', '_')"#)
             .returns_error(r"import cycle detected: 111\.star -> 222\.star -> 111\.star");
-        VexTest::new("cycle-complex")
+        VexTest::new("cycle-complex-absolute")
             .with_scriptlet("vexes/test.star", "load('111.star', '_')")
             .with_scriptlet("vexes/111.star", r#"load('222.star', '_')"#)
             .with_scriptlet("vexes/222.star", r#"load('333.star', '_')"#)
             .with_scriptlet("vexes/333.star", r#"load('lib/444.star', '_')"#)
             .with_scriptlet("vexes/lib/444.star", r#"load('111.star', '_')"#)
             .returns_error(
-                r"import cycle detected: 111\.star -> 222\.star -> 333\.star -> lib(/|\\)444.star -> 111.star",
+                r"import cycle detected: 111\.star -> 222\.star -> 333\.star -> lib/444.star -> 111.star",
+            );
+        VexTest::new("cycle-complex-relative")
+            .with_scriptlet("vexes/test.star", "load('111.star', '_')")
+            .with_scriptlet("vexes/111.star", r#"load('aaa/222.star', '_')"#)
+            .with_scriptlet("vexes/aaa/222.star", r#"load('./333.star', '_')"#)
+            .with_scriptlet("vexes/aaa/333.star", r#"load('../lib/444.star', '_')"#)
+            .with_scriptlet("vexes/lib/444.star", r#"load('111.star', '_')"#)
+            .returns_error(
+                r"import cycle detected: 111\.star -> aaa/222\.star -> aaa/333\.star -> lib/444.star -> 111.star",
             );
     }
 
@@ -710,14 +738,10 @@ mod test {
                 let Self { name, path } = self;
                 let path = path.expect("path not set");
                 eprintln!("running test {name} with {path:?}...");
-                eprintln!(r"load({}, 'unused')", path.quote());
 
                 const DIR: &str = "/tmp/vex_project";
-                PreinitingScriptlet::new_from_str(
-                    SourcePath::new(
-                        Utf8Path::new(formatcp!("{DIR}/test.star")),
-                        Utf8Path::new(DIR),
-                    ),
+                PreinitingScriptlet::new(
+                    Utf8PathBuf::from(formatcp!("{DIR}/test.star")),
                     formatdoc! {
                         r#"
                             load({}, 'unused')
@@ -733,32 +757,30 @@ mod test {
             .path("abcdefghijklmnopqrstuvwxyz_0123456789.star")
             .ok();
         LoadTest::new("nested").path("aaa/bbb/ccc.star").ok();
-        // TODO(kcza): reinstate these.
-        // LoadTest::new("relative-toplevel").path("./aaa.star").ok();
-        // LoadTest::new("relative-nested")
-        //     .path("./aaa/bbb/ccc.star")
-        //     .ok();
-        // LoadTest::new("parent-toplevel").path("../aaa.star").ok();
-        // LoadTest::new("parent-nested")
-        //     .path("../../../aaa/bbb/ccc.star")
-        //     .ok();
+        LoadTest::new("relative-toplevel").path("./aaa.star").ok();
+        LoadTest::new("relative-nested")
+            .path("./aaa/bbb/ccc.star")
+            .ok();
+        LoadTest::new("parent-toplevel").path("../aaa.star").ok();
+        LoadTest::new("parent-nested")
+            .path("../../../aaa/bbb/ccc.star")
+            .ok();
 
         LoadTest::new("dash")
             .path("---.star")
             .causes("load path can only contain a-z, 0-9, `_`, `.` and `/`, found `-`");
-        // TODO(kcza): reinstate these.
-        // LoadTest::new("backslashes")
-        //     .path(r".\\.\\aaa.star")
-        //     .causes(r"load path can only contain a-z, 0-9, `_`, `.` and `/`, found `\`");
-        // LoadTest::new("extra-starting-current-dir")
-        //     .path("././aaa.star")
-        //     .causes("load path cannot contain multiple `./`");
-        // LoadTest::new("current-dir-in-parent-dir")
-        //     .path(".././aaa.star")
-        //     .causes("load path cannot contain both `./` and `../`");
-        // LoadTest::new("parent-op-in-current-dir")
-        //     .path("./../aaa.star")
-        //     .causes("load path cannot contain both `./` and `../`");
+        LoadTest::new("backslashes")
+            .path(r".\\.\\aaa.star")
+            .causes(r"load path can only contain a-z, 0-9, `_`, `.` and `/`, found `\`");
+        LoadTest::new("extra-starting-current-dir")
+            .path("././aaa.star")
+            .causes("load path cannot contain multiple `./`");
+        LoadTest::new("current-dir-in-parent-dir")
+            .path(".././aaa.star")
+            .causes("load path cannot contain both `./` and `../`");
+        LoadTest::new("parent-op-in-current-dir")
+            .path("./../aaa.star")
+            .causes("load path cannot contain both `./` and `../`");
         LoadTest::new("midway-current-dir")
             .path("aaa/./bbb.star")
             .causes("load path can only have path operators at the start");

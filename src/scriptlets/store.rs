@@ -1,169 +1,107 @@
-use std::{collections::BTreeMap, fs, io::ErrorKind, iter, ops::Deref};
+use std::{collections::BTreeMap, ops::Deref};
 
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use dupe::Dupe;
 use log::{info, log_enabled};
-use starlark::{environment::FrozenModule, eval::FileLoader, values::FrozenHeap};
+use starlark::{eval::FileLoader, values::FrozenHeap};
+use walkdir::WalkDir;
 
 use crate::{
-    context::Context,
-    error::{Error, IOAction},
+    error::Error,
     result::Result,
     scriptlets::{
         scriptlet::{InitingScriptlet, PreinitingScriptlet},
+        source::{FileSource, ScriptSource},
         ObserverData,
     },
-    source_path::{PrettyPath, SourcePath},
+    source_path::PrettyPath,
     verbosity::Verbosity,
 };
 
-type StoreIndex = usize;
-
 #[derive(Debug)]
 pub struct PreinitingStore {
-    vex_dir: Utf8PathBuf,
-    path_indices: BTreeMap<PrettyPath, StoreIndex>,
     store: Vec<PreinitingScriptlet>,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+struct StoreIndex(usize);
+
 impl PreinitingStore {
-    pub fn new(ctx: &Context) -> Result<Self> {
-        let mut ret = Self {
-            vex_dir: ctx.vex_dir(),
-            path_indices: BTreeMap::new(),
-            store: Vec::new(),
-        };
-        ret.load_dir(ctx, ctx.vex_dir())?;
-        Ok(ret)
+    pub fn new<S: ScriptSource>(scripts: Vec<S>) -> Result<Self> {
+        let store: Vec<_> = scripts
+            .iter()
+            .map(|source| Result::Ok((source.path(), source.content()?)))
+            .inspect(|content_result| {
+                if let Err(err) = content_result {
+                    if log_enabled!(log::Level::Info) {
+                        info!("{err}");
+                    }
+                }
+            })
+            .flatten()
+            .map(|(path, content)| PreinitingScriptlet::new(path.to_owned(), content))
+            .collect::<Result<_>>()?;
+        Ok(Self { store })
     }
 
-    fn load_dir(&mut self, ctx: &Context, path: Utf8PathBuf) -> Result<()> {
-        let dir = fs::read_dir(&path).map_err(|err| match err.kind() {
-            ErrorKind::NotFound => Error::NoVexesDir(path.clone()),
-            _ => Error::IO {
-                path: PrettyPath::new(&path),
-                action: IOAction::Read,
-                cause: err,
-            },
-        })?;
-        for entry in dir {
-            let entry = entry.map_err(|cause| Error::IO {
-                path: PrettyPath::new(&path),
-                action: IOAction::Read,
-                cause,
-            })?;
-            let entry_path = Utf8PathBuf::try_from(entry.path())?;
-            let metadata = fs::symlink_metadata(&entry_path).map_err(|cause| Error::IO {
-                path: PrettyPath::new(&entry_path),
-                action: IOAction::Read,
-                cause,
-            })?;
-
-            if metadata.is_symlink() {
-                if log_enabled!(log::Level::Info) {
-                    let symlink_path = entry_path.strip_prefix(ctx.project_root.as_ref())?;
-                    info!("ignoring /{symlink_path} (symlink)");
-                }
-                continue;
-            }
-
-            if metadata.is_dir() {
-                self.load_dir(ctx, entry_path)?;
-                continue;
-            }
-
-            if !metadata.is_file() {
-                panic!("unreachable");
-            }
-            if !entry_path.extension().is_some_and(|ext| ext == "star") {
-                if log_enabled!(log::Level::Info) {
-                    let unknown_path = entry_path.strip_prefix(ctx.project_root.as_ref())?;
-                    info!("ignoring /{unknown_path} (expected `.star` extension)");
-                }
-                continue;
-            }
-            let scriptlet_path = SourcePath::new(&entry_path, &self.vex_dir);
-            self.load_file(scriptlet_path)?;
+    pub fn new_in_dir(dir_path: &Utf8Path) -> Result<Self> {
+        if !dir_path.is_dir() {
+            return Err(Error::NoVexesDir(PrettyPath::new(dir_path)));
         }
 
-        Ok(())
-    }
-
-    fn load_file(&mut self, path: SourcePath) -> Result<()> {
-        if self.path_indices.get(&path.pretty_path).is_some() {
-            return Ok(());
-        }
-
-        let scriptlet = PreinitingScriptlet::new(path.dupe())?;
-        self.store.push(scriptlet);
-        self.path_indices
-            .insert(path.pretty_path.dupe(), self.store.len() - 1);
-
-        Ok(())
+        let dir_walker = WalkDir::new(dir_path)
+            // .sort_by_file_name()
+            .min_depth(1) // Immediate children.
+            .into_iter()
+            .filter_entry(|entry| {
+                entry.file_type().is_dir()
+                    || entry.path().extension().is_some_and(|ext| ext == "star")
+            });
+        let sources: Vec<_> = dir_walker
+            .flatten() // Ignore inaccessible files.
+            .filter(|entry| entry.file_type().is_file())
+            .map(|entry| Utf8PathBuf::try_from(entry.into_path()))
+            .flatten() // Ignore files with invalid UTF-8 file names.
+            .map(|path| {
+                let load_path = path.strip_prefix(dir_path).unwrap_or(&path).to_owned();
+                FileSource::new(load_path, path)
+            })
+            .collect();
+        Self::new(sources)
     }
 
     pub fn preinit(mut self, opts: PreinitOptions) -> Result<InitingStore> {
-        self.check_loads()?;
-        self.sort();
-        self.linearise_store()?;
-
-        let Self { store, .. } = self;
+        self.store.sort_by(|sc1, sc2| sc1.path.cmp(&sc2.path));
+        self.sort_topographically()?;
+        let Self { store } = self;
 
         let frozen_heap = FrozenHeap::new();
-        let mut initing_store = Vec::with_capacity(store.len());
-        let mut cache = PreinitedModuleCache::new();
+        let mut cache = PreinitedModuleStore::new();
         for scriptlet in store.into_iter() {
             let preinited_scriptlet = scriptlet.preinit(&opts, &cache, &frozen_heap)?;
-            cache.cache(&preinited_scriptlet);
-            initing_store.push(preinited_scriptlet);
+            cache.store(preinited_scriptlet);
         }
 
-        Ok(InitingStore {
-            store: initing_store,
-            frozen_heap,
-        })
-    }
-
-    fn check_loads(&self) -> Result<()> {
-        // TODO(kcza): use relative loads
-        let mut unknown_loads = self.store.iter().flat_map(|s| {
-            s.loads()
-                .iter()
-                .filter(|l| self.path_indices.get(l).is_none())
-        });
-        if let Some(unknown_module) = unknown_loads.next() {
-            return Err(Error::NoSuchModule(unknown_module.dupe()));
-        }
-        Ok(())
-    }
-
-    fn sort(&mut self) {
-        self.store
-            .sort_by(|s, t| s.path.pretty_path.cmp(&t.path.pretty_path));
-        self.path_indices = self
-            .store
-            .iter()
-            .enumerate()
-            .map(|(i, s)| (s.path.pretty_path.dupe(), i))
-            .collect();
+        let store = cache.into_entry_modules().collect();
+        Ok(InitingStore { store, frozen_heap })
     }
 
     /// Topographically order the store
-    fn linearise_store(&mut self) -> Result<()> {
+    fn sort_topographically(&mut self) -> Result<()> {
         fn directed_dfs(
             linearised: &mut Vec<StoreIndex>,
-            explored: &mut Vec<bool>,
+            explored: &mut [bool],
             loads: &[Vec<StoreIndex>],
             loaded_by: &[Vec<StoreIndex>],
             node: StoreIndex,
         ) {
-            if !loads[node].iter().all(|n| explored[*n]) {
+            if !loads[node.0].iter().all(|n| explored[n.0]) {
                 return;
             }
 
-            explored[node] = true;
+            explored[node.0] = true;
             linearised.push(node);
-            for m in &loaded_by[node] {
+            for m in &loaded_by[node.0] {
                 directed_dfs(linearised, explored, loads, loaded_by, *m);
             }
         }
@@ -173,8 +111,8 @@ impl PreinitingStore {
         let n = self.store.len();
         let mut explored = vec![false; n];
         let mut linearised = Vec::with_capacity(n);
-        for node in 0..n {
-            if explored[node] {
+        for node in (0..n).map(StoreIndex) {
+            if explored[node.0] {
                 continue;
             }
 
@@ -194,8 +132,8 @@ impl PreinitingStore {
         linearised
             .into_iter()
             .enumerate()
-            .filter(|(i, j)| i < j)
-            .for_each(|(i, j)| self.store.swap(i, j));
+            .filter(|(i, j)| *i < j.0)
+            .for_each(|(i, j)| self.store.swap(i, j.0));
 
         Ok(())
     }
@@ -203,7 +141,7 @@ impl PreinitingStore {
     fn find_cycle(&self) -> Vec<PrettyPath> {
         fn undirected_dfs(
             stack: &mut Vec<StoreIndex>,
-            explored: &mut Vec<bool>,
+            explored: &mut [bool],
             edges: &[Vec<StoreIndex>],
             node: StoreIndex,
         ) -> Option<Vec<StoreIndex>> {
@@ -218,13 +156,13 @@ impl PreinitingStore {
                 );
             }
 
-            if explored[node] {
+            if explored[node.0] {
                 return None;
             }
-            explored[node] = true;
+            explored[node.0] = true;
 
             stack.push(node);
-            for next in &edges[node] {
+            for next in &edges[node.0] {
                 let r = undirected_dfs(stack, explored, edges, *next);
                 if r.is_some() {
                     return r;
@@ -241,13 +179,13 @@ impl PreinitingStore {
             self.get_loaded_by_edges(&edges)
                 .into_iter()
                 .enumerate()
-                .for_each(|(n, g)| g.iter().for_each(|m| edges[*m].push(n)));
+                .for_each(|(n, g)| g.into_iter().for_each(|m| edges[m.0].push(StoreIndex(n))));
             edges
         };
         let n = self.store.len();
         let mut explored = vec![false; n];
         let mut cycle = None;
-        for node in 0..n {
+        for node in (0..n).map(StoreIndex) {
             let c = undirected_dfs(&mut stack, &mut explored, &edges, node);
             if c.is_some() {
                 cycle = c;
@@ -257,34 +195,37 @@ impl PreinitingStore {
         cycle
             .unwrap()
             .into_iter()
-            .map(|idx| self.store[idx].path.pretty_path.dupe())
+            .map(|idx| PrettyPath::new(&self.store[idx.0].path))
             .collect()
     }
 
     fn get_load_edges(&self) -> Vec<Vec<StoreIndex>> {
+        let script_indices_by_path: BTreeMap<_, _> = self
+            .store
+            .iter()
+            .enumerate()
+            .map(|(idx, script)| (script.path.as_path(), StoreIndex(idx)))
+            .collect();
         self.store
             .iter()
-            .map(|s| {
-                let mut adjacent = s
+            .map(|script| {
+                script
                     .loads()
-                    .iter()
-                    .map(|m| *self.path_indices.get(m).unwrap())
-                    .collect::<Vec<_>>();
-                adjacent.sort();
-                adjacent
+                    .values()
+                    .map(|load| script_indices_by_path.get(load.path()).map(|idx| *idx))
+                    .flatten()
+                    .collect()
             })
             .collect()
     }
 
     fn get_loaded_by_edges(&self, load_edges: &[Vec<StoreIndex>]) -> Vec<Vec<StoreIndex>> {
-        let mut ret = iter::repeat_with(Vec::new)
-            .take(self.store.len())
-            .collect::<Vec<_>>();
-        load_edges
-            .iter()
-            .enumerate()
-            .rev()
-            .for_each(|(n, a)| a.iter().for_each(|m| ret[*m].push(n)));
+        let mut ret = vec![Vec::new(); load_edges.len()];
+        for (idx, loads) in load_edges.iter().enumerate() {
+            for load_idx in loads {
+                ret[load_idx.0].push(StoreIndex(idx));
+            }
+        }
         ret
     }
 }
@@ -296,32 +237,32 @@ pub struct PreinitOptions {
 }
 
 #[derive(Debug)]
-pub struct PreinitedModuleCache {
-    exports: BTreeMap<PrettyPath, FrozenModule>,
+pub struct PreinitedModuleStore {
+    entries: BTreeMap<Utf8PathBuf, InitingScriptlet>,
 }
 
-impl PreinitedModuleCache {
+impl PreinitedModuleStore {
     fn new() -> Self {
         Self {
-            exports: BTreeMap::new(),
+            entries: BTreeMap::new(),
         }
     }
 
-    fn cache(&mut self, scriptlet: &InitingScriptlet) {
-        self.exports.insert(
-            scriptlet.path.pretty_path.dupe(),
-            scriptlet.preinited_module.dupe(),
-        );
+    fn store(&mut self, scriptlet: InitingScriptlet) {
+        self.entries.insert(scriptlet.path.to_owned(), scriptlet);
+    }
+
+    pub fn into_entry_modules(self) -> impl Iterator<Item = InitingScriptlet> {
+        self.entries.into_iter().map(|(_, module)| module)
     }
 }
 
-impl FileLoader for &PreinitedModuleCache {
+impl FileLoader for &PreinitedModuleStore {
     fn load(&self, path: &str) -> anyhow::Result<starlark::environment::FrozenModule> {
-        let path = PrettyPath::from(path);
-        self.exports
-            .get(&path)
-            .map(Dupe::dupe)
-            .ok_or_else(|| Error::NoSuchModule(path).into())
+        self.entries
+            .get(Utf8Path::new(path))
+            .map(|scriptlet| scriptlet.preinited_module.dupe())
+            .ok_or_else(|| Error::NoSuchModule(path.into()).into())
     }
 }
 
@@ -340,7 +281,7 @@ impl InitingStore {
             ObserverData::with_capacity(4 * num_scripts),
             |mut data, scriptlet| {
                 data.extend(scriptlet.init(&opts, &frozen_heap)?);
-                Ok::<_, Error>(data)
+                Result::Ok(data)
             },
         )?;
 

@@ -1,13 +1,12 @@
 use std::{fmt, io, num, path, str::Utf8Error};
 
-use camino::Utf8PathBuf;
 use derive_more::Display;
 use joinery::JoinableIterator;
 use strum::IntoEnumIterator;
 
 use crate::{
     query::Query,
-    scriptlets::{action::Action, event::EventKind, LoadStatementModule, Location},
+    scriptlets::{action::Action, event::EventKind, LoadPath, Location},
     source_path::PrettyPath,
     supported_language::SupportedLanguage,
 };
@@ -21,7 +20,7 @@ pub enum Error {
     #[error(
         "already inited in a parent directory {found_root}, to continue regardless, use --force"
     )]
-    AlreadyInited { found_root: Utf8PathBuf },
+    AlreadyInited { found_root: PrettyPath },
 
     #[error("cannot discern language of {path} as multiple patterns match (could be {language} or {other_language})")]
     AmbiguousLanguage {
@@ -84,7 +83,7 @@ pub enum Error {
     NoSuchModule(PrettyPath),
 
     #[error("cannot find vexes directory at {0}")]
-    NoVexesDir(Utf8PathBuf),
+    NoVexesDir(PrettyPath),
 
     #[error("{0} is not a check path")]
     NotACheckPath(PrettyPath),
@@ -237,13 +236,13 @@ pub enum InvalidLoadReason {
 
     #[display(
         fmt = "load path components must be at least {} characters",
-        LoadStatementModule::MIN_COMPONENT_LEN
+        LoadPath::MIN_COMPONENT_LEN
     )]
     TooShortComponent,
 
     #[display(
         fmt = "load path stem must be at least {} characters",
-        LoadStatementModule::MIN_COMPONENT_LEN
+        LoadPath::MIN_COMPONENT_LEN
     )]
     TooShortStem,
 
@@ -262,8 +261,8 @@ pub enum InvalidLoadReason {
     #[display(fmt = "load path cannot contain both `./` and `../`")]
     MixedPathOperators,
 
-    #[display(fmt = "load path cannot be relative")]
-    Relative,
+    #[display(fmt = "load path cannot be outside of the scriptlets directory")]
+    OutsideDirectory,
 
     #[display(fmt = "load path invalid, see docs")] // TODO(kcza): link to spec once public.
     NonSpecific,
