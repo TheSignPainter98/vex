@@ -42,11 +42,9 @@ tempfile = "3.9.0"
 thiserror = "1.0.51"
 toml_edit = { version = "0.21.0", features = ["serde"] }
 tree-sitter = "0.21.0"
-tree-sitter-c = "0.21"
 tree-sitter-go = "0.21"
 tree-sitter-python = "0.21"
 tree-sitter-rust = "0.21"
-tree-sitter-cpp = "0.21"
 uniquote = "4.0.0"
 textwrap = { version = "0.16.1", default-features = false }
 
