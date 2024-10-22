@@ -11,7 +11,7 @@ mod print_handler;
 pub mod query_cache;
 pub mod query_captures;
 mod scriptlet;
-mod source;
+pub mod source;
 mod store;
 
 pub use self::intents::{Intent, Intents};

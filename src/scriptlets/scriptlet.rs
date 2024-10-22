@@ -295,7 +295,7 @@ impl LoadPath {
             reason,
         };
 
-        let dir = from.parent().unwrap_or(&Utf8Path::new(""));
+        let dir = from.parent().unwrap_or(Utf8Path::new(""));
         let mut clean_path_components = Vec::with_capacity(10);
         for component in dir.components().chain(Utf8Path::new(load).components()) {
             match component {

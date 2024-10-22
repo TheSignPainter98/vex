@@ -36,7 +36,7 @@ use cli::{InitCmd, ListCmd, MaxProblems, ToList};
 use dupe::Dupe;
 use indoc::printdoc;
 use log::{info, log_enabled, trace};
-use scriptlets::InitOptions;
+use scriptlets::{source, InitOptions};
 use source_file::SourceFile;
 use source_path::PrettyPath;
 use strum::IntoEnumIterator;
@@ -135,7 +135,7 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
             verbosity,
         };
         let init_opts = InitOptions { verbosity };
-        PreinitingStore::new_in_dir(&ctx.vex_dir())?
+        PreinitingStore::new(&source::sources_in_dir(&ctx.vex_dir())?)?
             .preinit(preinit_opts)?
             .init(init_opts)?
     };

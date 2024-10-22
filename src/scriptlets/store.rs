@@ -4,14 +4,13 @@ use camino::{Utf8Path, Utf8PathBuf};
 use dupe::Dupe;
 use log::{info, log_enabled};
 use starlark::{eval::FileLoader, values::FrozenHeap};
-use walkdir::WalkDir;
 
 use crate::{
     error::Error,
     result::Result,
     scriptlets::{
         scriptlet::{InitingScriptlet, PreinitingScriptlet},
-        source::{FileSource, ScriptSource},
+        source::ScriptSource,
         ObserverData,
     },
     source_path::PrettyPath,
@@ -27,7 +26,7 @@ pub struct PreinitingStore {
 struct StoreIndex(usize);
 
 impl PreinitingStore {
-    pub fn new<S: ScriptSource>(scripts: Vec<S>) -> Result<Self> {
+    pub fn new<S: ScriptSource>(scripts: &[S]) -> Result<Self> {
         let store: Vec<_> = scripts
             .iter()
             .map(|source| Result::Ok((source.path(), source.content()?)))
@@ -42,32 +41,6 @@ impl PreinitingStore {
             .map(|(path, content)| PreinitingScriptlet::new(path.to_owned(), content))
             .collect::<Result<_>>()?;
         Ok(Self { store })
-    }
-
-    pub fn new_in_dir(dir_path: &Utf8Path) -> Result<Self> {
-        if !dir_path.is_dir() {
-            return Err(Error::NoVexesDir(PrettyPath::new(dir_path)));
-        }
-
-        let dir_walker = WalkDir::new(dir_path)
-            // .sort_by_file_name()
-            .min_depth(1) // Immediate children.
-            .into_iter()
-            .filter_entry(|entry| {
-                entry.file_type().is_dir()
-                    || entry.path().extension().is_some_and(|ext| ext == "star")
-            });
-        let sources: Vec<_> = dir_walker
-            .flatten() // Ignore inaccessible files.
-            .filter(|entry| entry.file_type().is_file())
-            .map(|entry| Utf8PathBuf::try_from(entry.into_path()))
-            .flatten() // Ignore files with invalid UTF-8 file names.
-            .map(|path| {
-                let load_path = path.strip_prefix(dir_path).unwrap_or(&path).to_owned();
-                FileSource::new(load_path, path)
-            })
-            .collect();
-        Self::new(sources)
     }
 
     pub fn preinit(mut self, opts: PreinitOptions) -> Result<InitingStore> {
@@ -212,8 +185,7 @@ impl PreinitingStore {
                 script
                     .loads()
                     .values()
-                    .map(|load| script_indices_by_path.get(load.path()).map(|idx| *idx))
-                    .flatten()
+                    .flat_map(|load| script_indices_by_path.get(load.path()).copied())
                     .collect()
             })
             .collect()
@@ -253,7 +225,7 @@ impl PreinitedModuleStore {
     }
 
     pub fn into_entry_modules(self) -> impl Iterator<Item = InitingScriptlet> {
-        self.entries.into_iter().map(|(_, module)| module)
+        self.entries.into_values()
     }
 }
 

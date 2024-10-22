@@ -510,11 +510,11 @@ mod test {
         let irritations = VexTest::new("many-origins")
             .with_scriptlet(
                 format!("vexes/{}.star", VEX_2_FILE_NAME),
-                &vex_source(VEX_2_NAME),
+                vex_source(VEX_2_NAME),
             )
             .with_scriptlet(
                 format!("vexes/{}.star", VEX_1_FILE_NAME),
-                &vex_source(VEX_1_NAME),
+                vex_source(VEX_1_NAME),
             )
             .with_source_file(
                 "src/main.rs",

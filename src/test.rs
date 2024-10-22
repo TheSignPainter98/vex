@@ -13,7 +13,7 @@ use starlark::values::FrozenHeap;
 use crate::{
     associations::Associations,
     cli::MaxProblems,
-    context::Context,
+    context::{Context, Manifest},
     error::{Error, IOAction},
     logger,
     result::Result,
@@ -22,8 +22,9 @@ use crate::{
         event::{PostTestRunEvent, PreTestRunEvent},
         handler_module::HandlerModule,
         query_cache::QueryCache,
+        source::{self, ScriptSource},
         InitOptions, Intent, Observable, ObserveOptions, PreinitOptions, PreinitingStore,
-        PrintHandler, VexingStore,
+        PrintHandler,
     },
     source_path::{PrettyPath, SourcePath},
     verbosity::Verbosity,
@@ -31,6 +32,11 @@ use crate::{
 
 pub fn test() -> Result<()> {
     let ctx = Context::acquire()?;
+
+    run_tests(&source::sources_in_dir(&ctx.vex_dir())?)
+}
+
+pub(crate) fn run_tests(script_sources: &[impl ScriptSource]) -> Result<()> {
     let store = {
         let preinit_opts = PreinitOptions {
             verbosity: Verbosity::Quiet,
@@ -39,16 +45,11 @@ pub fn test() -> Result<()> {
         let init_opts = InitOptions {
             verbosity: Verbosity::Quiet,
         };
-        PreinitingStore::new_in_dir(&ctx.vex_dir())?
+        PreinitingStore::new(script_sources)?
             .preinit(preinit_opts)?
             .init(init_opts)?
     };
 
-    run_tests(&ctx, &store)?;
-    Ok(())
-}
-
-pub(crate) fn run_tests(ctx: &Context, store: &VexingStore) -> Result<()> {
     let files_to_scan = {
         let frozen_heap = FrozenHeap::new();
         let event = PreTestRunEvent;
@@ -157,16 +158,15 @@ pub(crate) fn run_tests(ctx: &Context, store: &VexingStore) -> Result<()> {
     }
 
     let collect_run_data = |lenient| {
+        let sub_ctx = Context::new_with_manifest(&temp_dir_path, Manifest::default());
         let sub_store = {
             let verbosity = Verbosity::Quiet;
             let preinit_opts = PreinitOptions { lenient, verbosity };
             let init_opts = InitOptions { verbosity };
-            // Create new store using the current context to inherit the existing scripts.
-            PreinitingStore::new_in_dir(&ctx.vex_dir())?
+            PreinitingStore::new(script_sources)?
                 .preinit(preinit_opts)?
                 .init(init_opts)?
         };
-        let sub_ctx = ctx.child_context(PrettyPath::new(&temp_dir_path));
         crate::vex(
             &sub_ctx,
             &sub_store,
