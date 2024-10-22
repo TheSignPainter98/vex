@@ -261,7 +261,7 @@ pub enum InvalidLoadReason {
     #[display(fmt = "load path cannot contain both `./` and `../`")]
     MixedPathOperators,
 
-    #[display(fmt = "load path cannot be outside of the scriptlets directory")]
+    #[display(fmt = "load path cannot be outside of the vexes directory")]
     OutsideDirectory,
 
     #[display(fmt = "load path invalid, see docs")] // TODO(kcza): link to spec once public.

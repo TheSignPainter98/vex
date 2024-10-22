@@ -32,7 +32,6 @@ use crate::{
 
 pub fn test() -> Result<()> {
     let ctx = Context::acquire()?;
-
     run_tests(&source::sources_in_dir(&ctx.vex_dir())?)
 }
 

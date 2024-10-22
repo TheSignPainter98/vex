@@ -45,7 +45,7 @@ impl PreinitingStore {
 
     pub fn preinit(mut self, opts: PreinitOptions) -> Result<InitingStore> {
         self.store.sort_by(|sc1, sc2| sc1.path.cmp(&sc2.path));
-        self.sort_topographically()?;
+        self.topographic_sort()?;
         let Self { store } = self;
 
         let frozen_heap = FrozenHeap::new();
@@ -60,7 +60,7 @@ impl PreinitingStore {
     }
 
     /// Topographically order the store
-    fn sort_topographically(&mut self) -> Result<()> {
+    fn topographic_sort(&mut self) -> Result<()> {
         fn directed_dfs(
             linearised: &mut Vec<StoreIndex>,
             explored: &mut [bool],

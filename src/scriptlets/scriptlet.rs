@@ -132,13 +132,11 @@ impl LoadPath {
     fn new(from: &Utf8Path, load: &str) -> Result<Self> {
         let load_path = Utf8Path::new(load);
         Self::validate_raw(from, load_path)?;
-        let resolved_path = if matches!(
-            load_path.components().next(),
-            Some(Utf8Component::CurDir) | Some(Utf8Component::ParentDir)
-        ) {
-            Self::path_in_dir(from, load)?
-        } else {
-            load_path.to_owned()
+        let resolved_path = match load_path.components().next() {
+            Some(Utf8Component::CurDir | Utf8Component::ParentDir) => {
+                Self::path_in_dir(from, load)?
+            }
+            _ => load_path.to_owned(),
         };
         Ok(Self(resolved_path))
     }

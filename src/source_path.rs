@@ -37,10 +37,6 @@ impl SourcePath {
             pretty_path: PrettyPath::new(path),
         }
     }
-
-    // pub fn as_str(&self) -> &str {
-    //     self.pretty_path.as_str()
-    // }
 }
 
 impl AsRef<str> for SourcePath {
