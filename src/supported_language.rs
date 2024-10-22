@@ -29,9 +29,6 @@ use crate::{error::Error, result::Result};
 )]
 #[serde(rename_all = "kebab-case")]
 pub enum SupportedLanguage {
-    C,
-    #[serde(rename = "c++")]
-    Cpp,
     Go,
     Python,
     Rust,
@@ -40,8 +37,6 @@ pub enum SupportedLanguage {
 impl SupportedLanguage {
     pub fn name(&self) -> &'static str {
         match self {
-            Self::C => "c",
-            Self::Cpp => "c++",
             Self::Go => "go",
             Self::Python => "python",
             Self::Rust => "rust",
@@ -57,8 +52,6 @@ impl SupportedLanguage {
         };
 
         LANGUAGES[*self].get_or_init(|| match self {
-            Self::C => tree_sitter_c::language(),
-            Self::Cpp => tree_sitter_cpp::language(),
             Self::Go => tree_sitter_go::language(),
             Self::Python => tree_sitter_python::language(),
             Self::Rust => tree_sitter_rust::language(),
@@ -75,7 +68,7 @@ impl SupportedLanguage {
 
         IGNORE_QUERIES[*self].get_or_init(|| {
             let raw = match self {
-                Self::C | Self::Cpp | Self::Go => indoc! {r#"
+                Self::Go => indoc! {r#"
                     (
                         (comment) @marker (#match? @marker "^/[/*] *vex:ignore")
                         .
@@ -107,8 +100,6 @@ impl FromStr for SupportedLanguage {
 
     fn from_str(s: &str) -> Result<Self> {
         match s {
-            "c" => Ok(Self::C),
-            "c++" => Ok(Self::Cpp),
             "go" => Ok(Self::Go),
             "python" => Ok(Self::Python),
             "rust" => Ok(Self::Rust),
@@ -144,46 +135,6 @@ mod test {
     #[test]
     #[allow(clippy::single_range_in_vec_init)]
     fn ignore_queries() {
-        Test::language(SupportedLanguage::C)
-            .with_source(indoc! {r#"
-                void main() {
-                    // vex:ignore *
-                    int x[] = {
-                        1,
-                        2,
-                        3,
-                    };
-                    /* vex:ignore * */
-                    int y[] = {
-                        1,
-                        2,
-                        3,
-                    };
-                    // unrelated
-                    int z = 1;
-                }
-            "#})
-            .ignores_ranges(&[18..89, 94..168]);
-        Test::language(SupportedLanguage::Cpp)
-            .with_source(indoc! {r#"
-                void main() {
-                    // vex:ignore *
-                    vector<int> x {
-                        1,
-                        2,
-                        3,
-                    };
-                    /* vex:ignore * */
-                    vector<int> y = {
-                        1,
-                        2,
-                        3,
-                    };
-                    // unrelated
-                    int z = 1;
-                }
-            "#})
-            .ignores_ranges(&[18..93, 98..178]);
         Test::language(SupportedLanguage::Go)
             .with_source(indoc! {r#"
                 package main

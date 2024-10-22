@@ -83,29 +83,6 @@ mod test {
 
         let language_tests = [
             LanguageTest {
-                language: "c",
-                query: "(translation_unit)",
-                files: &[
-                    LanguageTestFile {
-                        path: "main.c",
-                        content: indoc! {r#"
-                            #include <stdio.h>
-                            #include "main.h"
-
-                            void main(void) {
-                                printf("Hello, world!\n");
-                            }
-                        "#},
-                    },
-                    LanguageTestFile {
-                        path: "main.h",
-                        content: indoc! {r#"
-                            void some_prototype(void);
-                        "#},
-                    },
-                ],
-            },
-            LanguageTest {
                 language: "go",
                 query: "(source_file)",
                 files: &[LanguageTestFile {
