@@ -9,7 +9,7 @@ use starlark::{
     analysis::AstModuleLint,
     environment::{FrozenModule, Globals, GlobalsBuilder, LibraryExtension, Module},
     errors::Lint,
-    eval::Evaluator,
+    eval::{Evaluator, FileLoader},
     syntax::{AstModule, Dialect},
     values::FrozenHeap,
 };
@@ -66,14 +66,10 @@ impl PreinitingScriptlet {
     pub fn preinit(
         self,
         opts: &PreinitOptions,
-        cache: &PreinitedModuleStore,
+        partial_store: &PreinitedModuleStore,
         frozen_heap: &FrozenHeap,
     ) -> Result<InitingScriptlet> {
-        let Self {
-            path,
-            ast,
-            loads: _,
-        } = self;
+        let Self { path, ast, loads } = self;
         let PreinitOptions { lenient, verbosity } = opts;
 
         let preinited_module = {
@@ -87,8 +83,9 @@ impl PreinitingScriptlet {
                     ignore_markers: None,
                 };
                 let print_handler = PrintHandler::new(*verbosity, path.as_str());
+                let loader = Loader::new(&loads, partial_store);
                 let mut eval = Evaluator::new(&preinited_module);
-                eval.set_loader(&cache);
+                eval.set_loader(&loader);
                 eval.set_print_handler(&print_handler);
                 eval.extra = Some(&temp_data);
                 eval.eval_module(ast, &Self::globals(*lenient))?;
@@ -116,6 +113,27 @@ impl PreinitingScriptlet {
 
     pub fn loads(&self) -> &BTreeMap<String, LoadPath> {
         &self.loads
+    }
+}
+
+struct Loader<'src> {
+    loads: &'src BTreeMap<String, LoadPath>,
+    store: &'src PreinitedModuleStore,
+}
+
+impl<'src> Loader<'src> {
+    fn new(loads: &'src BTreeMap<String, LoadPath>, store: &'src PreinitedModuleStore) -> Self {
+        Self { loads, store }
+    }
+}
+
+impl FileLoader for Loader<'_> {
+    fn load(&self, path: &str) -> anyhow::Result<starlark::environment::FrozenModule> {
+        self.loads
+            .get(path)
+            .and_then(|load_path| self.store.get(load_path.path()))
+            .map(|scriptlet| scriptlet.preinited_module.dupe())
+            .ok_or_else(|| Error::NoSuchModule(path.into()).into())
     }
 }
 
@@ -650,7 +668,7 @@ mod test {
 
     #[test]
     fn loads() {
-        VexTest::new("valid")
+        VexTest::new("valid-absolute")
             .with_scriptlet(
                 "vexes/test.star",
                 indoc! {r#"
@@ -668,6 +686,15 @@ mod test {
                 "#},
             )
             .assert_irritation_free();
+        VexTest::new("valid-sibling")
+            .with_scriptlet("vexes/dir/test.star", "load('./sibling.star', 'func')")
+            .with_scriptlet("vexes/dir/sibling.star", "fail('marker')")
+            .returns_error("marker");
+        VexTest::new("valid-parent")
+            .with_scriptlet("vexes/dir/test.star", "load('../sibling.star', 'func')")
+            .with_scriptlet("vexes/sibling.star", "fail('marker')")
+            .returns_error("marker");
+
         VexTest::new("nonexistent-loads")
             .with_scriptlet("vexes/test.star", "load('i_do_not_exist.star', 'x')")
             .returns_error(r"cannot find module 'i_do_not_exist\.star'");

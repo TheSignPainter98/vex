@@ -1,9 +1,8 @@
 use std::{collections::BTreeMap, ops::Deref};
 
 use camino::{Utf8Path, Utf8PathBuf};
-use dupe::Dupe;
 use log::{info, log_enabled};
-use starlark::{eval::FileLoader, values::FrozenHeap};
+use starlark::values::FrozenHeap;
 
 use crate::{
     error::Error,
@@ -49,13 +48,13 @@ impl PreinitingStore {
         let Self { store } = self;
 
         let frozen_heap = FrozenHeap::new();
-        let mut cache = PreinitedModuleStore::new();
+        let mut partial_store = PreinitedModuleStore::new();
         for scriptlet in store.into_iter() {
-            let preinited_scriptlet = scriptlet.preinit(&opts, &cache, &frozen_heap)?;
-            cache.store(preinited_scriptlet);
+            let preinited_scriptlet = scriptlet.preinit(&opts, &partial_store, &frozen_heap)?;
+            partial_store.add(preinited_scriptlet);
         }
 
-        let store = cache.into_entry_modules().collect();
+        let store = partial_store.into_entry_modules().collect();
         Ok(InitingStore { store, frozen_heap })
     }
 
@@ -210,7 +209,7 @@ pub struct PreinitOptions {
 
 #[derive(Debug)]
 pub struct PreinitedModuleStore {
-    entries: BTreeMap<Utf8PathBuf, InitingScriptlet>,
+    pub entries: BTreeMap<Utf8PathBuf, InitingScriptlet>,
 }
 
 impl PreinitedModuleStore {
@@ -220,21 +219,16 @@ impl PreinitedModuleStore {
         }
     }
 
-    fn store(&mut self, scriptlet: InitingScriptlet) {
+    fn add(&mut self, scriptlet: InitingScriptlet) {
         self.entries.insert(scriptlet.path.to_owned(), scriptlet);
     }
 
     pub fn into_entry_modules(self) -> impl Iterator<Item = InitingScriptlet> {
         self.entries.into_values()
     }
-}
 
-impl FileLoader for &PreinitedModuleStore {
-    fn load(&self, path: &str) -> anyhow::Result<starlark::environment::FrozenModule> {
-        self.entries
-            .get(Utf8Path::new(path))
-            .map(|scriptlet| scriptlet.preinited_module.dupe())
-            .ok_or_else(|| Error::NoSuchModule(path.into()).into())
+    pub fn get(&self, path: &Utf8Path) -> Option<&InitingScriptlet> {
+        self.entries.get(path)
     }
 }
 
