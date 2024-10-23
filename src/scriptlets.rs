@@ -11,6 +11,7 @@ mod print_handler;
 pub mod query_cache;
 pub mod query_captures;
 mod scriptlet;
+pub mod source;
 mod store;
 
 pub use self::intents::{Intent, Intents};
@@ -18,5 +19,5 @@ pub use self::node::{Location, Node, NodePrinter, WhitespaceStyle};
 pub use self::observers::{Observable, ObserveOptions, Observer, ObserverData};
 pub use self::print_handler::PrintHandler;
 pub use self::query_captures::QueryCaptures;
-pub use self::scriptlet::LoadStatementModule;
+pub use self::scriptlet::LoadPath;
 pub use self::store::{InitOptions, PreinitOptions, PreinitingStore, VexingStore};

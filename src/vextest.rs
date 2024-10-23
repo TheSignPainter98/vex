@@ -5,7 +5,7 @@ use std::{
     io::Write,
 };
 
-use camino::Utf8PathBuf;
+use camino::{Utf8Component, Utf8PathBuf};
 use indoc::indoc;
 use regex::Regex;
 
@@ -13,7 +13,10 @@ use crate::{
     cli::MaxProblems,
     context::Context,
     result::Result,
-    scriptlets::{InitOptions, PreinitOptions, PreinitingStore},
+    scriptlets::{
+        source::{ScriptSource, TestSource},
+        InitOptions, PreinitOptions, PreinitingStore,
+    },
     verbosity::Verbosity,
     RunData,
 };
@@ -27,7 +30,7 @@ pub struct VexTest<'s> {
     max_problems: MaxProblems,
     lenient: bool,
     fire_test_events: bool,
-    scriptlets: BTreeMap<Utf8PathBuf, Cow<'s, str>>,
+    scriptlets: Vec<TestSource<Utf8PathBuf, Cow<'s, str>>>,
     source_files: BTreeMap<Utf8PathBuf, Cow<'s, str>>,
 }
 
@@ -80,13 +83,28 @@ impl<'s> VexTest<'s> {
         let content = content.into();
 
         assert!(
-            path.starts_with("vexes/"),
+            path.as_str().starts_with("vexes/"),
             "test scriptlet path must start with vexes/"
         );
         assert!(
-            self.scriptlets.insert(path, content).is_none(),
+            !self.scriptlets.iter().any(|s| s.path() == path),
             "duplicate scriptlet declaration"
         );
+        let vex_dir = path
+            .components()
+            .next()
+            .and_then(|first| match first {
+                Utf8Component::Normal(d) => Some(d),
+                _ => None,
+            })
+            .unwrap()
+            .to_owned()
+            .into();
+        self.scriptlets.push(TestSource {
+            vex_dir,
+            path,
+            content,
+        });
     }
 
     #[allow(unused)]
@@ -136,41 +154,32 @@ impl<'s> VexTest<'s> {
                 .unwrap();
         }
 
-        for (path, content) in &self.scriptlets {
-            let scriptlet_path = root_path.join(path);
-            fs::create_dir_all(scriptlet_path.parent().unwrap()).unwrap();
-            File::create(scriptlet_path)
-                .unwrap()
-                .write_all(content.as_bytes())
-                .unwrap();
-        }
-
-        for (path, content) in &self.source_files {
-            let source_path = root_path.join(path);
-            fs::create_dir_all(source_path.parent().unwrap()).unwrap();
-            File::create(root_path.join(path))
-                .unwrap()
-                .write_all(content.as_bytes())
-                .unwrap();
-        }
-
         let ctx = Context::acquire_in(&root_path).unwrap();
         if !self.bare {
             fs::create_dir(ctx.vex_dir()).ok();
         }
-        let verbosity = Verbosity::default();
-        let preinit_opts = PreinitOptions {
-            lenient: self.lenient,
-            verbosity,
-        };
-        let init_opts = InitOptions { verbosity };
-        let store = PreinitingStore::new(&ctx)?
-            .preinit(preinit_opts)?
-            .init(init_opts)?;
         if self.fire_test_events {
-            crate::test::run_tests(&ctx, &store)?;
+            crate::test::run_tests(&self.scriptlets)?;
             Ok(RunData::default())
         } else {
+            for (path, content) in &self.source_files {
+                let source_path = root_path.join(path);
+                fs::create_dir_all(source_path.parent().unwrap()).unwrap();
+                File::create(root_path.join(path))
+                    .unwrap()
+                    .write_all(content.as_bytes())
+                    .unwrap();
+            }
+
+            let verbosity = Verbosity::default();
+            let preinit_opts = PreinitOptions {
+                lenient: self.lenient,
+                verbosity,
+            };
+            let init_opts = InitOptions { verbosity };
+            let store = PreinitingStore::new(&self.scriptlets)?
+                .preinit(preinit_opts)?
+                .init(init_opts)?;
             super::vex(&ctx, &store, self.max_problems, verbosity)
         }
     }

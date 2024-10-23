@@ -37,10 +37,6 @@ impl SourcePath {
             pretty_path: PrettyPath::new(path),
         }
     }
-
-    pub fn as_str(&self) -> &str {
-        self.pretty_path.as_str()
-    }
 }
 
 impl AsRef<str> for SourcePath {
@@ -342,8 +338,7 @@ mod test {
     impl FileLoader for TestModuleCache {
         fn load(&self, path: &str) -> anyhow::Result<starlark::environment::FrozenModule> {
             if path != VexTest::CHECK_STARLARK_PATH {
-                let path = PrettyPath::from(path);
-                return Err(Error::NoSuchModule(path).into());
+                return Err(Error::NoSuchModule(path.into()).into());
             }
             lazy_static! {
                 static ref CHECK_MODULE: FrozenModule = {

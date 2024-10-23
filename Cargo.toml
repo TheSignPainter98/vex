@@ -16,7 +16,7 @@ license-file = "LICENSE"
 allocative = "0.3.1"
 annotate-snippets = "0.10.0"
 anyhow = "1.0.76"
-camino = { version = "1.1.6", features = ["serde1"] }
+camino = { version = "1.1.9", features = ["serde1"] }
 clap = { version = "4.4.11", features = ["derive", "color", "wrap_help"] }
 const_format = "0.2.32"
 derive-new = "0.6.0"
@@ -47,6 +47,7 @@ tree-sitter-python = "0.21"
 tree-sitter-rust = "0.21"
 uniquote = "4.0.0"
 textwrap = { version = "0.16.1", default-features = false }
+walkdir = "2"
 
 [dev-dependencies]
 insta = { version = "1.36.1", features = ["yaml"] }

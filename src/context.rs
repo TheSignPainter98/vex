@@ -36,9 +36,16 @@ impl Context {
         })
     }
 
+    pub fn new_with_manifest(project_root: &Utf8Path, manifest: Manifest) -> Self {
+        Self {
+            project_root: PrettyPath::new(project_root),
+            manifest,
+        }
+    }
+
     #[cfg(test)]
-    pub fn acquire_in(dir: &Utf8Path) -> Result<Self> {
-        let (project_root, raw_data) = Manifest::acquire_content_in(dir)?;
+    pub fn acquire_in(project_root: &Utf8Path) -> Result<Self> {
+        let (project_root, raw_data) = Manifest::acquire_content_in(project_root)?;
         let project_root = PrettyPath::new(&project_root);
         let data = toml_edit::de::from_str(&raw_data)?;
         Ok(Context {
@@ -109,13 +116,6 @@ impl Context {
         Ok(())
     }
 
-    pub fn child_context(&self, project_root: PrettyPath) -> Context {
-        Context {
-            project_root,
-            manifest: self.manifest.clone(),
-        }
-    }
-
     pub fn associations(&self) -> Result<Associations> {
         let mut ret = Associations::base();
         self.manifest
@@ -180,7 +180,11 @@ impl Manifest {
         let project_root = project_root.as_ref();
         if !force {
             match Manifest::acquire_content_in(project_root) {
-                Ok((found_root, _)) => return Err(Error::AlreadyInited { found_root }),
+                Ok((found_root, _)) => {
+                    return Err(Error::AlreadyInited {
+                        found_root: PrettyPath::new(&found_root),
+                    })
+                }
                 Err(Error::ManifestNotFound) => {}
                 Err(e) => return Err(e),
             }
@@ -210,7 +214,7 @@ impl Manifest {
     fn acquire_content() -> Result<(Utf8PathBuf, String)> {
         Self::acquire_content_in(&Utf8PathBuf::try_from(env::current_dir().map_err(
             |cause| Error::IO {
-                path: PrettyPath::new(Utf8Path::new(".")),
+                path: PrettyPath::from("."),
                 action: IOAction::Read,
                 cause,
             },
@@ -225,7 +229,7 @@ impl Manifest {
                 Err(e) if e.kind() == ErrorKind::NotFound => {}
                 Err(e) => {
                     return Err(Error::IO {
-                        path: PrettyPath::new(Utf8Path::new(Self::FILE_NAME)),
+                        path: PrettyPath::from(Self::FILE_NAME),
                         action: IOAction::Read,
                         cause: e,
                     })
@@ -243,7 +247,7 @@ impl Manifest {
             manifest_file
                 .read_to_string(&mut manifest_raw)
                 .map_err(|cause| Error::IO {
-                    path: PrettyPath::new(Utf8Path::new(Self::FILE_NAME)),
+                    path: PrettyPath::from(Self::FILE_NAME),
                     action: IOAction::Read,
                     cause,
                 })?;
@@ -350,7 +354,7 @@ mod test {
 
     use crate::{
         cli::MaxProblems,
-        scriptlets::{InitOptions, PreinitOptions, PreinitingStore},
+        scriptlets::{source, InitOptions, PreinitOptions, PreinitingStore},
         verbosity::Verbosity,
         RunData,
     };
@@ -395,7 +399,7 @@ mod test {
 
         Context::init(tempdir_path.clone(), false).unwrap();
         let ctx = Context::acquire_in(&tempdir_path).unwrap();
-        PreinitingStore::new(&ctx)
+        PreinitingStore::new(&source::sources_in_dir(&ctx.vex_dir())?)
             .unwrap()
             .preinit(PreinitOptions::default())
             .unwrap()
@@ -414,7 +418,7 @@ mod test {
         // Already inited, force
         Context::init(&tempdir_path, true).unwrap();
         let ctx = Context::acquire_in(&tempdir_path).unwrap();
-        PreinitingStore::new(&ctx)
+        PreinitingStore::new(&source::sources_in_dir(&ctx.vex_dir())?)
             .unwrap()
             .preinit(PreinitOptions::default())
             .unwrap()
@@ -446,7 +450,7 @@ mod test {
 
         Context::init(&tempdir_path, false)?;
         let ctx = Context::acquire_in(&tempdir_path)?;
-        let store = PreinitingStore::new(&ctx)?
+        let store = PreinitingStore::new(&source::sources_in_dir(&ctx.vex_dir())?)?
             .preinit(PreinitOptions::default())?
             .init(InitOptions::default())?;
         let RunData { irritations, .. } =
@@ -455,26 +459,6 @@ mod test {
             .into_iter()
             .map(|irr| irr.to_string())
             .collect::<Vec<_>>());
-
-        Ok(())
-    }
-
-    #[test]
-    fn no_vexes_dir() -> Result<()> {
-        let tempdir = tempfile::tempdir().unwrap();
-        let tempdir_path = Utf8PathBuf::try_from(tempdir.path().to_owned())?;
-
-        let mut manifest = File::create(tempdir_path.join("vex.toml")).unwrap();
-        manifest.write_all("[vex]".as_bytes()).unwrap();
-
-        let re = Regex::new("^cannot find vexes directory at .*").unwrap();
-        let ctx = Context::acquire_in(&tempdir_path).unwrap();
-        let err = PreinitingStore::new(&ctx).unwrap_err();
-        assert!(
-            re.is_match(&err.to_string()),
-            "incorrect error, expected {} but got {err}",
-            re.as_str()
-        );
 
         Ok(())
     }
