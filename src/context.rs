@@ -193,7 +193,8 @@ impl Manifest {
         let file_path = project_root.join(Self::FILE_NAME);
         let file = File::options()
             .write(true)
-            .create_new(!force)
+            .create(true)
+            .truncate(true)
             .open(&file_path)
             .map_err(|cause| Error::IO {
                 path: PrettyPath::new(&file_path),
