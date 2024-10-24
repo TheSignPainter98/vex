@@ -34,7 +34,7 @@ use std::{env, fs, process::ExitCode};
 use camino::{Utf8Path, Utf8PathBuf};
 use cli::{InitCmd, ListCmd, MaxProblems, ToList};
 use dupe::Dupe;
-use indoc::printdoc;
+use indoc::{formatdoc, printdoc};
 use log::{info, log_enabled, trace};
 use scriptlets::{source, InitOptions};
 use source_file::SourceFile;
@@ -438,13 +438,15 @@ fn init(init_args: InitCmd) -> Result<()> {
     Context::init(cwd, init_args.force)?;
     let queries_dir = Context::acquire()?.manifest.metadata.queries_dir;
     success!(
-        "
-            vex initialised
-            now add style rules in ./{}/
-            for an example, open ./{}/{EXAMPLE_VEX_FILE}
-        ",
-        queries_dir.as_str(),
-        queries_dir.as_str(),
+        "{}",
+        formatdoc!(
+            "
+                vex initialised
+                now add style rules in ./{}/
+                for an example, open ./{}/{EXAMPLE_VEX_FILE}",
+            queries_dir.as_str(),
+            queries_dir.as_str(),
+        )
     );
     Ok(())
 }
