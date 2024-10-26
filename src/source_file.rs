@@ -9,7 +9,7 @@ use walkdir::WalkDir;
 
 use crate::{
     cli::MaxConcurrentFileLimit,
-    context::{Context, Manifest},
+    context::Context,
     error::{Error, IOAction},
     ignore_markers::{IgnoreMarkers, VexIdFilter},
     result::{RecoverableResult, Result},
@@ -74,16 +74,6 @@ pub fn sources_in_dir(
                 return false;
             }
 
-            if !is_root
-                && entry.file_type().is_dir()
-                && entry_path.join(Manifest::FILE_NAME).exists()
-            {
-                if log_enabled!(log::Level::Info) {
-                    let dir_marker = if entry.file_type().is_dir() { "/" } else { "" };
-                    info!("ignoring {entry_path}{dir_marker}: contains vex project");
-                }
-                return false;
-            }
             true
         })
         .flatten()
