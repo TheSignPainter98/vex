@@ -12,7 +12,7 @@ use starlark::values::FrozenHeap;
 
 use crate::{
     associations::Associations,
-    cli::MaxProblems,
+    cli::{MaxConcurrentFileLimit, MaxProblems},
     context::{Context, Manifest},
     error::{Error, IOAction},
     logger,
@@ -170,6 +170,7 @@ pub(crate) fn run_tests(script_sources: &[impl ScriptSource]) -> Result<()> {
             &sub_ctx,
             &sub_store,
             MaxProblems::Unlimited,
+            MaxConcurrentFileLimit::new(1),
             Verbosity::Quiet,
         )
     };

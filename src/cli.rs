@@ -9,7 +9,7 @@ use clap::{
     ArgAction, Parser, Subcommand, ValueEnum,
 };
 
-use crate::{error::Error, supported_language::SupportedLanguage};
+use crate::{supported_language::SupportedLanguage, Result};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -123,9 +123,10 @@ pub enum ToList {
 
 #[derive(Debug, Default, PartialEq, Eq, Parser)]
 pub struct CheckCmd {
-    // Set concurrency limit
-    // #[arg(long, default_value_t = MaxConcurrentFileLimit::default(), value_parser = MaxConcurrentFileLimit::parser())]
-    // pub max_concurrent_files: MaxConcurrentFileLimit,
+    /// Set concurrency limit
+    #[arg(long, default_value_t = MaxConcurrentFileLimit::default(), value_parser = MaxConcurrentFileLimit::parser(), value_name = "max")]
+    pub max_concurrent_files: MaxConcurrentFileLimit,
+
     /// Reduce strictness
     #[arg(long)]
     pub lenient: bool,
@@ -135,26 +136,36 @@ pub struct CheckCmd {
     pub max_problems: MaxProblems,
 }
 
-// #[derive(Clone, Debug)]
-// pub struct MaxConcurrentFileLimit(pub u32);
-//
-// impl MaxConcurrentFileLimit {
-//     fn parser() -> impl TypedValueParser {
-//         StringValueParser::new().try_map(|s| Ok::<_, Error>(Self(s.parse()?)))
-//     }
-// }
-//
-// impl Default for MaxConcurrentFileLimit {
-//     fn default() -> Self {
-//         Self(16)
-//     }
-// }
-//
-// impl Display for MaxConcurrentFileLimit {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         self.0.fmt(f)
-//     }
-// }
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MaxConcurrentFileLimit(u32);
+
+impl MaxConcurrentFileLimit {
+    pub fn new(limit: u32) -> MaxConcurrentFileLimit {
+        Self(limit)
+    }
+
+    fn parser() -> impl TypedValueParser {
+        StringValueParser::new().try_map(|s| Result::Ok(Self(s.parse()?)))
+    }
+}
+
+impl Default for MaxConcurrentFileLimit {
+    fn default() -> Self {
+        Self(16)
+    }
+}
+
+impl From<MaxConcurrentFileLimit> for usize {
+    fn from(max: MaxConcurrentFileLimit) -> Self {
+        max.0 as usize
+    }
+}
+
+impl Display for MaxConcurrentFileLimit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MaxProblems {
@@ -166,11 +177,11 @@ impl MaxProblems {
     fn parser() -> impl TypedValueParser {
         StringValueParser::new().try_map(|s| {
             if s.to_lowercase() == "unlimited" {
-                return Ok(Self::Unlimited);
+                return Result::Ok(Self::Unlimited);
             }
 
             let max: u32 = s.parse()?;
-            Ok::<_, Error>(Self::Limited(max))
+            Result::Ok(Self::Limited(max))
         })
     }
 

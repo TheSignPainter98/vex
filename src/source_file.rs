@@ -1,18 +1,90 @@
 use std::{fs, ops::Range};
 
 use allocative::Allocative;
+use camino::{Utf8Path, Utf8PathBuf};
 use dupe::Dupe;
 use log::{info, log_enabled};
 use tree_sitter::{Node as TSNode, Parser, QueryCursor, Tree};
+use walkdir::WalkDir;
 
 use crate::{
+    cli::MaxConcurrentFileLimit,
+    context::Context,
     error::{Error, IOAction},
     ignore_markers::{IgnoreMarkers, VexIdFilter},
     result::{RecoverableResult, Result},
     scriptlets::{Location, Node},
     source_path::SourcePath,
     supported_language::SupportedLanguage,
+    trigger::FilePattern,
 };
+
+pub fn sources_in_dir(
+    ctx: &Context,
+    max_concurrent_files: MaxConcurrentFileLimit,
+) -> Result<Vec<SourceFile>> {
+    let ignores: Vec<_> = ctx
+        .metadata
+        .ignores
+        .clone()
+        .into_inner()
+        .into_iter()
+        .map(|ignore| ignore.compile())
+        .collect::<Result<_>>()?;
+    let allows: Vec<_> = ctx
+        .metadata
+        .allows
+        .clone()
+        .into_iter()
+        .map(|allow| allow.compile())
+        .collect::<Result<_>>()?;
+    let associations = ctx.associations()?;
+    WalkDir::new(ctx.project_root.as_str())
+        .follow_links(false)
+        .follow_root_links(false)
+        .max_open(max_concurrent_files.into())
+        .into_iter()
+        .filter_entry(|entry| {
+            let entry_path = match Utf8Path::from_path(entry.path()) {
+                Some(p) => p,
+                _ => return false,
+            };
+
+            let is_hidden = entry_path
+                .file_name()
+                .is_some_and(|file_name| file_name.starts_with('.'));
+            let is_root = entry_path == ctx.project_root.as_ref();
+            if is_hidden && !is_root {
+                if log_enabled!(log::Level::Info) {
+                    let dir_marker = if entry.file_type().is_dir() { "/" } else { "" };
+                    info!("ignoring {entry_path}{dir_marker}: hidden");
+                }
+                return false;
+            }
+
+            let matches_any = |path, patterns: &[FilePattern]| {
+                patterns.iter().any(|pattern| pattern.matches(path))
+            };
+            if matches_any(entry_path, &ignores) && !matches_any(entry_path, &allows) {
+                if log_enabled!(log::Level::Info) {
+                    let dir_marker = if entry.file_type().is_dir() { "/" } else { "" };
+                    info!("ignoring {entry_path}{dir_marker}: matches ignore pattern");
+                }
+                return false;
+            }
+
+            true
+        })
+        .flatten()
+        .filter(|entry| entry.file_type().is_file())
+        .flat_map(|entry| Utf8PathBuf::from_path_buf(entry.path().to_owned()))
+        .map(|entry_path| SourcePath::new(&entry_path, &ctx.project_root))
+        .map(|source_path| {
+            let language = associations.get_language(&source_path)?;
+            Ok(SourceFile::new(source_path, language))
+        })
+        .collect()
+}
 
 #[derive(Debug)]
 pub struct SourceFile {
