@@ -10,7 +10,7 @@ use indoc::indoc;
 use regex::Regex;
 
 use crate::{
-    cli::MaxProblems,
+    cli::{MaxConcurrentFileLimit, MaxProblems},
     context::Context,
     result::Result,
     scriptlets::{
@@ -180,7 +180,13 @@ impl<'s> VexTest<'s> {
             let store = PreinitingStore::new(&self.scriptlets)?
                 .preinit(preinit_opts)?
                 .init(init_opts)?;
-            super::vex(&ctx, &store, self.max_problems, verbosity)
+            super::vex(
+                &ctx,
+                &store,
+                self.max_problems,
+                MaxConcurrentFileLimit::new(1),
+                verbosity,
+            )
         }
     }
 

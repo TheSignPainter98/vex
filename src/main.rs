@@ -29,15 +29,14 @@ mod vex;
 #[cfg(test)]
 mod vextest;
 
-use std::{env, fs, process::ExitCode};
+use std::{env, process::ExitCode};
 
-use camino::{Utf8Path, Utf8PathBuf};
-use cli::{InitCmd, ListCmd, MaxProblems, ToList};
+use camino::Utf8PathBuf;
+use cli::{InitCmd, ListCmd, MaxConcurrentFileLimit, MaxProblems, ToList};
 use dupe::Dupe;
 use indoc::printdoc;
-use log::{info, log_enabled, trace};
+use log::{info, log_enabled};
 use scriptlets::{source, InitOptions};
-use source_file::SourceFile;
 use source_path::PrettyPath;
 use strum::IntoEnumIterator;
 use tree_sitter::QueryCursor;
@@ -59,9 +58,7 @@ use crate::{
         query_captures::QueryCaptures,
         Observable, ObserveOptions, PreinitOptions, PreinitingStore, PrintHandler, VexingStore,
     },
-    source_path::SourcePath,
     supported_language::SupportedLanguage,
-    trigger::FilePattern,
     verbosity::Verbosity,
 };
 
@@ -128,8 +125,9 @@ fn list(list_args: ListCmd) -> Result<()> {
 
 fn check(cmd_args: CheckCmd) -> Result<()> {
     let ctx = Context::acquire()?;
+    let verbosity = logger::verbosity();
+
     let store = {
-        let verbosity = logger::verbosity();
         let preinit_opts = PreinitOptions {
             lenient: cmd_args.lenient,
             verbosity,
@@ -140,11 +138,16 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
             .init(init_opts)?
     };
 
-    let verbosity = logger::verbosity();
     let RunData {
         irritations,
         num_files_scanned,
-    } = vex(&ctx, &store, cmd_args.max_problems, verbosity)?;
+    } = vex(
+        &ctx,
+        &store,
+        cmd_args.max_problems,
+        cmd_args.max_concurrent_files,
+        verbosity,
+    )?;
     irritations
         .iter()
         .for_each(|irr| crate::warn!(custom=true; "{irr}"));
@@ -172,43 +175,10 @@ fn vex(
     ctx: &Context,
     store: &VexingStore,
     max_problems: MaxProblems,
+    max_concurrent_files: MaxConcurrentFileLimit,
     verbosity: Verbosity,
 ) -> Result<RunData> {
-    let files = {
-        let mut paths = Vec::new();
-        let ignores = ctx
-            .metadata
-            .ignores
-            .clone()
-            .into_inner()
-            .into_iter()
-            .map(|ignore| ignore.compile())
-            .collect::<Result<Vec<_>>>()?;
-        let allows = ctx
-            .metadata
-            .allows
-            .clone()
-            .into_iter()
-            .map(|allow| allow.compile())
-            .collect::<Result<Vec<_>>>()?;
-        walkdir(
-            ctx,
-            ctx.project_root.as_ref(),
-            &ignores,
-            &allows,
-            &mut paths,
-        )?;
-
-        let associations = ctx.associations()?;
-        paths
-            .into_iter()
-            .map(|p| SourcePath::new(&p, &ctx.project_root))
-            .map(|p| {
-                let language = associations.get_language(&p)?;
-                Ok(SourceFile::new(p, language))
-            })
-            .collect::<Result<Vec<_>>>()?
-    };
+    let files = source_file::sources_in_dir(ctx, max_concurrent_files)?;
 
     let project_queries_hint = store.project_queries_hint();
     let file_queries_hint = store.file_queries_hint();
@@ -365,68 +335,6 @@ fn vex(
         irritations,
         num_files_scanned: files.len(),
     })
-}
-
-fn walkdir(
-    ctx: &Context,
-    path: &Utf8Path,
-    ignores: &[FilePattern],
-    allows: &[FilePattern],
-    paths: &mut Vec<Utf8PathBuf>,
-) -> Result<()> {
-    if log_enabled!(log::Level::Trace) {
-        trace!("walking {path}");
-    }
-    let entries = fs::read_dir(path).map_err(|cause| Error::IO {
-        path: PrettyPath::new(path),
-        action: IOAction::Read,
-        cause,
-    })?;
-    for entry in entries {
-        let entry = entry.map_err(|cause| Error::IO {
-            path: PrettyPath::new(path),
-            action: IOAction::Read,
-            cause,
-        })?;
-        let entry_path = Utf8PathBuf::try_from(entry.path())?;
-        let metadata = fs::symlink_metadata(&entry_path).map_err(|cause| Error::IO {
-            path: PrettyPath::new(&entry_path),
-            action: IOAction::Read,
-            cause,
-        })?;
-        let is_dir = metadata.is_dir();
-
-        let project_relative_path =
-            Utf8Path::new(&entry_path.as_str()[ctx.project_root.as_str().len()..]);
-        if !allows.iter().any(|p| p.matches(project_relative_path)) {
-            let hidden = project_relative_path
-                .file_name()
-                .is_some_and(|name| name.starts_with('.'));
-            if hidden || ignores.iter().any(|p| p.matches(project_relative_path)) {
-                if log_enabled!(log::Level::Info) {
-                    let dir_marker = if is_dir { "/" } else { "" };
-                    info!("ignoring {project_relative_path}{dir_marker}");
-                }
-                continue;
-            }
-        }
-
-        if is_dir {
-            walkdir(ctx, &entry_path, ignores, allows, paths)?;
-        } else if metadata.is_file() {
-            paths.push(entry_path);
-        } else if log_enabled!(log::Level::Info) {
-            let entry_path = entry_path.strip_prefix(ctx.project_root.as_ref())?;
-            let file_type = if metadata.is_symlink() {
-                "symlink"
-            } else {
-                "unknown type"
-            };
-            info!("ignoring /{entry_path} ({file_type})");
-        }
-    }
-
-    Ok(())
 }
 
 fn init(init_args: InitCmd) -> Result<()> {

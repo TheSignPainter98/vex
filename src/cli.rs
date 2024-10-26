@@ -123,9 +123,10 @@ pub enum ToList {
 
 #[derive(Debug, Default, PartialEq, Eq, Parser)]
 pub struct CheckCmd {
-    // Set concurrency limit
-    // #[arg(long, default_value_t = MaxConcurrentFileLimit::default(), value_parser = MaxConcurrentFileLimit::parser())]
-    // pub max_concurrent_files: MaxConcurrentFileLimit,
+    /// Set concurrency limit
+    #[arg(long, default_value_t = MaxConcurrentFileLimit::default(), value_parser = MaxConcurrentFileLimit::parser())]
+    pub max_concurrent_files: MaxConcurrentFileLimit,
+
     /// Reduce strictness
     #[arg(long)]
     pub lenient: bool,
@@ -135,26 +136,36 @@ pub struct CheckCmd {
     pub max_problems: MaxProblems,
 }
 
-// #[derive(Clone, Debug)]
-// pub struct MaxConcurrentFileLimit(pub u32);
-//
-// impl MaxConcurrentFileLimit {
-//     fn parser() -> impl TypedValueParser {
-//         StringValueParser::new().try_map(|s| Ok::<_, Error>(Self(s.parse()?)))
-//     }
-// }
-//
-// impl Default for MaxConcurrentFileLimit {
-//     fn default() -> Self {
-//         Self(16)
-//     }
-// }
-//
-// impl Display for MaxConcurrentFileLimit {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         self.0.fmt(f)
-//     }
-// }
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MaxConcurrentFileLimit(u32);
+
+impl MaxConcurrentFileLimit {
+    pub fn new(limit: u32) -> MaxConcurrentFileLimit {
+        Self(limit)
+    }
+
+    fn parser() -> impl TypedValueParser {
+        StringValueParser::new().try_map(|s| Ok::<_, Error>(Self(s.parse()?)))
+    }
+}
+
+impl Default for MaxConcurrentFileLimit {
+    fn default() -> Self {
+        Self(16)
+    }
+}
+
+impl From<MaxConcurrentFileLimit> for usize {
+    fn from(max: MaxConcurrentFileLimit) -> Self {
+        max.0 as usize
+    }
+}
+
+impl Display for MaxConcurrentFileLimit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MaxProblems {

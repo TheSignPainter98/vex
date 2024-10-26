@@ -162,7 +162,7 @@ pub struct Manifest {
 }
 
 impl Manifest {
-    const FILE_NAME: &'static str = "vex.toml";
+    pub const FILE_NAME: &'static str = "vex.toml";
     const DEFAULT_CONTENT: &'static str = indoc! {r#"
         [vex]
         ignore = [ "vex.toml", "vexes/", ".git/", ".gitignore", "/target/" ]
@@ -353,7 +353,7 @@ mod test {
     use toml_edit::Document;
 
     use crate::{
-        cli::MaxProblems,
+        cli::{MaxConcurrentFileLimit, MaxProblems},
         scriptlets::{source, InitOptions, PreinitOptions, PreinitingStore},
         verbosity::Verbosity,
         RunData,
@@ -453,8 +453,13 @@ mod test {
         let store = PreinitingStore::new(&source::sources_in_dir(&ctx.vex_dir())?)?
             .preinit(PreinitOptions::default())?
             .init(InitOptions::default())?;
-        let RunData { irritations, .. } =
-            crate::vex(&ctx, &store, MaxProblems::Unlimited, Verbosity::default())?;
+        let RunData { irritations, .. } = crate::vex(
+            &ctx,
+            &store,
+            MaxProblems::Unlimited,
+            MaxConcurrentFileLimit::new(1),
+            Verbosity::default(),
+        )?;
         assert_yaml_snapshot!(irritations
             .into_iter()
             .map(|irr| irr.to_string())
