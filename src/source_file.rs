@@ -9,7 +9,7 @@ use walkdir::WalkDir;
 
 use crate::{
     cli::MaxConcurrentFileLimit,
-    context::Context,
+    context::{Context, Manifest},
     error::{Error, IOAction},
     ignore_markers::{IgnoreMarkers, VexIdFilter},
     result::{RecoverableResult, Result},
@@ -73,6 +73,16 @@ pub fn sources_in_dir(
                 return false;
             }
 
+            if !is_root
+                && entry.file_type().is_dir()
+                && entry_path.join(Manifest::FILE_NAME).exists()
+            {
+                if log_enabled!(log::Level::Info) {
+                    let dir_marker = if entry.file_type().is_dir() { "/" } else { "" };
+                    info!("ignoring {entry_path}{dir_marker}: contains vex project");
+                }
+                return false;
+            }
             true
         })
         .flatten()
@@ -291,11 +301,54 @@ impl Eq for ParsedSourceFile {}
 
 #[cfg(test)]
 mod test {
+    use std::{fs::File, io::Write};
+
     use indoc::indoc;
 
     use crate::vex::id::VexId;
 
-    use super::*;
+    use super::{sources_in_dir, *};
+
+    #[test]
+    fn directory_walking() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let tempdir_path = Utf8PathBuf::try_from(tempdir.path().to_owned()).unwrap();
+
+        let manifest_content: &str = indoc! {r#"
+            [vex]
+            ignore = [ "to-ignore", "to-allow" ]
+            allow = [ "to-allow" ]
+        "#};
+        let files = [
+            ("vex.toml", manifest_content),
+            ("to-ignore", "ignored content"),
+            ("to-allow", "allowed content"),
+            ("sub-project/vex.toml", manifest_content),
+            ("sub-project/sub-project-file", "sub-project-content"),
+        ];
+        for (path, content) in files {
+            let abs_path = tempdir_path.join(path);
+            fs::create_dir_all(abs_path.parent().unwrap()).unwrap();
+            File::create(abs_path)
+                .unwrap()
+                .write_all(content.as_bytes())
+                .unwrap();
+        }
+
+        let ctx = Context::acquire_in(&tempdir_path).unwrap();
+        let sources = sources_in_dir(&ctx, MaxConcurrentFileLimit::new(1)).unwrap();
+        let returned_paths = {
+            let mut returned_paths: Vec<_> = sources
+                .iter()
+                .map(|source_file| source_file.path().pretty_path.as_str())
+                .collect();
+            returned_paths.sort();
+            returned_paths
+        };
+
+        let expected_paths = ["to-allow", "vex.toml"];
+        assert_eq!(returned_paths, expected_paths);
+    }
 
     #[test]
     fn general_ignore_markers() {
