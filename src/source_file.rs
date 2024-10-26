@@ -319,8 +319,7 @@ mod test {
             [vex]
             ignore = [ "to-ignore", "to-allow" ]
             allow = [ "to-allow" ]
-            "#
-        };
+        "#};
         let files = [
             ("vex.toml", manifest_content),
             ("to-ignore", "ignored content"),
