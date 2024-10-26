@@ -9,7 +9,7 @@ use clap::{
     ArgAction, Parser, Subcommand, ValueEnum,
 };
 
-use crate::{error::Error, supported_language::SupportedLanguage};
+use crate::{supported_language::SupportedLanguage, Result};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -124,7 +124,7 @@ pub enum ToList {
 #[derive(Debug, Default, PartialEq, Eq, Parser)]
 pub struct CheckCmd {
     /// Set concurrency limit
-    #[arg(long, default_value_t = MaxConcurrentFileLimit::default(), value_parser = MaxConcurrentFileLimit::parser())]
+    #[arg(long, default_value_t = MaxConcurrentFileLimit::default(), value_parser = MaxConcurrentFileLimit::parser(), value_name = "max")]
     pub max_concurrent_files: MaxConcurrentFileLimit,
 
     /// Reduce strictness
@@ -145,7 +145,7 @@ impl MaxConcurrentFileLimit {
     }
 
     fn parser() -> impl TypedValueParser {
-        StringValueParser::new().try_map(|s| Ok::<_, Error>(Self(s.parse()?)))
+        StringValueParser::new().try_map(|s| Result::Ok(Self(s.parse()?)))
     }
 }
 
@@ -177,11 +177,11 @@ impl MaxProblems {
     fn parser() -> impl TypedValueParser {
         StringValueParser::new().try_map(|s| {
             if s.to_lowercase() == "unlimited" {
-                return Ok(Self::Unlimited);
+                return Result::Ok(Self::Unlimited);
             }
 
             let max: u32 = s.parse()?;
-            Ok::<_, Error>(Self::Limited(max))
+            Result::Ok(Self::Limited(max))
         })
     }
 

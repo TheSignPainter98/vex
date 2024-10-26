@@ -39,7 +39,6 @@ pub fn sources_in_dir(
         .map(|allow| allow.compile())
         .collect::<Result<_>>()?;
     let associations = ctx.associations()?;
-
     WalkDir::new(ctx.project_root.as_str())
         .follow_links(false)
         .follow_root_links(false)
