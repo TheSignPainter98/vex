@@ -131,8 +131,12 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
         let preinit_opts = PreinitOptions {
             lenient: cmd_args.lenient,
             verbosity,
+            query_cache: None,
         };
-        let init_opts = InitOptions { verbosity };
+        let init_opts = InitOptions {
+            verbosity,
+            query_cache: None,
+        };
         PreinitingStore::new(&source::sources_in_dir(&ctx.vex_dir())?)?
             .preinit(preinit_opts)?
             .init(init_opts)?
@@ -194,7 +198,7 @@ fn vex(
         let handler_module = HandlerModule::new();
         let observe_opts = ObserveOptions {
             action: Action::Vexing(event.kind()),
-            query_cache: &query_cache,
+            query_cache: Some(&query_cache),
             ignore_markers: None,
             print_handler: &PrintHandler::new(verbosity, event.kind().name()),
         };
@@ -237,7 +241,7 @@ fn vex(
             let handler_module = HandlerModule::new();
             let observe_opts = ObserveOptions {
                 action: Action::Vexing(event.kind()),
-                query_cache: &query_cache,
+                query_cache: Some(&query_cache),
                 ignore_markers: None,
                 print_handler: &PrintHandler::new(verbosity, event.kind().name()),
             };
@@ -298,7 +302,7 @@ fn vex(
                         };
                         let observe_opts = ObserveOptions {
                             action: Action::Vexing(EventKind::Match),
-                            query_cache: &query_cache,
+                            query_cache: Some(&query_cache),
                             ignore_markers: Some(&ignore_markers),
                             print_handler: &PrintHandler::new(verbosity, EventKind::Match.name()),
                         };

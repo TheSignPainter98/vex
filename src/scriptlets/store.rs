@@ -8,6 +8,7 @@ use crate::{
     error::Error,
     result::Result,
     scriptlets::{
+        query_cache::QueryCache,
         scriptlet::{InitingScriptlet, PreinitingScriptlet},
         source::ScriptSource,
         ObserverData,
@@ -202,9 +203,10 @@ impl PreinitingStore {
 }
 
 #[derive(Debug, Default)]
-pub struct PreinitOptions {
+pub struct PreinitOptions<'qc> {
     pub lenient: bool,
     pub verbosity: Verbosity,
+    pub query_cache: Option<&'qc QueryCache>,
 }
 
 #[derive(Debug)]
@@ -260,8 +262,9 @@ impl InitingStore {
 }
 
 #[derive(Debug, Default)]
-pub struct InitOptions {
+pub struct InitOptions<'qc> {
     pub verbosity: Verbosity,
+    pub query_cache: Option<&'qc QueryCache>,
 }
 
 #[derive(Debug)]

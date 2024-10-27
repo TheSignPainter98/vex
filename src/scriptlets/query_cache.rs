@@ -9,21 +9,24 @@ use starlark::{
 
 use crate::{query::Query, result::Result, supported_language::SupportedLanguage};
 
-#[derive(Clone, Debug, Allocative)]
+#[derive(Debug, Allocative)]
 pub struct QueryCache {
     cache: RefCell<HashMap<(SupportedLanguage, StarlarkHashValue), CachedQuery>>,
+    stats: RefCell<QueryCacheStats>,
 }
 
 impl QueryCache {
     pub fn new() -> Self {
         Self {
             cache: RefCell::new(HashMap::new()),
+            stats: RefCell::new(QueryCacheStats::default()),
         }
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             cache: RefCell::new(HashMap::with_capacity(capacity)),
+            stats: RefCell::new(QueryCacheStats::default()),
         }
     }
 
@@ -34,9 +37,12 @@ impl QueryCache {
     ) -> Result<Arc<Query>> {
         let query_hash = raw_query.get_hashed().hash(); // This hash value is only 32 bits long.
 
+        let mut stats = self.stats.borrow_mut();
         if let Some(cached_query) = self.cache.borrow().get(&(language, query_hash)) {
+            stats.hits += 1;
             return Ok(cached_query.0.dupe());
         }
+        stats.misses += 1;
 
         let query = Arc::new(Query::new(language, &raw_query)?);
         self.cache
@@ -58,6 +64,12 @@ impl Default for QueryCache {
 
 #[derive(Clone, Debug, Allocative)]
 struct CachedQuery(#[allocative(skip)] Arc<Query>);
+
+#[derive(Debug, Default, Allocative)]
+struct QueryCacheStats {
+    misses: u64,
+    hits: u64,
+}
 
 #[cfg(test)]
 mod test {

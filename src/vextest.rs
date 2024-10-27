@@ -175,8 +175,12 @@ impl<'s> VexTest<'s> {
             let preinit_opts = PreinitOptions {
                 lenient: self.lenient,
                 verbosity,
+                ..PreinitOptions::default()
             };
-            let init_opts = InitOptions { verbosity };
+            let init_opts = InitOptions {
+                verbosity,
+                ..InitOptions::default()
+            };
             let store = PreinitingStore::new(&self.scriptlets)?
                 .preinit(preinit_opts)?
                 .init(init_opts)?;

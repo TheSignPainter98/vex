@@ -24,7 +24,6 @@ use crate::{
         extra_data::{RetainedData, TempData, UnfrozenRetainedData},
         handler_module::HandlerModule,
         print_handler::PrintHandler,
-        query_cache::QueryCache,
         store::{InitOptions, PreinitedModuleStore},
         Intent, ObserverData, PreinitOptions,
     },
@@ -65,12 +64,16 @@ impl PreinitingScriptlet {
 
     pub fn preinit(
         self,
-        opts: &PreinitOptions,
+        opts: &PreinitOptions<'_>,
         partial_store: &PreinitedModuleStore,
         frozen_heap: &FrozenHeap,
     ) -> Result<InitingScriptlet> {
         let Self { path, ast, loads } = self;
-        let PreinitOptions { lenient, verbosity } = opts;
+        let PreinitOptions {
+            lenient,
+            verbosity,
+            query_cache,
+        } = opts;
 
         let preinited_module = {
             let preinited_module = Module::new();
@@ -79,7 +82,7 @@ impl PreinitingScriptlet {
             {
                 let temp_data = TempData {
                     action: Action::Preiniting,
-                    query_cache: &QueryCache::new(),
+                    query_cache: *query_cache,
                     ignore_markers: None,
                 };
                 let print_handler = PrintHandler::new(*verbosity, path.as_str());
@@ -339,12 +342,15 @@ pub struct InitingScriptlet {
 }
 
 impl InitingScriptlet {
-    pub fn init(self, opts: &InitOptions, frozen_heap: &FrozenHeap) -> Result<ObserverData> {
+    pub fn init(self, opts: &InitOptions<'_>, frozen_heap: &FrozenHeap) -> Result<ObserverData> {
         let Self {
             path,
             preinited_module,
         } = self;
-        let InitOptions { verbosity } = opts;
+        let InitOptions {
+            verbosity,
+            query_cache,
+        } = opts;
 
         let Some(init) = preinited_module.get_option("init")? else {
             return Ok(ObserverData::empty());
@@ -355,7 +361,7 @@ impl InitingScriptlet {
             {
                 let temp_data = TempData {
                     action: Action::Initing,
-                    query_cache: &QueryCache::new(),
+                    query_cache: *query_cache,
                     ignore_markers: None,
                 };
                 let print_handler = PrintHandler::new(*verbosity, path.as_str());

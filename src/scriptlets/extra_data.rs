@@ -101,7 +101,7 @@ impl<'v> AllocValue<'v> for RetainedData {
 #[derive(Debug, ProvidesStaticType)]
 pub struct TempData<'v> {
     pub action: Action,
-    pub query_cache: &'v QueryCache,
+    pub query_cache: Option<&'v QueryCache>,
     pub ignore_markers: Option<&'v IgnoreMarkers>,
 }
 

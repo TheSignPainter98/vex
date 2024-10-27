@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, sync::Arc};
 
 use allocative::Allocative;
 use camino::Utf8Path;
@@ -17,6 +17,7 @@ use starlark_derive::starlark_value;
 use crate::{
     error::Error,
     irritation::IrritationRenderer,
+    query::Query,
     result::Result,
     scriptlets::{
         action::Action,
@@ -64,7 +65,11 @@ impl AppObject {
             let language = language.parse::<SupportedLanguage>()?;
             let query = {
                 let temp_data = TempData::get_from(eval);
-                temp_data.query_cache.get_or_create(language, query)?
+                if let Some(query_cache) = temp_data.query_cache {
+                    query_cache.get_or_create(language, query)?
+                } else {
+                    Arc::new(Query::new(language, &query)?)
+                }
             };
             let on_match = UnfrozenObserver::new(on_match);
             ret_data.declare_intent(UnfrozenIntent::Find {
