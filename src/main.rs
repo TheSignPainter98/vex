@@ -131,12 +131,8 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
         let preinit_opts = PreinitOptions {
             lenient: cmd_args.lenient,
             verbosity,
-            query_cache: None,
         };
-        let init_opts = InitOptions {
-            verbosity,
-            query_cache: None,
-        };
+        let init_opts = InitOptions { verbosity };
         PreinitingStore::new(&source::sources_in_dir(&ctx.vex_dir())?)?
             .preinit(preinit_opts)?
             .init(init_opts)?

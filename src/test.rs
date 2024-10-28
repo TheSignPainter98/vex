@@ -43,7 +43,6 @@ pub(crate) fn run_tests(script_sources: &[impl ScriptSource]) -> Result<()> {
         };
         let init_opts = InitOptions {
             verbosity: Verbosity::Quiet,
-            ..InitOptions::default()
         };
         PreinitingStore::new(script_sources)?
             .preinit(preinit_opts)?
@@ -161,19 +160,10 @@ pub(crate) fn run_tests(script_sources: &[impl ScriptSource]) -> Result<()> {
     let collect_run_data = |lenient| {
         let sub_ctx = Context::new_with_manifest(&temp_dir_path, Manifest::default());
 
-        let query_cache = QueryCache::new();
-
         let sub_store = {
             let verbosity = Verbosity::Quiet;
-            let preinit_opts = PreinitOptions {
-                lenient,
-                verbosity,
-                query_cache: Some(&query_cache),
-            };
-            let init_opts = InitOptions {
-                verbosity,
-                query_cache: Some(&query_cache),
-            };
+            let preinit_opts = PreinitOptions { lenient, verbosity };
+            let init_opts = InitOptions { verbosity };
             PreinitingStore::new(script_sources)?
                 .preinit(preinit_opts)?
                 .init(init_opts)?
