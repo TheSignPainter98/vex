@@ -159,7 +159,6 @@ pub(crate) fn run_tests(script_sources: &[impl ScriptSource]) -> Result<()> {
 
     let collect_run_data = |lenient| {
         let sub_ctx = Context::new_with_manifest(&temp_dir_path, Manifest::default());
-
         let sub_store = {
             let verbosity = Verbosity::Quiet;
             let preinit_opts = PreinitOptions { lenient, verbosity };
