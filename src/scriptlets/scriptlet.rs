@@ -24,7 +24,6 @@ use crate::{
         extra_data::{RetainedData, TempData, UnfrozenRetainedData},
         handler_module::HandlerModule,
         print_handler::PrintHandler,
-        query_cache::QueryCache,
         store::{InitOptions, PreinitedModuleStore},
         Intent, ObserverData, PreinitOptions,
     },
@@ -79,7 +78,7 @@ impl PreinitingScriptlet {
             {
                 let temp_data = TempData {
                     action: Action::Preiniting,
-                    query_cache: &QueryCache::new(),
+                    query_cache: None,
                     ignore_markers: None,
                 };
                 let print_handler = PrintHandler::new(*verbosity, path.as_str());
@@ -355,7 +354,7 @@ impl InitingScriptlet {
             {
                 let temp_data = TempData {
                     action: Action::Initing,
-                    query_cache: &QueryCache::new(),
+                    query_cache: None,
                     ignore_markers: None,
                 };
                 let print_handler = PrintHandler::new(*verbosity, path.as_str());

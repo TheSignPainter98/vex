@@ -39,7 +39,10 @@ pub fn sources_in_dir(
         .map(|allow| allow.compile())
         .collect::<Result<_>>()?;
     let associations = ctx.associations()?;
-    WalkDir::new(ctx.project_root.as_str())
+
+    let root = ctx.project_root.as_str();
+
+    WalkDir::new(root)
         .follow_links(false)
         .follow_root_links(false)
         .max_open(max_concurrent_files.into())
@@ -50,10 +53,11 @@ pub fn sources_in_dir(
                 _ => return false,
             };
 
+            let is_root = entry_path == root;
+
             let is_hidden = entry_path
                 .file_name()
                 .is_some_and(|file_name| file_name.starts_with('.'));
-            let is_root = entry_path == ctx.project_root.as_ref();
             if is_hidden && !is_root {
                 if log_enabled!(log::Level::Info) {
                     let dir_marker = if entry.file_type().is_dir() { "/" } else { "" };
@@ -68,7 +72,10 @@ pub fn sources_in_dir(
             if matches_any(entry_path, &ignores) && !matches_any(entry_path, &allows) {
                 if log_enabled!(log::Level::Info) {
                     let dir_marker = if entry.file_type().is_dir() { "/" } else { "" };
-                    info!("ignoring {entry_path}{dir_marker}: matches ignore pattern");
+                    info!(
+                        "ignoring {}{dir_marker}: matches ignore pattern",
+                        entry_path.strip_prefix(root).unwrap_or(entry_path),
+                    );
                 }
                 return false;
             }
@@ -79,7 +86,10 @@ pub fn sources_in_dir(
             {
                 if log_enabled!(log::Level::Info) {
                     let dir_marker = if entry.file_type().is_dir() { "/" } else { "" };
-                    info!("ignoring {entry_path}{dir_marker}: contains vex project");
+                    info!(
+                        "ignoring {}{dir_marker}: contains vex project",
+                        entry_path.strip_prefix(root).unwrap_or(entry_path),
+                    );
                 }
                 return false;
             }

@@ -49,13 +49,14 @@ pub(crate) fn run_tests(script_sources: &[impl ScriptSource]) -> Result<()> {
             .init(init_opts)?
     };
 
+    let query_cache = QueryCache::new();
     let files_to_scan = {
         let frozen_heap = FrozenHeap::new();
         let event = PreTestRunEvent;
         let handler_module = HandlerModule::new();
         let observe_opts = ObserveOptions {
             action: Action::Vexing(event.kind()),
-            query_cache: &QueryCache::new(),
+            query_cache: Some(&query_cache),
             ignore_markers: None,
             print_handler: &PrintHandler::new(logger::verbosity(), event.kind().name()),
         };
@@ -187,7 +188,7 @@ pub(crate) fn run_tests(script_sources: &[impl ScriptSource]) -> Result<()> {
         let event = PostTestRunEvent::new(irritations, handler_module.heap());
         let observer_opts = ObserveOptions {
             action: Action::Vexing(event.kind()),
-            query_cache: &QueryCache::new(),
+            query_cache: Some(&query_cache),
             ignore_markers: None,
             print_handler: &PrintHandler::new(logger::verbosity(), event.kind().name()),
         };

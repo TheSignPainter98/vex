@@ -9,7 +9,7 @@ use starlark::{
 
 use crate::{query::Query, result::Result, supported_language::SupportedLanguage};
 
-#[derive(Clone, Debug, Allocative)]
+#[derive(Debug, Allocative)]
 pub struct QueryCache {
     cache: RefCell<HashMap<(SupportedLanguage, StarlarkHashValue), CachedQuery>>,
 }

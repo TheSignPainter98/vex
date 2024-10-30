@@ -129,7 +129,7 @@ pub trait Observable {
 #[derive(Clone, Debug, Dupe)]
 pub struct ObserveOptions<'v> {
     pub action: Action,
-    pub query_cache: &'v QueryCache,
+    pub query_cache: Option<&'v QueryCache>,
     pub ignore_markers: Option<&'v IgnoreMarkers>,
     pub print_handler: &'v PrintHandler<'v>,
 }

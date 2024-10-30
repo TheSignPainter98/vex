@@ -194,7 +194,7 @@ fn vex(
         let handler_module = HandlerModule::new();
         let observe_opts = ObserveOptions {
             action: Action::Vexing(event.kind()),
-            query_cache: &query_cache,
+            query_cache: Some(&query_cache),
             ignore_markers: None,
             print_handler: &PrintHandler::new(verbosity, event.kind().name()),
         };
@@ -237,7 +237,7 @@ fn vex(
             let handler_module = HandlerModule::new();
             let observe_opts = ObserveOptions {
                 action: Action::Vexing(event.kind()),
-                query_cache: &query_cache,
+                query_cache: Some(&query_cache),
                 ignore_markers: None,
                 print_handler: &PrintHandler::new(verbosity, event.kind().name()),
             };
@@ -298,7 +298,7 @@ fn vex(
                         };
                         let observe_opts = ObserveOptions {
                             action: Action::Vexing(EventKind::Match),
-                            query_cache: &query_cache,
+                            query_cache: Some(&query_cache),
                             ignore_markers: Some(&ignore_markers),
                             print_handler: &PrintHandler::new(verbosity, EventKind::Match.name()),
                         };
