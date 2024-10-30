@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use smallvec::SmallVec;
 
-use crate::{error::Error, result::RecoverableResult, vex::id::VexId};
+use crate::{error::Error, result::RecoverableResult, scan::VexId};
 
 #[derive(Debug)]
 pub struct IgnoreMarkers {

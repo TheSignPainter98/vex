@@ -11,9 +11,9 @@ use starlark_derive::{
 
 use crate::{
     logger,
+    scan::VexId,
     scriptlets::{main_annotation::MainAnnotation, Location, Node},
     source_path::PrettyPath,
-    vex::id::VexId,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Allocative, Serialize, ProvidesStaticType)]

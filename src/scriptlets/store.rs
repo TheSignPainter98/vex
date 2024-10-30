@@ -1,4 +1,8 @@
-use std::{collections::BTreeMap, ops::Deref};
+use std::{
+    collections::BTreeMap,
+    ops::Deref,
+    sync::{Mutex, MutexGuard},
+};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use log::{info, log_enabled};
@@ -251,6 +255,7 @@ impl InitingStore {
             },
         )?;
 
+        let frozen_heap = Mutex::new(frozen_heap);
         Ok(VexingStore {
             num_scripts,
             observer_data,
@@ -268,12 +273,12 @@ pub struct InitOptions {
 pub struct VexingStore {
     num_scripts: usize,
     observer_data: ObserverData,
-    frozen_heap: FrozenHeap,
+    frozen_heap: Mutex<FrozenHeap>,
 }
 
 impl VexingStore {
-    pub fn frozen_heap(&self) -> &FrozenHeap {
-        &self.frozen_heap
+    pub fn frozen_heap(&self) -> MutexGuard<'_, FrozenHeap> {
+        self.frozen_heap.lock().expect("frozen heap lock poisoned")
     }
 
     pub fn project_queries_hint(&self) -> usize {

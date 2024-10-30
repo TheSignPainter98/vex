@@ -17,6 +17,7 @@ use crate::{
     error::{Error, IOAction},
     logger,
     result::Result,
+    scan,
     scriptlets::{
         action::Action,
         event::{PostTestRunEvent, PreTestRunEvent},
@@ -167,7 +168,7 @@ pub(crate) fn run_tests(script_sources: &[impl ScriptSource]) -> Result<()> {
                 .preinit(preinit_opts)?
                 .init(init_opts)?
         };
-        crate::vex(
+        scan::scan_project(
             &sub_ctx,
             &sub_store,
             MaxProblems::Unlimited,
