@@ -34,6 +34,7 @@ use camino::Utf8PathBuf;
 use cli::{InitCmd, ListCmd, ToList};
 use indoc::{formatdoc, printdoc};
 use log::{info, log_enabled};
+use rayon::ThreadPoolBuilder;
 use scan::ProjectRunData;
 use scriptlets::{source, InitOptions, PreinitOptions, PreinitingStore};
 use source_path::PrettyPath;
@@ -124,6 +125,11 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
             .preinit(preinit_opts)?
             .init(init_opts)?
     };
+
+    ThreadPoolBuilder::new()
+        .num_threads(cmd_args.max_concurrent_files.into())
+        .build_global()
+        .expect("internal error: failed to configure thread pool");
 
     let ProjectRunData {
         irritations,
