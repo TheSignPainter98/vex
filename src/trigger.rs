@@ -159,10 +159,10 @@ mod test {
 
             let run_data = test.try_run().unwrap();
             assert_eq!(
-                1 + language_tests
+                language_tests
                     .iter()
-                    .map(|lt| lt.files.len())
-                    .sum::<usize>(),
+                    .map(|lt| lt.files.len() as u64)
+                    .sum::<u64>(),
                 run_data.num_files_scanned,
                 "wrong number of files scanned"
             );
