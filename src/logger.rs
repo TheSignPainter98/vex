@@ -113,11 +113,11 @@ impl Log for Logger {
 
 fn annotation_type_of(level: Level) -> AnnotationType {
     match level {
-        Level::Trace => AnnotationType::Note,
         Level::Error => AnnotationType::Error,
-        Level::Info => AnnotationType::Info,
         Level::Warn => AnnotationType::Warning,
+        Level::Info => AnnotationType::Info,
         Level::Debug => AnnotationType::Help,
+        Level::Trace => AnnotationType::Note,
     }
 }
 

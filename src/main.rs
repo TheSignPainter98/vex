@@ -33,7 +33,7 @@ use std::{env, process::ExitCode};
 
 use camino::Utf8PathBuf;
 use indoc::{formatdoc, printdoc};
-use log::{info, log_enabled, trace};
+use log::{debug, info, log_enabled};
 use rayon::ThreadPoolBuilder;
 use strum::IntoEnumIterator;
 
@@ -153,7 +153,7 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
             Plural::new(num_files_scanned, "file", "files"),
         );
     }
-    if log_enabled!(log::Level::Trace) {
+    if log_enabled!(log::Level::Debug) {
         let pretty_approx = |num| {
             if num < 1_000 {
                 format!("{num}")
@@ -165,7 +165,7 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
                 format!("{:.1}G", num as f64 / 1_000_000_000.0)
             }
         };
-        trace!("scanned {} bytes", pretty_approx(num_bytes_scanned),);
+        debug!("scanned {} bytes", pretty_approx(num_bytes_scanned),);
     }
 
     let num_problems = irritations.len()
