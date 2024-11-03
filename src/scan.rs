@@ -89,7 +89,7 @@ pub fn scan_project(
     };
 
     let total_irritations = AtomicUsize::new(0);
-    let run_data: Vec<_> = files
+    let runs: Vec<_> = files
         .par_iter()
         .filter_map(|file| match file.language() {
             Some(language) => Some((file, language)),
@@ -124,8 +124,8 @@ pub fn scan_project(
             !max_problems.is_exceeded_by(prev_total_irritations)
         })
         .collect::<Result<_>>()?;
-    for rd in run_data {
-        irritations.extend(rd.irritations);
+    for run in runs {
+        irritations.extend(run.irritations);
     }
 
     irritations.sort();

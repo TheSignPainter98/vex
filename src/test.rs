@@ -176,16 +176,16 @@ pub(crate) fn run_tests(script_sources: &[impl ScriptSource]) -> Result<()> {
             Verbosity::Quiet,
         )
     };
-    let nonlenient_data = collect_run_data(false)?;
-    let lenient_data = collect_run_data(true)?;
+    let nonlenient_run = collect_run_data(false)?;
+    let lenient_run = collect_run_data(true)?;
 
     {
         let handler_module = HandlerModule::new();
-        let irritations = nonlenient_data
+        let irritations = nonlenient_run
             .irritations
             .into_iter()
             .zip(iter::repeat(false))
-            .chain(lenient_data.irritations.into_iter().zip(iter::repeat(true)));
+            .chain(lenient_run.irritations.into_iter().zip(iter::repeat(true)));
         let event = PostTestRunEvent::new(irritations, handler_module.heap());
         let observer_opts = ObserveOptions {
             action: Action::Vexing(event.kind()),
