@@ -31,21 +31,20 @@ mod vextest;
 use std::{env, process::ExitCode};
 
 use camino::Utf8PathBuf;
-use cli::{InitCmd, ListCmd, ToList};
 use indoc::{formatdoc, printdoc};
 use log::{info, log_enabled};
 use rayon::ThreadPoolBuilder;
-use scan::ProjectRunData;
-use scriptlets::{source, InitOptions, PreinitOptions, PreinitingStore};
-use source_path::PrettyPath;
 use strum::IntoEnumIterator;
 
 use crate::{
-    cli::{Args, CheckCmd, Command},
+    cli::{Args, CheckCmd, Command, InitCmd, ListCmd, ToList},
     context::{Context, EXAMPLE_VEX_FILE},
     error::{Error, IOAction},
     plural::Plural,
     result::Result,
+    scan::ProjectRunData,
+    scriptlets::{source, InitOptions, PreinitOptions, PreinitingStore},
+    source_path::PrettyPath,
     supported_language::SupportedLanguage,
     verbosity::Verbosity,
 };
