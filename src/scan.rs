@@ -35,7 +35,8 @@ use crate::{
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct ProjectRunData {
     pub irritations: Vec<Irritation>,
-    pub num_files_scanned: usize,
+    pub num_files_scanned: u64,
+    pub num_bytes_scanned: u64,
 }
 
 pub fn scan_project(
@@ -124,6 +125,9 @@ pub fn scan_project(
             !max_problems.is_exceeded_by(prev_total_irritations)
         })
         .collect::<Result<_>>()?;
+
+    let num_files_scanned = runs.len() as u64;
+    let num_bytes_scanned = runs.iter().map(|run| run.num_bytes_scanned).sum();
     for run in runs {
         irritations.extend(run.irritations);
     }
@@ -135,15 +139,18 @@ pub fn scan_project(
             irritations.truncate(max);
         }
     }
+
     Ok(ProjectRunData {
         irritations,
-        num_files_scanned: files.len(),
+        num_files_scanned,
+        num_bytes_scanned,
     })
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct FileRunData {
     pub irritations: Vec<Irritation>,
+    pub num_bytes_scanned: u64,
 }
 
 pub struct VexFileOptions<'a> {
@@ -207,7 +214,10 @@ fn scan_file(file: &SourceFile, opts: VexFileOptions<'_>) -> Result<FileRunData>
         .all(|(l, _, _)| *l != language)
     {
         // The user did not request a scan of this type of file.
-        return Ok(FileRunData { irritations });
+        return Ok(FileRunData {
+            irritations,
+            num_bytes_scanned: 0,
+        });
     }
 
     let parsed_file = file.parse()?;
@@ -257,5 +267,9 @@ fn scan_file(file: &SourceFile, opts: VexFileOptions<'_>) -> Result<FileRunData>
                     Result::Ok(())
                 })
         })?;
-    Ok(FileRunData { irritations })
+    let num_bytes_scanned = parsed_file.content.len() as u64;
+    Ok(FileRunData {
+        irritations,
+        num_bytes_scanned,
+    })
 }

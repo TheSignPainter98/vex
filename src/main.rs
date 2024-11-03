@@ -33,7 +33,7 @@ use std::{env, process::ExitCode};
 
 use camino::Utf8PathBuf;
 use indoc::{formatdoc, printdoc};
-use log::{info, log_enabled};
+use log::{debug, info, log_enabled};
 use rayon::ThreadPoolBuilder;
 use strum::IntoEnumIterator;
 
@@ -135,6 +135,7 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
     let ProjectRunData {
         irritations,
         num_files_scanned,
+        num_bytes_scanned,
     } = scan::scan_project(
         &ctx,
         &store,
@@ -145,12 +146,29 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
     irritations
         .iter()
         .for_each(|irr| crate::warn!(custom=true; "{irr}"));
+
     if log_enabled!(log::Level::Info) {
         info!(
             "scanned {}",
             Plural::new(num_files_scanned, "file", "files"),
         );
     }
+    if log_enabled!(log::Level::Debug) {
+        let pretty_approx = |num| {
+            let num = num as f64;
+            if num < 1_000.0 {
+                format!("{num}")
+            } else if num < 1_000_000.0 {
+                format!("{:.1}K", num / 1_000.0)
+            } else if num < 1_000_000_000.0 {
+                format!("{:.1}M", num / 1_000_000.0)
+            } else {
+                format!("{:.1}G", num / 1_000_000_000.0)
+            }
+        };
+        debug!("scanned {} bytes", pretty_approx(num_bytes_scanned),);
+    }
+
     let num_problems = irritations.len()
         + *logger::NUM_ERRS.lock().expect("failed to lock NUM_ERRS") as usize
         + *logger::NUM_WARNINGS
