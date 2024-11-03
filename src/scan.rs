@@ -90,7 +90,7 @@ pub fn scan_project(
     };
 
     let total_irritations = AtomicUsize::new(0);
-    let run_data: Vec<_> = files
+    let runs: Vec<_> = files
         .par_iter()
         .filter_map(|file| match file.language() {
             Some(language) => Some((file, language)),
@@ -126,10 +126,10 @@ pub fn scan_project(
         })
         .collect::<Result<_>>()?;
 
-    let num_files_scanned = run_data.len() as u64;
-    let num_bytes_scanned = run_data.iter().map(|rd| rd.num_bytes_scanned).sum();
-    for rd in run_data {
-        irritations.extend(rd.irritations);
+    let num_files_scanned = runs.len() as u64;
+    let num_bytes_scanned = runs.iter().map(|run| run.num_bytes_scanned).sum();
+    for run in runs {
+        irritations.extend(run.irritations);
     }
 
     irritations.sort();

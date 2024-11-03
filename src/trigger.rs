@@ -157,21 +157,20 @@ mod test {
                 "I appear to have burst into flames.",
             );
 
-            let run_data = test.try_run().unwrap();
+            let run = test.try_run().unwrap();
             assert_eq!(
                 language_tests
                     .iter()
                     .map(|lt| lt.files.len() as u64)
                     .sum::<u64>(),
-                run_data.num_files_scanned,
+                run.num_files_scanned,
                 "wrong number of files scanned"
             );
             assert_eq!(
                 language_test.files.len(),
-                run_data.irritations.len(),
+                run.irritations.len(),
                 "wrong number of irritations lodged: got {:?}",
-                run_data
-                    .irritations
+                run.irritations
                     .iter()
                     .map(Irritation::to_string)
                     .collect::<Vec<_>>(),
