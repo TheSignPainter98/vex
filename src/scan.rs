@@ -1,6 +1,12 @@
 mod id;
 
-use std::{ops::Deref, sync::Arc};
+use std::{
+    ops::Deref,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+};
 
 pub use self::id::VexId;
 
@@ -86,6 +92,7 @@ pub fn scan_project(
         project_queries
     };
 
+    let total_irritations = AtomicUsize::new(0);
     let run_data: Vec<_> = files
         .par_iter()
         .filter_map(|file| match file.language() {
@@ -105,7 +112,20 @@ pub fn scan_project(
                 query_cache: &query_cache,
                 verbosity,
             };
-            vex_file(file, opts)
+            scan_file(file, opts)
+        })
+        .take_any_while(|file_scan_result| {
+            let run = match file_scan_result {
+                Ok(run) => run,
+                Err(_) => return true,
+            };
+            let new_irritations = run.irritations.len();
+            let prev_total_irritations = if new_irritations > 0 {
+                total_irritations.fetch_add(new_irritations, Ordering::Relaxed)
+            } else {
+                total_irritations.load(Ordering::Relaxed)
+            };
+            !max_problems.is_exceeded_by(prev_total_irritations)
         })
         .collect::<Result<_>>()?;
     for rd in run_data {
@@ -138,13 +158,12 @@ pub struct VexFileOptions<'a> {
     verbosity: Verbosity,
 }
 
-fn vex_file(file: &SourceFile, opts: VexFileOptions<'_>) -> Result<FileRunData> {
+fn scan_file(file: &SourceFile, opts: VexFileOptions<'_>) -> Result<FileRunData> {
     let VexFileOptions {
         store,
         language,
         project_queries,
         query_cache,
-        // max_problems: _, // TODO(kcza): fixme
         verbosity,
     } = opts;
 
@@ -159,7 +178,7 @@ fn vex_file(file: &SourceFile, opts: VexFileOptions<'_>) -> Result<FileRunData> 
         let handler_module = HandlerModule::new();
         let observe_opts = ObserveOptions {
             action: Action::Vexing(event.kind()),
-            query_cache: Some(&query_cache),
+            query_cache: Some(query_cache),
             ignore_markers: None,
             print_handler: &PrintHandler::new(verbosity, event.kind().name()),
         };
@@ -217,7 +236,7 @@ fn vex_file(file: &SourceFile, opts: VexFileOptions<'_>) -> Result<FileRunData> 
                     };
                     let observe_opts = ObserveOptions {
                         action: Action::Vexing(EventKind::Match),
-                        query_cache: Some(&query_cache),
+                        query_cache: Some(query_cache),
                         ignore_markers: Some(&ignore_markers),
                         print_handler: &PrintHandler::new(verbosity, EventKind::Match.name()),
                     };

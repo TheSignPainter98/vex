@@ -190,7 +190,6 @@ impl MaxProblems {
         })
     }
 
-    #[allow(unused)]
     pub fn is_exceeded_by(&self, to_check: usize) -> bool {
         match self {
             Self::Unlimited => false,
