@@ -1,4 +1,4 @@
-use std::{cmp, env, fmt::Display, iter, process};
+use std::{cmp, env, fmt::Display, iter, process, thread};
 
 use camino::Utf8PathBuf;
 use clap::{
@@ -136,7 +136,7 @@ pub struct CheckCmd {
     pub max_problems: MaxProblems,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct MaxConcurrentFileLimit(u32);
 
 impl MaxConcurrentFileLimit {
@@ -151,7 +151,12 @@ impl MaxConcurrentFileLimit {
 
 impl Default for MaxConcurrentFileLimit {
     fn default() -> Self {
-        Self(16)
+        let parallelism_limit: u32 = thread::available_parallelism()
+            .map(|ap| ap.get())
+            .unwrap_or(1)
+            .try_into()
+            .expect("internal error: integer conversion failed");
+        Self(parallelism_limit)
     }
 }
 
@@ -167,7 +172,7 @@ impl Display for MaxConcurrentFileLimit {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum MaxProblems {
     Unlimited,
     Limited(u32),
@@ -185,7 +190,6 @@ impl MaxProblems {
         })
     }
 
-    #[allow(unused)]
     pub fn is_exceeded_by(&self, to_check: usize) -> bool {
         match self {
             Self::Unlimited => false,

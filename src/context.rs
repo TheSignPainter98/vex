@@ -355,9 +355,9 @@ mod test {
 
     use crate::{
         cli::{MaxConcurrentFileLimit, MaxProblems},
+        scan::{self, ProjectRunData},
         scriptlets::{source, InitOptions, PreinitOptions, PreinitingStore},
         verbosity::Verbosity,
-        RunData,
     };
 
     use super::*;
@@ -454,7 +454,7 @@ mod test {
         let store = PreinitingStore::new(&source::sources_in_dir(&ctx.vex_dir())?)?
             .preinit(PreinitOptions::default())?
             .init(InitOptions::default())?;
-        let RunData { irritations, .. } = crate::vex(
+        let ProjectRunData { irritations, .. } = scan::scan_project(
             &ctx,
             &store,
             MaxProblems::Unlimited,

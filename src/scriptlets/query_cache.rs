@@ -1,4 +1,7 @@
-use std::{cell::RefCell, collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 
 use allocative::Allocative;
 use dupe::Dupe;
@@ -11,19 +14,19 @@ use crate::{query::Query, result::Result, supported_language::SupportedLanguage}
 
 #[derive(Debug, Allocative)]
 pub struct QueryCache {
-    cache: RefCell<HashMap<(SupportedLanguage, StarlarkHashValue), CachedQuery>>,
+    cache: RwLock<HashMap<(SupportedLanguage, StarlarkHashValue), CachedQuery>>,
 }
 
 impl QueryCache {
     pub fn new() -> Self {
         Self {
-            cache: RefCell::new(HashMap::new()),
+            cache: RwLock::new(HashMap::new()),
         }
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            cache: RefCell::new(HashMap::with_capacity(capacity)),
+            cache: RwLock::new(HashMap::with_capacity(capacity)),
         }
     }
 
@@ -34,13 +37,19 @@ impl QueryCache {
     ) -> Result<Arc<Query>> {
         let query_hash = raw_query.get_hashed().hash(); // This hash value is only 32 bits long.
 
-        if let Some(cached_query) = self.cache.borrow().get(&(language, query_hash)) {
+        if let Some(cached_query) = self
+            .cache
+            .read()
+            .expect("internal error: cache lock poisoned")
+            .get(&(language, query_hash))
+        {
             return Ok(cached_query.0.dupe());
         }
 
         let query = Arc::new(Query::new(language, &raw_query)?);
         self.cache
-            .borrow_mut()
+            .write()
+            .expect("internal error: cache lock poisoned")
             .insert((language, query_hash), CachedQuery(query.dupe()));
         Ok(query)
     }

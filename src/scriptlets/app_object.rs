@@ -30,7 +30,7 @@ use crate::{
     },
     source_path::PrettyPath,
     supported_language::SupportedLanguage,
-    vex::id::VexId,
+    vex_id::VexId,
 };
 
 #[derive(Debug, PartialEq, Eq, new, ProvidesStaticType, NoSerialize, Allocative)]
@@ -310,7 +310,7 @@ mod test {
             )
             .try_run()
             .unwrap()
-            .into_irritations()
+            .irritations
             .into_iter()
             .map(|irr| irr.to_string())
             .collect::<Vec<_>>();
@@ -532,7 +532,7 @@ mod test {
             )
             .try_run()
             .unwrap()
-            .into_irritations()
+            .irritations
             .into_iter()
             .map(|irr| irr.to_string())
             .collect::<Vec<_>>();
@@ -605,7 +605,7 @@ mod test {
                 )
                 .try_run()
                 .unwrap()
-                .into_irritations()
+                .irritations
                 .into_iter()
                 .map(|irr| irr.to_string())
                 .collect::<Vec<_>>();

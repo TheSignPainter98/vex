@@ -15,7 +15,7 @@ mod logger;
 mod plural;
 mod query;
 mod result;
-mod run_data;
+mod scan;
 mod scriptlets;
 mod source_file;
 mod source_path;
@@ -24,7 +24,7 @@ mod supported_language;
 mod test;
 mod trigger;
 mod verbosity;
-mod vex;
+mod vex_id;
 
 #[cfg(test)]
 mod vextest;
@@ -32,32 +32,20 @@ mod vextest;
 use std::{env, process::ExitCode};
 
 use camino::Utf8PathBuf;
-use cli::{InitCmd, ListCmd, MaxConcurrentFileLimit, MaxProblems, ToList};
-use dupe::Dupe;
 use indoc::{formatdoc, printdoc};
 use log::{info, log_enabled};
-use scriptlets::{source, InitOptions};
-use source_path::PrettyPath;
+use rayon::ThreadPoolBuilder;
 use strum::IntoEnumIterator;
-use tree_sitter::QueryCursor;
 
 use crate::{
-    cli::{Args, CheckCmd, Command},
+    cli::{Args, CheckCmd, Command, InitCmd, ListCmd, ToList},
     context::{Context, EXAMPLE_VEX_FILE},
     error::{Error, IOAction},
     plural::Plural,
     result::Result,
-    run_data::RunData,
-    scriptlets::{
-        action::Action,
-        event::EventKind,
-        event::{MatchEvent, OpenFileEvent, OpenProjectEvent},
-        handler_module::HandlerModule,
-        intents::Intent,
-        query_cache::QueryCache,
-        query_captures::QueryCaptures,
-        Observable, ObserveOptions, PreinitOptions, PreinitingStore, PrintHandler, VexingStore,
-    },
+    scan::ProjectRunData,
+    scriptlets::{source, InitOptions, PreinitOptions, PreinitingStore},
+    source_path::PrettyPath,
     supported_language::SupportedLanguage,
     verbosity::Verbosity,
 };
@@ -138,10 +126,16 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
             .init(init_opts)?
     };
 
-    let RunData {
+    // Configure global `rayon` thread pool.
+    ThreadPoolBuilder::new()
+        .num_threads(cmd_args.max_concurrent_files.into())
+        .build_global()
+        .expect("internal error: failed to configure global thread pool");
+
+    let ProjectRunData {
         irritations,
         num_files_scanned,
-    } = vex(
+    } = scan::scan_project(
         &ctx,
         &store,
         cmd_args.max_problems,
@@ -169,172 +163,6 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
     }
 
     Ok(())
-}
-
-fn vex(
-    ctx: &Context,
-    store: &VexingStore,
-    max_problems: MaxProblems,
-    max_concurrent_files: MaxConcurrentFileLimit,
-    verbosity: Verbosity,
-) -> Result<RunData> {
-    let files = source_file::sources_in_dir(ctx, max_concurrent_files)?;
-
-    let project_queries_hint = store.project_queries_hint();
-    let file_queries_hint = store.file_queries_hint();
-
-    let query_cache = QueryCache::with_capacity(project_queries_hint + file_queries_hint);
-
-    let mut irritations = vec![];
-    let frozen_heap = store.frozen_heap();
-    let project_queries = {
-        let mut project_queries = Vec::with_capacity(project_queries_hint);
-
-        let event = OpenProjectEvent::new(ctx.project_root.dupe());
-        let handler_module = HandlerModule::new();
-        let observe_opts = ObserveOptions {
-            action: Action::Vexing(event.kind()),
-            query_cache: Some(&query_cache),
-            ignore_markers: None,
-            print_handler: &PrintHandler::new(verbosity, event.kind().name()),
-        };
-        store.observers_for(event.kind()).observe(
-            &handler_module,
-            handler_module.heap().alloc(event),
-            observe_opts,
-        )?;
-        handler_module
-            .into_intents_on(frozen_heap)?
-            .into_iter()
-            .for_each(|intent| match intent {
-                Intent::Find {
-                    language,
-                    query,
-                    on_match,
-                } => project_queries.push((language, query, on_match)),
-                Intent::Observe { .. } => panic!("internal error: non-init observe"),
-                Intent::Warn(irr) => irritations.push(irr),
-                Intent::ScanFile { .. } => {
-                    panic!("internal error: unexpected ScanFile intent declared")
-                }
-            });
-        project_queries
-    };
-
-    for file in &files {
-        let Some(language) = file.language() else {
-            if log_enabled!(log::Level::Info) {
-                info!("skipping {}", file.path());
-            }
-            continue;
-        };
-
-        let file_queries = {
-            let mut file_queries = Vec::with_capacity(store.file_queries_hint());
-            let path = file.path().pretty_path.dupe();
-
-            let event = OpenFileEvent::new(path);
-            let handler_module = HandlerModule::new();
-            let observe_opts = ObserveOptions {
-                action: Action::Vexing(event.kind()),
-                query_cache: Some(&query_cache),
-                ignore_markers: None,
-                print_handler: &PrintHandler::new(verbosity, event.kind().name()),
-            };
-            store.observers_for(event.kind()).observe(
-                &handler_module,
-                handler_module.heap().alloc(event),
-                observe_opts,
-            )?;
-            handler_module
-                .into_intents_on(frozen_heap)?
-                .into_iter()
-                .for_each(|intent| match intent {
-                    Intent::Find {
-                        language,
-                        query,
-                        on_match,
-                    } => file_queries.push((language, query, on_match)),
-                    Intent::Observe { .. } => panic!("internal error: non-init observe"),
-                    Intent::Warn(irr) => irritations.push(irr.clone()),
-                    Intent::ScanFile { .. } => {
-                        panic!("internal error: unexpected ScanFile intent declared")
-                    }
-                });
-            file_queries
-        };
-
-        if project_queries
-            .iter()
-            .chain(file_queries.iter())
-            .all(|(l, _, _)| *l != language)
-        {
-            continue; // No need to parse, the user will never search this.
-        }
-        let parsed_file = file.parse()?;
-        let ignore_markers = parsed_file.ignore_markers()?;
-        project_queries
-            .iter()
-            .chain(file_queries.iter())
-            .filter(|(l, _, _)| *l == language)
-            .try_for_each(|(_, query, on_match)| {
-                QueryCursor::new()
-                    .matches(
-                        query,
-                        parsed_file.tree.root_node(),
-                        parsed_file.content.as_bytes(),
-                    )
-                    .try_for_each(|qmatch| {
-                        let handler_module = HandlerModule::new();
-                        let event = {
-                            let path = parsed_file.path.pretty_path.dupe();
-                            let captures = QueryCaptures::new(
-                                query,
-                                qmatch,
-                                &parsed_file,
-                                handler_module.heap(),
-                            );
-                            handler_module.heap().alloc(MatchEvent::new(path, captures))
-                        };
-                        let observe_opts = ObserveOptions {
-                            action: Action::Vexing(EventKind::Match),
-                            query_cache: Some(&query_cache),
-                            ignore_markers: Some(&ignore_markers),
-                            print_handler: &PrintHandler::new(verbosity, EventKind::Match.name()),
-                        };
-                        on_match.observe(&handler_module, event, observe_opts)?;
-                        handler_module
-                            .into_intents_on(frozen_heap)?
-                            .into_iter()
-                            .for_each(|intent| match intent {
-                                Intent::Find { .. } => {
-                                    panic!("internal error: find intended during find")
-                                }
-                                Intent::Observe { .. } => {
-                                    panic!("internal error: non-init observe")
-                                }
-                                Intent::Warn(irr) => irritations.push(irr),
-                                Intent::ScanFile { .. } => {
-                                    panic!("internal error: unexpected ScanFile intent declared")
-                                }
-                            });
-
-                        Ok::<_, Error>(())
-                    })
-            })?;
-    }
-
-    irritations.sort();
-    if let MaxProblems::Limited(max) = max_problems {
-        let max = max as usize;
-        if max < irritations.len() {
-            irritations.truncate(max);
-        }
-    }
-    Ok(RunData {
-        irritations,
-        num_files_scanned: files.len(),
-    })
 }
 
 fn init(init_args: InitCmd) -> Result<()> {
@@ -365,7 +193,7 @@ mod test_ {
     use insta::assert_yaml_snapshot;
     use joinery::JoinableIterator;
 
-    use crate::vextest::VexTest;
+    use crate::{cli::MaxProblems, vextest::VexTest};
 
     use super::*;
 
@@ -411,7 +239,7 @@ mod test_ {
             )
             .try_run()
             .unwrap()
-            .into_irritations();
+            .irritations;
         assert_eq!(irritations.len(), MAX as usize);
     }
 
@@ -442,7 +270,7 @@ mod test_ {
             .with_source_file("src/main.rs", collated_rust_snippets)
             .try_run()
             .unwrap()
-            .into_irritations()
+            .irritations
             .into_iter()
             .map(|irr| irr.to_string())
             .collect::<Vec<_>>();

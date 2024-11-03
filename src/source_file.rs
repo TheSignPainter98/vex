@@ -315,7 +315,7 @@ mod test {
 
     use indoc::indoc;
 
-    use crate::vex::id::VexId;
+    use crate::vex_id::VexId;
 
     use super::{sources_in_dir, *};
 

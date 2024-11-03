@@ -13,12 +13,13 @@ use crate::{
     cli::{MaxConcurrentFileLimit, MaxProblems},
     context::Context,
     result::Result,
+    scan,
     scriptlets::{
         source::{ScriptSource, TestSource},
         InitOptions, PreinitOptions, PreinitingStore,
     },
     verbosity::Verbosity,
-    RunData,
+    ProjectRunData,
 };
 
 #[must_use]
@@ -124,7 +125,7 @@ impl<'s> VexTest<'s> {
 
     pub fn assert_irritation_free(self) {
         assert_eq!(
-            self.try_run().unwrap().into_irritations(),
+            self.try_run().unwrap().irritations,
             &[],
             "irritations returned!"
         );
@@ -140,7 +141,7 @@ impl<'s> VexTest<'s> {
         );
     }
 
-    pub fn try_run(mut self) -> Result<RunData> {
+    pub fn try_run(mut self) -> Result<ProjectRunData> {
         self.setup();
 
         let root_dir = tempfile::tempdir().unwrap();
@@ -160,7 +161,7 @@ impl<'s> VexTest<'s> {
         }
         if self.fire_test_events {
             crate::test::run_tests(&self.scriptlets)?;
-            Ok(RunData::default())
+            Ok(ProjectRunData::default())
         } else {
             for (path, content) in &self.source_files {
                 let source_path = root_path.join(path);
@@ -180,7 +181,7 @@ impl<'s> VexTest<'s> {
             let store = PreinitingStore::new(&self.scriptlets)?
                 .preinit(preinit_opts)?
                 .init(init_opts)?;
-            super::vex(
+            scan::scan_project(
                 &ctx,
                 &store,
                 self.max_problems,

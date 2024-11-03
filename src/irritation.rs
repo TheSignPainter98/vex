@@ -13,7 +13,7 @@ use crate::{
     logger,
     scriptlets::{main_annotation::MainAnnotation, Location, Node},
     source_path::PrettyPath,
-    vex::id::VexId,
+    vex_id::VexId,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Allocative, Serialize, ProvidesStaticType)]
