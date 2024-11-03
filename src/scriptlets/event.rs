@@ -602,7 +602,7 @@ mod test {
     fn on_open_file_event() {
         test_event_common_properties("open_file", "OpenFileEvent", &["name", "path"]);
 
-        let run_data = VexTest::new("many-matching-triggers-one-event")
+        let run = VexTest::new("many-matching-triggers-one-event")
             .with_scriptlet(
                 "vexes/test.star",
                 indoc! {r#"
@@ -620,7 +620,7 @@ mod test {
             .with_source_file("src/unused.rs", r#"fn other() { }"#)
             .try_run()
             .unwrap();
-        assert_eq!(1, run_data.irritations.len());
+        assert_eq!(1, run.irritations.len());
     }
 
     #[test]
