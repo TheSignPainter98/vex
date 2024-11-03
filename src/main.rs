@@ -24,6 +24,7 @@ mod supported_language;
 mod test;
 mod trigger;
 mod verbosity;
+mod vex_id;
 
 #[cfg(test)]
 mod vextest;
@@ -125,10 +126,11 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
             .init(init_opts)?
     };
 
+    // Configure global `rayon` thread pool.
     ThreadPoolBuilder::new()
         .num_threads(cmd_args.max_concurrent_files.into())
         .build_global()
-        .expect("internal error: failed to configure thread pool");
+        .expect("internal error: failed to configure global thread pool");
 
     let ProjectRunData {
         irritations,

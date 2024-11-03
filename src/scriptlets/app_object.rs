@@ -19,7 +19,6 @@ use crate::{
     irritation::IrritationRenderer,
     query::Query,
     result::Result,
-    scan::VexId,
     scriptlets::{
         action::Action,
         event::EventKind,
@@ -31,6 +30,7 @@ use crate::{
     },
     source_path::PrettyPath,
     supported_language::SupportedLanguage,
+    vex_id::VexId,
 };
 
 #[derive(Debug, PartialEq, Eq, new, ProvidesStaticType, NoSerialize, Allocative)]

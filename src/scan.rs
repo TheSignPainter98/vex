@@ -1,5 +1,3 @@
-mod id;
-
 use std::{
     ops::Deref,
     sync::{
@@ -7,8 +5,6 @@ use std::{
         Arc,
     },
 };
-
-pub use self::id::VexId;
 
 use dupe::Dupe;
 use log::{info, log_enabled};
@@ -210,9 +206,10 @@ fn scan_file(file: &SourceFile, opts: VexFileOptions<'_>) -> Result<FileRunData>
         .chain(file_queries.iter())
         .all(|(l, _, _)| *l != language)
     {
-        // No need to parse, the user will never search this.
+        // The user did not request a scan of this type of file.
         return Ok(FileRunData { irritations });
     }
+
     let parsed_file = file.parse()?;
     let ignore_markers = parsed_file.ignore_markers()?;
     project_queries
