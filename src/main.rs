@@ -4,6 +4,7 @@
 #[macro_use]
 extern crate pretty_assertions;
 
+mod active_lints;
 mod associations;
 mod cli;
 mod context;
@@ -132,6 +133,7 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
         .build_global()
         .expect("internal error: failed to configure global thread pool");
 
+    let active_lints = todo!();
     let ProjectRunData {
         irritations,
         num_files_scanned,
@@ -139,6 +141,7 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
     } = scan::scan_project(
         &ctx,
         &store,
+        active_lints,
         cmd_args.max_problems,
         cmd_args.max_concurrent_files,
         verbosity,

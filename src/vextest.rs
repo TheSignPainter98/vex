@@ -10,6 +10,7 @@ use indoc::indoc;
 use regex::Regex;
 
 use crate::{
+    active_lints::ActiveLints,
     cli::{MaxConcurrentFileLimit, MaxProblems},
     context::Context,
     result::Result,
@@ -175,6 +176,8 @@ impl<'s> VexTest<'s> {
                     .unwrap();
             }
 
+            let active_lints = ActiveLints::all();
+
             let verbosity = Verbosity::default();
             let preinit_opts = PreinitOptions {
                 lenient: self.lenient,
@@ -187,6 +190,7 @@ impl<'s> VexTest<'s> {
             scan::scan_project(
                 &ctx,
                 &store,
+                active_lints,
                 self.max_problems,
                 MaxConcurrentFileLimit::new(1),
                 verbosity,

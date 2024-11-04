@@ -387,6 +387,7 @@ mod test {
     use toml_edit::Document;
 
     use crate::{
+        active_lints::ActiveLints,
         cli::{MaxConcurrentFileLimit, MaxProblems},
         scan::{self, ProjectRunData},
         scriptlets::{source, InitOptions, PreinitOptions, PreinitingStore},
@@ -490,6 +491,7 @@ mod test {
         let ProjectRunData { irritations, .. } = scan::scan_project(
             &ctx,
             &store,
+            ActiveLints::default(),
             MaxProblems::Unlimited,
             MaxConcurrentFileLimit::new(1),
             Verbosity::default(),

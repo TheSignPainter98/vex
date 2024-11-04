@@ -10,13 +10,14 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use serde::Serialize;
 
-use crate::error::{Error, InvalidIDReason};
+use crate::{
+    error::{Error, InvalidIDReason},
+    result::Result,
+};
 
 #[derive(Debug, Clone, Allocative, Eq, PartialEq, Serialize)]
 pub struct VexId {
     hash: u64,
-
-    #[allocative(skip)]
     name: String,
 }
 
@@ -34,7 +35,7 @@ impl VexId {
 impl TryFrom<String> for VexId {
     type Error = Error;
 
-    fn try_from(raw_id: String) -> Result<Self, Self::Error> {
+    fn try_from(raw_id: String) -> Result<Self> {
         let invalid_id = |reason| Error::InvalidID {
             raw_id: raw_id.to_string(),
             reason,

@@ -13,6 +13,7 @@ use starlark::values::FrozenHeap;
 use tree_sitter::QueryCursor;
 
 use crate::{
+    active_lints::ActiveLints,
     cli::{MaxConcurrentFileLimit, MaxProblems},
     context::Context,
     irritation::Irritation,
@@ -42,6 +43,7 @@ pub struct ProjectRunData {
 pub fn scan_project(
     ctx: &Context,
     store: &VexingStore,
+    active_lints: ActiveLints,
     max_problems: MaxProblems,
     max_concurrent_files: MaxConcurrentFileLimit,
     verbosity: Verbosity,
@@ -63,6 +65,7 @@ pub fn scan_project(
         let observe_opts = ObserveOptions {
             action: Action::Vexing(event.kind()),
             query_cache: Some(&query_cache),
+            active_lints: Some(&active_lints),
             ignore_markers: None,
             print_handler: &PrintHandler::new(verbosity, event.kind().name()),
         };
@@ -107,6 +110,7 @@ pub fn scan_project(
                 language,
                 project_queries: &project_queries,
                 query_cache: &query_cache,
+                active_lints: &active_lints,
                 verbosity,
             };
             scan_file(file, opts)
@@ -158,6 +162,7 @@ pub struct VexFileOptions<'a> {
     language: SupportedLanguage,
     project_queries: &'a [(SupportedLanguage, Arc<Query>, Observer)],
     query_cache: &'a QueryCache,
+    active_lints: &'a ActiveLints,
     verbosity: Verbosity,
 }
 
@@ -167,6 +172,7 @@ fn scan_file(file: &SourceFile, opts: VexFileOptions<'_>) -> Result<FileRunData>
         language,
         project_queries,
         query_cache,
+        active_lints,
         verbosity,
     } = opts;
 
@@ -182,6 +188,7 @@ fn scan_file(file: &SourceFile, opts: VexFileOptions<'_>) -> Result<FileRunData>
         let observe_opts = ObserveOptions {
             action: Action::Vexing(event.kind()),
             query_cache: Some(query_cache),
+            active_lints: Some(&active_lints),
             ignore_markers: None,
             print_handler: &PrintHandler::new(verbosity, event.kind().name()),
         };
@@ -244,6 +251,7 @@ fn scan_file(file: &SourceFile, opts: VexFileOptions<'_>) -> Result<FileRunData>
                     let observe_opts = ObserveOptions {
                         action: Action::Vexing(EventKind::Match),
                         query_cache: Some(query_cache),
+                        active_lints: Some(&active_lints),
                         ignore_markers: Some(&ignore_markers),
                         print_handler: &PrintHandler::new(verbosity, EventKind::Match.name()),
                     };
