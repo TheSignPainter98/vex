@@ -163,6 +163,9 @@ pub struct Manifest {
     pub lints: LintsConfig,
 
     #[serde(default)]
+    pub groups: GroupsConfig,
+
+    #[serde(default)]
     pub languages: LanguagesConfig,
 }
 
@@ -554,6 +557,10 @@ mod test {
             lint-id-1 = false
             lint-id-2 = true
 
+            [groups.active]
+            group-id-1 = false
+            group-id-2 = true
+
             [languages.python]
             use-for = ["*.star", "*.py2"]
         "#};
@@ -566,6 +573,10 @@ mod test {
         assert_eq!(
             parsed_manifest.lints.active_lints_config,
             BTreeMap::from_iter([("lint-id-1".into(), false), ("lint-id-2".into(), true)])
+        );
+        assert_eq!(
+            parsed_manifest.groups.active,
+            BTreeMap::from_iter([("group-id-1".into(), false), ("group-id-2".into(), true)])
         );
         assert_eq!(
             parsed_manifest.languages.deref()[&SupportedLanguage::Python]
