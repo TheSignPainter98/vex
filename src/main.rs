@@ -190,7 +190,7 @@ fn init(init_args: InitCmd) -> Result<()> {
         cause,
     })?)?;
     Context::init(cwd, init_args.force)?;
-    let queries_dir = Context::acquire()?.manifest.metadata.queries_dir;
+    let vexes_dir = Context::acquire()?.manifest.run.vexes_dir;
     success!(
         "{}",
         formatdoc!(
@@ -198,8 +198,8 @@ fn init(init_args: InitCmd) -> Result<()> {
                 vex initialised
                 now add style rules in ./{}/
                 for an example, open ./{}/{EXAMPLE_VEX_FILE}",
-            queries_dir.as_str(),
-            queries_dir.as_str(),
+            vexes_dir.as_str(),
+            vexes_dir.as_str(),
         )
     );
     Ok(())

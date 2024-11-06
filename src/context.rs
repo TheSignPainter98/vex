@@ -2,7 +2,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use indoc::indoc;
 use serde::{Deserialize as Deserialise, Serialize as Serialise};
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::io::{BufWriter, ErrorKind, Read, Write};
 use std::ops::Deref;
 use std::{
@@ -56,7 +56,7 @@ impl Context {
 
     pub fn init(project_root: impl AsRef<Utf8Path>, force: bool) -> Result<()> {
         let project_root = project_root.as_ref();
-        fs::create_dir_all(project_root.join(QueriesDir::default().as_str())).map_err(|cause| {
+        fs::create_dir_all(project_root.join(VexesDir::default().as_str())).map_err(|cause| {
             Error::IO {
                 path: PrettyPath::new(project_root),
                 action: IOAction::Write,
@@ -66,7 +66,7 @@ impl Context {
         Manifest::init(project_root, force)?;
 
         let example_vex_path = Utf8PathBuf::from(project_root)
-            .join(QueriesDir::default().as_str())
+            .join(VexesDir::default().as_str())
             .join(EXAMPLE_VEX_FILE);
         const EXAMPLE_VEX_CONTENT: &str = indoc! {r#"
             def init():
@@ -119,7 +119,7 @@ impl Context {
     pub fn associations(&self) -> Result<Associations> {
         let mut ret = Associations::base();
         self.manifest
-            .language_options
+            .languages
             .iter()
             .map(|(language, options)| {
                 let patterns = options
@@ -138,8 +138,7 @@ impl Context {
     }
 
     pub fn vex_dir(&self) -> Utf8PathBuf {
-        self.project_root
-            .join(self.manifest.metadata.queries_dir.as_str())
+        self.project_root.join(self.manifest.run.vexes_dir.as_str())
     }
 }
 
@@ -155,22 +154,26 @@ impl Deref for Context {
 #[serde(rename_all = "kebab-case")]
 pub struct Manifest {
     #[serde(rename = "vex")]
-    pub metadata: Metadata,
+    pub run: RunConfig,
 
-    #[serde(flatten)]
-    pub language_options: LanguageData,
+    #[serde(default)]
+    pub files: FilesConfig,
+
+    #[serde(default)]
+    pub lints: LintsConfig,
+
+    #[serde(default)]
+    pub languages: LanguagesConfig,
 }
 
 impl Manifest {
     pub const FILE_NAME: &'static str = "vex.toml";
     const DEFAULT_CONTENT: &'static str = indoc! {r#"
         [vex]
-        ignore = [ "vex.toml", "vexes/", ".git/", ".gitignore", "/target/" ]
+        version = "1"
 
-        # If this is a C++ project where header files have file-extension .h, uncomment the
-        # following lines.
-        # ["c++"]
-        # use-for = [ "*.h" ]
+        [files]
+        ignore = [ "vex.toml", "vexes/", ".git/", ".gitignore", "/target/" ]
 
         [python]
         use-for = [ "*.star" ]
@@ -260,10 +263,45 @@ impl Manifest {
 }
 
 #[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
-pub struct Metadata {
-    #[serde(default)]
-    pub queries_dir: QueriesDir,
+pub struct RunConfig {
+    pub version: Version,
 
+    #[serde(default)]
+    #[serde(rename = "directory")]
+    pub vexes_dir: VexesDir,
+}
+
+#[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
+pub enum Version {
+    #[default]
+    #[serde(rename = "1")]
+    V1,
+}
+
+impl Version {
+    #[allow(dead_code)]
+    pub fn current() -> Self {
+        Self::V1
+    }
+}
+
+#[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
+pub struct VexesDir(Utf8PathBuf);
+
+impl VexesDir {
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl Default for VexesDir {
+    fn default() -> Self {
+        Self("vexes".into())
+    }
+}
+
+#[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
+pub struct FilesConfig {
     #[serde(default, rename = "ignore")]
     pub ignores: IgnoreData,
 
@@ -271,10 +309,20 @@ pub struct Metadata {
     pub allows: Vec<RawFilePattern<String>>,
 }
 
-#[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
-pub struct LanguageData(HashMap<SupportedLanguage, LanguageOptions>);
+#[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
+pub struct LintsConfig {
+    active: BTreeMap<String, bool>,
+}
 
-impl Default for LanguageData {
+#[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
+pub struct GroupsConfig {
+    active: BTreeMap<String, bool>,
+}
+
+#[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
+pub struct LanguagesConfig(HashMap<SupportedLanguage, LanguageOptions>);
+
+impl Default for LanguagesConfig {
     fn default() -> Self {
         Self(
             [(
@@ -289,7 +337,7 @@ impl Default for LanguageData {
     }
 }
 
-impl Deref for LanguageData {
+impl Deref for LanguagesConfig {
     type Target = HashMap<SupportedLanguage, LanguageOptions>;
 
     fn deref(&self) -> &Self::Target {
@@ -301,21 +349,6 @@ impl Deref for LanguageData {
 pub struct LanguageOptions {
     #[serde(rename = "use-for", default)]
     file_associations: Vec<RawFilePattern<String>>,
-}
-
-#[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
-pub struct QueriesDir(String);
-
-impl QueriesDir {
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl Default for QueriesDir {
-    fn default() -> Self {
-        Self("vexes".into())
-    }
 }
 
 #[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
@@ -366,10 +399,10 @@ mod test {
     fn default_manifest_valid() {
         let init_manifest: Manifest =
             toml_edit::de::from_str(Manifest::DEFAULT_CONTENT).expect("default manifest invalid");
-        assert!(init_manifest.metadata.allows.is_empty());
+        assert!(init_manifest.files.allows.is_empty());
         assert_eq!(
             init_manifest
-                .metadata
+                .files
                 .ignores
                 .iter()
                 .map(RawFilePattern::to_string)
@@ -472,11 +505,70 @@ mod test {
     #[test]
     fn defaults() {
         let root_dir = tempfile::tempdir().unwrap();
-        let root_path = Utf8PathBuf::try_from(root_dir.path().to_path_buf()).unwrap();
+        let root_path = Utf8PathBuf::try_from(root_dir.path().to_owned()).unwrap();
 
         Context::init(&root_path, false).unwrap();
         let manifest = Context::acquire_in(&root_path).unwrap().manifest;
 
         assert_eq!(manifest, Manifest::default());
+    }
+
+    #[test]
+    fn default_version_is_current() {
+        assert_eq!(Version::default(), Version::current());
+    }
+
+    #[test]
+    fn init_manifest_version_is_current() {
+        let root_dir = tempfile::tempdir().unwrap();
+        let root_path = Utf8PathBuf::try_from(root_dir.path().to_owned()).unwrap();
+
+        Manifest::init(&root_path, false).unwrap();
+        let ctx = Context::acquire_in(&root_path).unwrap();
+        assert_eq!(ctx.manifest.run.version, Version::current());
+    }
+
+    #[test]
+    fn minimal_manifest() {
+        toml_edit::de::from_str::<Manifest>("").unwrap_err();
+        toml_edit::de::from_str::<Manifest>("[vex]").unwrap_err();
+
+        toml_edit::de::from_str::<Manifest>("[vex]\nversion = '1'").unwrap();
+    }
+
+    #[test]
+    fn maximal_manifest() {
+        let manifest_content = indoc! {r#"
+            [vex]
+            version = "1"
+            directory = "some-dir/"
+
+            [files]
+            ignore = ["vexes/", "target/"]
+            allow = ["vexes/check-me.star", "target/check-me.rs"]
+
+            [lints.active]
+            lint-id-1 = false
+            lint-id-2 = true
+
+            [languages.python]
+            use-for = ["*.star", "*.py2"]
+        "#};
+        let parsed_manifest: Manifest = toml_edit::de::from_str(manifest_content).unwrap();
+
+        assert_eq!(parsed_manifest.run.version, Version::V1);
+        assert_eq!(parsed_manifest.run.vexes_dir.as_str(), "some-dir/");
+        assert_eq!(parsed_manifest.files.ignores.into_inner().len(), 2);
+        assert_eq!(parsed_manifest.files.allows.len(), 2);
+        assert_eq!(
+            parsed_manifest.lints.active,
+            BTreeMap::from_iter([("lint-id-1".into(), false), ("lint-id-2".into(), true)])
+        );
+        assert_eq!(
+            parsed_manifest.languages.deref()[&SupportedLanguage::Python]
+                .file_associations
+                .len(),
+            2
+        );
     }
 }
