@@ -24,7 +24,7 @@ pub fn sources_in_dir(
     max_concurrent_files: MaxConcurrentFileLimit,
 ) -> Result<Vec<SourceFile>> {
     let ignores: Vec<_> = ctx
-        .metadata
+        .files
         .ignores
         .clone()
         .into_inner()
@@ -32,7 +32,7 @@ pub fn sources_in_dir(
         .map(|ignore| ignore.compile())
         .collect::<Result<_>>()?;
     let allows: Vec<_> = ctx
-        .metadata
+        .files
         .allows
         .clone()
         .into_iter()
@@ -326,6 +326,9 @@ mod test {
 
         let manifest_content: &str = indoc! {r#"
             [vex]
+            version = "1"
+
+            [files]
             ignore = [ "to-ignore", "to-allow" ]
             allow = [ "to-allow" ]
         "#};
