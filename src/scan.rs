@@ -188,7 +188,7 @@ fn scan_file(file: &SourceFile, opts: VexFileOptions<'_>) -> Result<FileRunData>
         let observe_opts = ObserveOptions {
             action: Action::Vexing(event.kind()),
             query_cache: Some(query_cache),
-            active_lints: Some(&active_lints),
+            active_lints: Some(active_lints),
             ignore_markers: None,
             print_handler: &PrintHandler::new(verbosity, event.kind().name()),
         };
@@ -251,7 +251,7 @@ fn scan_file(file: &SourceFile, opts: VexFileOptions<'_>) -> Result<FileRunData>
                     let observe_opts = ObserveOptions {
                         action: Action::Vexing(EventKind::Match),
                         query_cache: Some(query_cache),
-                        active_lints: Some(&active_lints),
+                        active_lints: Some(active_lints),
                         ignore_markers: Some(&ignore_markers),
                         print_handler: &PrintHandler::new(verbosity, EventKind::Match.name()),
                     };
