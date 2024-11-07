@@ -10,7 +10,6 @@ use indoc::indoc;
 use regex::Regex;
 
 use crate::{
-    active_lints::ActiveLints,
     cli::{MaxConcurrentFileLimit, MaxProblems},
     context::Context,
     result::Result,
@@ -176,7 +175,7 @@ impl<'s> VexTest<'s> {
                     .unwrap();
             }
 
-            let active_lints = ActiveLints::all();
+            let active_lints = crate::make_active_lints(&ctx.manifest)?;
 
             let verbosity = Verbosity::default();
             let preinit_opts = PreinitOptions {
