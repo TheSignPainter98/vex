@@ -13,7 +13,6 @@ use starlark::values::FrozenHeap;
 use tree_sitter::QueryCursor;
 
 use crate::{
-    active_lints::ActiveLints,
     cli::{MaxConcurrentFileLimit, MaxProblems},
     context::Context,
     irritation::Irritation,
@@ -31,6 +30,7 @@ use crate::{
     source_file::{self, SourceFile},
     supported_language::SupportedLanguage,
     verbosity::Verbosity,
+    warning_filter::WarningFilter,
 };
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -43,7 +43,7 @@ pub struct ProjectRunData {
 pub fn scan_project(
     ctx: &Context,
     store: &VexingStore,
-    active_lints: ActiveLints,
+    active_lints: WarningFilter,
     max_problems: MaxProblems,
     max_concurrent_files: MaxConcurrentFileLimit,
     verbosity: Verbosity,
@@ -162,7 +162,7 @@ pub struct VexFileOptions<'a> {
     language: SupportedLanguage,
     project_queries: &'a [(SupportedLanguage, Arc<Query>, Observer)],
     query_cache: &'a QueryCache,
-    active_lints: &'a ActiveLints,
+    active_lints: &'a WarningFilter,
     verbosity: Verbosity,
 }
 

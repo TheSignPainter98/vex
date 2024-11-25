@@ -67,6 +67,7 @@ impl AppObject {
         fn active<'v>(
             #[starlark(this)] _this: Value<'v>,
             #[starlark(require=pos)] id: &'v str,
+            #[starlark(require=named)] group: Option<&'v str>,
             eval: &mut Evaluator<'v, '_>,
         ) -> anyhow::Result<bool> {
             AppObject::check_attr_available(
@@ -78,11 +79,20 @@ impl AppObject {
                 ],
             )?;
 
-            let vex_id = VexId::try_from(id.to_string())?;
+            let lint_id = VexId::try_from(id.to_string())?;
+            let group_id = group
+                .map(ToOwned::to_owned)
+                .map(VexId::try_from)
+                .transpose()?;
             let temp_data = TempData::get_from(eval);
-            Ok(temp_data
-                .active_lints
-                .is_some_and(|active_lints| active_lints.is_active(&vex_id)))
+            let active = temp_data.active_lints.is_some_and(|active_lints| {
+                if let Some(group_id) = group_id {
+                    active_lints.is_active_with_group(&lint_id, &group_id)
+                } else {
+                    active_lints.is_active(&lint_id)
+                }
+            });
+            Ok(active)
         }
 
         fn search<'v>(

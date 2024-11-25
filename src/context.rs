@@ -178,6 +178,9 @@ impl Manifest {
         [files]
         ignore = [ "vex.toml", "vexes/", ".git/", ".gitignore", "/target/" ]
 
+        [groups.active]
+        pedantic = false
+
         [python]
         use-for = [ "*.star" ]
     "#};
@@ -320,7 +323,8 @@ pub struct LintsConfig {
 
 #[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
 pub struct GroupsConfig {
-    active: BTreeMap<String, bool>,
+    #[serde(rename = "active")]
+    pub active_groups_config: BTreeMap<String, bool>,
 }
 
 #[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
@@ -391,11 +395,11 @@ mod test {
     use toml_edit::Document;
 
     use crate::{
-        active_lints::ActiveLints,
         cli::{MaxConcurrentFileLimit, MaxProblems},
         scan::{self, ProjectRunData},
         scriptlets::{source, InitOptions, PreinitOptions, PreinitingStore},
         verbosity::Verbosity,
+        warning_filter::WarningFilter,
     };
 
     use super::*;
@@ -495,7 +499,7 @@ mod test {
         let ProjectRunData { irritations, .. } = scan::scan_project(
             &ctx,
             &store,
-            ActiveLints::all(),
+            WarningFilter::all(),
             MaxProblems::Unlimited,
             MaxConcurrentFileLimit::new(1),
             Verbosity::default(),
@@ -575,7 +579,7 @@ mod test {
             BTreeMap::from_iter([("lint-id-1".into(), false), ("lint-id-2".into(), true)])
         );
         assert_eq!(
-            parsed_manifest.groups.active,
+            parsed_manifest.groups.active_groups_config,
             BTreeMap::from_iter([("group-id-1".into(), false), ("group-id-2".into(), true)])
         );
         assert_eq!(

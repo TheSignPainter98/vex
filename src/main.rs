@@ -4,7 +4,6 @@
 #[macro_use]
 extern crate pretty_assertions;
 
-mod active_lints;
 mod associations;
 mod cli;
 mod context;
@@ -26,6 +25,7 @@ mod test;
 mod trigger;
 mod verbosity;
 mod vex_id;
+mod warning_filter;
 
 #[cfg(test)]
 mod vextest;
@@ -38,9 +38,9 @@ use indoc::{formatdoc, printdoc};
 use log::{debug, info, log_enabled};
 use rayon::ThreadPoolBuilder;
 use strum::IntoEnumIterator;
+use warning_filter::ActiveIds;
 
 use crate::{
-    active_lints::ActiveLints,
     cli::{Args, CheckCmd, Command, InitCmd, ListCmd, ToList},
     context::{Context, EXAMPLE_VEX_FILE},
     error::{Error, IOAction},
@@ -52,6 +52,7 @@ use crate::{
     supported_language::SupportedLanguage,
     verbosity::Verbosity,
     vex_id::VexId,
+    warning_filter::WarningFilter,
 };
 
 // TODO(kcza): move the subcommands to separate files
@@ -189,8 +190,8 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn make_active_lints(manifest: &Manifest) -> Result<ActiveLints> {
-    let inactive: Vec<_> = manifest
+pub(crate) fn make_active_lints(manifest: &Manifest) -> Result<WarningFilter> {
+    let inactive_lints: Vec<_> = manifest
         .lints
         .active_lints_config
         .iter()
@@ -198,7 +199,19 @@ pub(crate) fn make_active_lints(manifest: &Manifest) -> Result<ActiveLints> {
         .map(|(raw_id, _)| raw_id)
         .map(|raw_id| VexId::try_from(raw_id.clone()))
         .collect::<Result<_>>()?;
-    Ok(ActiveLints::from_inactive(inactive))
+    let active_lints = ActiveIds::from_inactive(inactive_lints);
+
+    let inactive_groups: Vec<_> = manifest
+        .groups
+        .active_groups_config
+        .iter()
+        .filter(|(_, active)| !*active)
+        .map(|(raw_id, _)| raw_id)
+        .map(|raw_id| VexId::try_from(raw_id.clone()))
+        .collect::<Result<_>>()?;
+    let active_groups = ActiveIds::from_inactive(inactive_groups);
+
+    Ok(WarningFilter::new(active_lints, active_groups))
 }
 
 fn init(init_args: InitCmd) -> Result<()> {
@@ -289,6 +302,10 @@ mod test_ {
                 [lints.active]
                 explicitly-active-lint = true
                 explicitly-inactive-lint = false
+
+                [groups.active]
+                explicitly-active-group = true
+                explicitly-inactive-group = false
             "#})
             .with_scriptlet(
                 "vexes/test.star",
@@ -301,8 +318,11 @@ mod test_ {
                     def on_open_project(event):
                         check['true'](vex.active('explicitly-active-lint'))
                         check['true'](vex.active('unspecified-lint'))
+                        check['true'](vex.active('some-lint', group='explicitly-active-group'))
+                        check['true'](vex.active('some-lint', group='unspecified-group'))
 
                         check['false'](vex.active('explicitly-inactive-lint'))
+                        check['false'](vex.active('some-lint', group='explicitly-inactive-group'))
                 "#,
                 check_path = VexTest::CHECK_STARLARK_PATH},
             )
