@@ -45,6 +45,46 @@ impl AppObject {
     #[allow(clippy::type_complexity)]
     #[starlark_module]
     fn methods(builder: &mut MethodsBuilder) {
+        fn observe<'v>(
+            #[starlark(this)] _this: Value<'v>,
+            #[starlark(require=pos)] event: &str,
+            #[starlark(require=pos)] observer: Value<'v>,
+            eval: &mut Evaluator<'v, '_>,
+        ) -> anyhow::Result<NoneType> {
+            AppObject::check_attr_available(eval, "vex.observe", &[Action::Initing])?;
+
+            let ret_data = UnfrozenRetainedData::get_from(eval.module());
+            let event_kind = event.parse()?;
+            let observer = UnfrozenObserver::new(observer);
+            ret_data.declare_intent(UnfrozenIntent::Observe {
+                event_kind,
+                observer,
+            });
+
+            Ok(NoneType)
+        }
+
+        fn active<'v>(
+            #[starlark(this)] _this: Value<'v>,
+            #[starlark(require=pos)] id: &'v str,
+            eval: &mut Evaluator<'v, '_>,
+        ) -> anyhow::Result<bool> {
+            AppObject::check_attr_available(
+                eval,
+                "vex.active",
+                &[
+                    Action::Vexing(EventKind::OpenProject),
+                    Action::Vexing(EventKind::OpenFile),
+                ],
+            )?;
+
+            let vex_id = VexId::try_from(id.to_string())?;
+            let temp_data = TempData::get_from(eval);
+            Ok(temp_data
+                .active_lints
+                .is_some_and(|active_lints| active_lints.is_active(&vex_id)))
+        }
+
         fn search<'v>(
             #[starlark(this)] _this: Value<'v>,
             #[starlark(require=pos)] language: &'v str,
@@ -76,25 +116,6 @@ impl AppObject {
                 language,
                 query,
                 on_match,
-            });
-
-            Ok(NoneType)
-        }
-
-        fn observe<'v>(
-            #[starlark(this)] _this: Value<'v>,
-            #[starlark(require=pos)] event: &str,
-            #[starlark(require=pos)] observer: Value<'v>,
-            eval: &mut Evaluator<'v, '_>,
-        ) -> anyhow::Result<NoneType> {
-            AppObject::check_attr_available(eval, "vex.observe", &[Action::Initing])?;
-
-            let ret_data = UnfrozenRetainedData::get_from(eval.module());
-            let event_kind = event.parse()?;
-            let observer = UnfrozenObserver::new(observer);
-            ret_data.declare_intent(UnfrozenIntent::Observe {
-                event_kind,
-                observer,
             });
 
             Ok(NoneType)

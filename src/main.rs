@@ -4,6 +4,7 @@
 #[macro_use]
 extern crate pretty_assertions;
 
+mod active_lints;
 mod associations;
 mod cli;
 mod context;
@@ -32,12 +33,14 @@ mod vextest;
 use std::{env, process::ExitCode};
 
 use camino::Utf8PathBuf;
+use context::Manifest;
 use indoc::{formatdoc, printdoc};
 use log::{debug, info, log_enabled};
 use rayon::ThreadPoolBuilder;
 use strum::IntoEnumIterator;
 
 use crate::{
+    active_lints::ActiveLints,
     cli::{Args, CheckCmd, Command, InitCmd, ListCmd, ToList},
     context::{Context, EXAMPLE_VEX_FILE},
     error::{Error, IOAction},
@@ -48,6 +51,7 @@ use crate::{
     source_path::PrettyPath,
     supported_language::SupportedLanguage,
     verbosity::Verbosity,
+    vex_id::VexId,
 };
 
 // TODO(kcza): move the subcommands to separate files
@@ -132,6 +136,7 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
         .build_global()
         .expect("internal error: failed to configure global thread pool");
 
+    let active_lints = make_active_lints(&ctx.manifest)?;
     let ProjectRunData {
         irritations,
         num_files_scanned,
@@ -139,6 +144,7 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
     } = scan::scan_project(
         &ctx,
         &store,
+        active_lints,
         cmd_args.max_problems,
         cmd_args.max_concurrent_files,
         verbosity,
@@ -181,6 +187,18 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
     }
 
     Ok(())
+}
+
+pub(crate) fn make_active_lints(manifest: &Manifest) -> Result<ActiveLints> {
+    let inactive: Vec<_> = manifest
+        .lints
+        .active_lints_config
+        .iter()
+        .filter(|(_, active)| !*active)
+        .map(|(raw_id, _)| raw_id)
+        .map(|raw_id| VexId::try_from(raw_id.clone()))
+        .collect::<Result<_>>()?;
+    Ok(ActiveLints::from_inactive(inactive))
 }
 
 fn init(init_args: InitCmd) -> Result<()> {
@@ -259,6 +277,37 @@ mod test_ {
             .unwrap()
             .irritations;
         assert_eq!(irritations.len(), MAX as usize);
+    }
+
+    #[test]
+    fn active_lint_filter() {
+        VexTest::new("filter-lints")
+            .with_manifest(indoc! {r#"
+                [vex]
+                version = "1"
+
+                [lints.active]
+                explicitly-active-lint = true
+                explicitly-inactive-lint = false
+            "#})
+            .with_scriptlet(
+                "vexes/test.star",
+                formatdoc! {r#"
+                    load('{check_path}', 'check')
+
+                    def init():
+                        vex.observe('open_project', on_open_project)
+
+                    def on_open_project(event):
+                        check['true'](vex.active('explicitly-active-lint'))
+                        check['true'](vex.active('unspecified-lint'))
+
+                        check['false'](vex.active('explicitly-inactive-lint'))
+                "#,
+                check_path = VexTest::CHECK_STARLARK_PATH},
+            )
+            .try_run()
+            .unwrap();
     }
 
     #[test]

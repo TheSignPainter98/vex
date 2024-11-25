@@ -80,6 +80,7 @@ impl PreinitingScriptlet {
                     action: Action::Preiniting,
                     query_cache: None,
                     ignore_markers: None,
+                    active_lints: None,
                 };
                 let print_handler = PrintHandler::new(*verbosity, path.as_str());
                 let loader = Loader::new(&loads, partial_store);
@@ -356,6 +357,7 @@ impl InitingScriptlet {
                     action: Action::Initing,
                     query_cache: None,
                     ignore_markers: None,
+                    active_lints: None,
                 };
                 let print_handler = PrintHandler::new(*verbosity, path.as_str());
                 let mut eval = Evaluator::new(&module);
@@ -541,15 +543,16 @@ mod test {
             }
         };
         test_preiniting_availability(
-            "vex.search",
-            Unavailable,
-            "vex.search('rust', '(source_file)', lambda x: x)",
-        );
-        test_preiniting_availability(
             "vex.observe",
             Unavailable,
             "vex.observe('open_file', lambda x: x)",
         );
+        test_preiniting_availability(
+            "vex.search",
+            Unavailable,
+            "vex.search('rust', '(source_file)', lambda x: x)",
+        );
+        test_preiniting_availability("vex.active", Unavailable, "vex.active('some-id')");
         test_preiniting_availability("vex.warn", Unavailable, "vex.warn('test', 'oh no!')");
 
         let assert_available_initing = |name, call| {
@@ -595,15 +598,16 @@ mod test {
             }
         };
         test_vexing_open_availability(
-            "vex.search",
-            Available,
-            "vex.search('rust', '(source_file)', lambda x: x)",
-        );
-        test_vexing_open_availability(
             "vex.observe",
             Unavailable,
             "vex.observe('open_file', lambda x: x)",
         );
+        test_vexing_open_availability(
+            "vex.search",
+            Available,
+            "vex.search('rust', '(source_file)', lambda x: x)",
+        );
+        test_vexing_open_availability("vex.active", Available, "vex.active('some-id')");
         test_vexing_open_availability("vex.warn", Available, "vex.warn('test', 'oh no!')");
 
         let test_vexing_match_availability = |name, availability, call| {
@@ -646,15 +650,16 @@ mod test {
             }
         };
         test_vexing_match_availability(
-            "vex.search",
-            Unavailable,
-            "vex.search('rust', '(source_file)', lambda x: x)",
-        );
-        test_vexing_match_availability(
             "vex.observe",
             Unavailable,
             "vex.observe('open_file', lambda x: x)",
         );
+        test_vexing_match_availability(
+            "vex.search",
+            Unavailable,
+            "vex.search('rust', '(source_file)', lambda x: x)",
+        );
+        test_vexing_match_availability("vex.active", Unavailable, "vex.active('some-id')");
         test_vexing_match_availability("vex.warn", Available, "vex.warn('test', 'oh no!')");
     }
 

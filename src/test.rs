@@ -11,6 +11,7 @@ use log::{error, log_enabled};
 use starlark::values::FrozenHeap;
 
 use crate::{
+    active_lints::ActiveLints,
     associations::Associations,
     cli::{MaxConcurrentFileLimit, MaxProblems},
     context::{Context, Manifest},
@@ -55,11 +56,13 @@ pub(crate) fn run_tests(script_sources: &[impl ScriptSource]) -> Result<()> {
         let frozen_heap = FrozenHeap::new();
         let event = PreTestRunEvent;
         let handler_module = HandlerModule::new();
+        let active_lints = ActiveLints::all();
         let observe_opts = ObserveOptions {
             action: Action::Vexing(event.kind()),
             query_cache: Some(&query_cache),
             ignore_markers: None,
             print_handler: &PrintHandler::new(logger::verbosity(), event.kind().name()),
+            active_lints: Some(&active_lints),
         };
         store.observers_for(event.kind()).observe(
             &handler_module,
@@ -171,6 +174,7 @@ pub(crate) fn run_tests(script_sources: &[impl ScriptSource]) -> Result<()> {
         scan::scan_project(
             &sub_ctx,
             &sub_store,
+            ActiveLints::all(),
             MaxProblems::Unlimited,
             MaxConcurrentFileLimit::new(1),
             Verbosity::Quiet,
@@ -181,17 +185,21 @@ pub(crate) fn run_tests(script_sources: &[impl ScriptSource]) -> Result<()> {
 
     {
         let handler_module = HandlerModule::new();
+
         let irritations = nonlenient_run
             .irritations
             .into_iter()
             .zip(iter::repeat(false))
             .chain(lenient_run.irritations.into_iter().zip(iter::repeat(true)));
         let event = PostTestRunEvent::new(irritations, handler_module.heap());
+
+        let active_lints = ActiveLints::all();
         let observer_opts = ObserveOptions {
             action: Action::Vexing(event.kind()),
             query_cache: Some(&query_cache),
             ignore_markers: None,
             print_handler: &PrintHandler::new(logger::verbosity(), event.kind().name()),
+            active_lints: Some(&active_lints),
         };
         store.observers_for(event.kind()).observe(
             &handler_module,

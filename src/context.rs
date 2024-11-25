@@ -311,7 +311,8 @@ pub struct FilesConfig {
 
 #[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
 pub struct LintsConfig {
-    active: BTreeMap<String, bool>,
+    #[serde(rename = "active")]
+    pub active_lints_config: BTreeMap<String, bool>,
 }
 
 #[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
@@ -387,6 +388,7 @@ mod test {
     use toml_edit::Document;
 
     use crate::{
+        active_lints::ActiveLints,
         cli::{MaxConcurrentFileLimit, MaxProblems},
         scan::{self, ProjectRunData},
         scriptlets::{source, InitOptions, PreinitOptions, PreinitingStore},
@@ -490,6 +492,7 @@ mod test {
         let ProjectRunData { irritations, .. } = scan::scan_project(
             &ctx,
             &store,
+            ActiveLints::all(),
             MaxProblems::Unlimited,
             MaxConcurrentFileLimit::new(1),
             Verbosity::default(),
@@ -561,7 +564,7 @@ mod test {
         assert_eq!(parsed_manifest.files.ignores.into_inner().len(), 2);
         assert_eq!(parsed_manifest.files.allows.len(), 2);
         assert_eq!(
-            parsed_manifest.lints.active,
+            parsed_manifest.lints.active_lints_config,
             BTreeMap::from_iter([("lint-id-1".into(), false), ("lint-id-2".into(), true)])
         );
         assert_eq!(
