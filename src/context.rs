@@ -179,7 +179,9 @@ impl Manifest {
         ignore = [ "vex.toml", "vexes/", ".git/", ".gitignore", "/target/" ]
 
         [groups.active]
+        deprecated = false
         pedantic = false
+        nursery = false
 
         [python]
         use-for = [ "*.star" ]
@@ -321,10 +323,21 @@ pub struct LintsConfig {
     pub active_lints_config: BTreeMap<String, bool>,
 }
 
-#[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
+#[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
 pub struct GroupsConfig {
     #[serde(rename = "active")]
     pub active_groups_config: BTreeMap<String, bool>,
+}
+
+impl Default for GroupsConfig {
+    fn default() -> Self {
+        Self {
+            active_groups_config: ["deprecated", "nursery", "pedantic"]
+                .into_iter()
+                .map(|group| (group.to_owned(), false))
+                .collect(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
@@ -417,6 +430,18 @@ mod test {
                 .map(RawFilePattern::to_string)
                 .collect::<Vec<_>>(),
             &["vex.toml", "vexes/", ".git/", ".gitignore", "/target/"]
+        );
+
+        assert_eq!(
+            init_manifest
+                .groups
+                .active_groups_config
+                .into_iter()
+                .collect::<Vec<_>>(),
+            ["deprecated", "nursery", "pedantic"]
+                .into_iter()
+                .map(|group| (group.to_owned(), false))
+                .collect::<Vec<_>>(),
         );
 
         let raw_manifest: Document = Manifest::DEFAULT_CONTENT.parse().unwrap();
