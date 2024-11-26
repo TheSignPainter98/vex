@@ -85,11 +85,11 @@ impl AppObject {
                 .map(VexId::try_from)
                 .transpose()?;
             let temp_data = TempData::get_from(eval);
-            let active = temp_data.active_lints.is_some_and(|active_lints| {
+            let active = temp_data.warning_filter.is_some_and(|warning_filter| {
                 if let Some(group_id) = group_id {
-                    active_lints.is_active_with_group(&lint_id, &group_id)
+                    warning_filter.is_active_with_group(&lint_id, &group_id)
                 } else {
-                    active_lints.is_active(&lint_id)
+                    warning_filter.is_active(&lint_id)
                 }
             });
             Ok(active)

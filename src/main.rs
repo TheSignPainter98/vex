@@ -137,7 +137,7 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
         .build_global()
         .expect("internal error: failed to configure global thread pool");
 
-    let active_lints = try_make_warning_filter(&ctx.manifest)?;
+    let warning_filter = try_make_warning_filter(&ctx.manifest)?;
     let ProjectRunData {
         irritations,
         num_files_scanned,
@@ -145,7 +145,7 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
     } = scan::scan_project(
         &ctx,
         &store,
-        active_lints,
+        warning_filter,
         cmd_args.max_problems,
         cmd_args.max_concurrent_files,
         verbosity,

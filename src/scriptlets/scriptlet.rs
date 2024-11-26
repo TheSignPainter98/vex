@@ -80,7 +80,7 @@ impl PreinitingScriptlet {
                     action: Action::Preiniting,
                     query_cache: None,
                     ignore_markers: None,
-                    active_lints: None,
+                    warning_filter: None,
                 };
                 let print_handler = PrintHandler::new(*verbosity, path.as_str());
                 let loader = Loader::new(&loads, partial_store);
@@ -357,7 +357,7 @@ impl InitingScriptlet {
                     action: Action::Initing,
                     query_cache: None,
                     ignore_markers: None,
-                    active_lints: None,
+                    warning_filter: None,
                 };
                 let print_handler = PrintHandler::new(*verbosity, path.as_str());
                 let mut eval = Evaluator::new(&module);

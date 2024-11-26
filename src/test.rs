@@ -56,13 +56,13 @@ pub(crate) fn run_tests(script_sources: &[impl ScriptSource]) -> Result<()> {
         let frozen_heap = FrozenHeap::new();
         let event = PreTestRunEvent;
         let handler_module = HandlerModule::new();
-        let active_lints = WarningFilter::all();
+        let warning_filter = WarningFilter::all();
         let observe_opts = ObserveOptions {
             action: Action::Vexing(event.kind()),
             query_cache: Some(&query_cache),
             ignore_markers: None,
             print_handler: &PrintHandler::new(logger::verbosity(), event.kind().name()),
-            active_lints: Some(&active_lints),
+            warning_filter: Some(&warning_filter),
         };
         store.observers_for(event.kind()).observe(
             &handler_module,
@@ -193,13 +193,13 @@ pub(crate) fn run_tests(script_sources: &[impl ScriptSource]) -> Result<()> {
             .chain(lenient_run.irritations.into_iter().zip(iter::repeat(true)));
         let event = PostTestRunEvent::new(irritations, handler_module.heap());
 
-        let active_lints = WarningFilter::all();
+        let warning_filter = WarningFilter::all();
         let observer_opts = ObserveOptions {
             action: Action::Vexing(event.kind()),
             query_cache: Some(&query_cache),
             ignore_markers: None,
             print_handler: &PrintHandler::new(logger::verbosity(), event.kind().name()),
-            active_lints: Some(&active_lints),
+            warning_filter: Some(&warning_filter),
         };
         store.observers_for(event.kind()).observe(
             &handler_module,

@@ -133,7 +133,7 @@ pub struct ObserveOptions<'v> {
     pub query_cache: Option<&'v QueryCache>,
     pub ignore_markers: Option<&'v IgnoreMarkers>,
     pub print_handler: &'v PrintHandler<'v>,
-    pub active_lints: Option<&'v WarningFilter>,
+    pub warning_filter: Option<&'v WarningFilter>,
 }
 
 impl Observable for Observer {
@@ -148,13 +148,13 @@ impl Observable for Observer {
             query_cache,
             ignore_markers,
             print_handler,
-            active_lints,
+            warning_filter,
         } = opts;
         let temp_data = TempData {
             action,
             query_cache,
             ignore_markers,
-            active_lints,
+            warning_filter,
         };
         let mut eval = Evaluator::new(handler_module);
         eval.extra = Some(&temp_data);
