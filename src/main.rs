@@ -137,7 +137,7 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
         .build_global()
         .expect("internal error: failed to configure global thread pool");
 
-    let active_lints = make_active_lints(&ctx.manifest)?;
+    let active_lints = try_make_warning_filter(&ctx.manifest)?;
     let ProjectRunData {
         irritations,
         num_files_scanned,
@@ -190,7 +190,7 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn make_active_lints(manifest: &Manifest) -> Result<WarningFilter> {
+pub(crate) fn try_make_warning_filter(manifest: &Manifest) -> Result<WarningFilter> {
     let inactive_lints: Vec<_> = manifest
         .lints
         .active_lints_config

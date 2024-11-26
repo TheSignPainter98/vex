@@ -175,7 +175,7 @@ impl<'s> VexTest<'s> {
                     .unwrap();
             }
 
-            let active_lints = crate::make_active_lints(&ctx.manifest)?;
+            let active_lints = crate::try_make_warning_filter(&ctx.manifest)?;
 
             let verbosity = Verbosity::default();
             let preinit_opts = PreinitOptions {
