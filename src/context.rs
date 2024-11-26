@@ -178,11 +178,6 @@ impl Manifest {
         [files]
         ignore = [ "vex.toml", "vexes/", ".git/", ".gitignore", "/target/" ]
 
-        [groups.active]
-        deprecated = false
-        pedantic = false
-        nursery = false
-
         [python]
         use-for = [ "*.star" ]
     "#};

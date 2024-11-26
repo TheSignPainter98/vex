@@ -201,13 +201,26 @@ pub(crate) fn make_active_lints(manifest: &Manifest) -> Result<WarningFilter> {
         .collect::<Result<_>>()?;
     let active_lints = ActiveIds::from_inactive(inactive_lints);
 
-    let inactive_groups: Vec<_> = manifest
+    let default_inactive_groups =
+        ["deprecated", "nursery", "pedantic"]
+            .into_iter()
+            .filter(|group| {
+                !manifest
+                    .groups
+                    .active_groups_config
+                    .get(*group)
+                    .copied()
+                    .unwrap_or(false)
+            });
+    let requested_inactive_groups = manifest
         .groups
         .active_groups_config
         .iter()
         .filter(|(_, active)| !*active)
-        .map(|(raw_id, _)| raw_id)
-        .map(|raw_id| VexId::try_from(raw_id.clone()))
+        .map(|(raw_id, _)| raw_id.as_str());
+    let inactive_groups: Vec<_> = default_inactive_groups
+        .chain(requested_inactive_groups)
+        .map(|raw_id| VexId::try_from(raw_id.to_owned()))
         .collect::<Result<_>>()?;
     let active_groups = ActiveIds::from_inactive(inactive_groups);
 
@@ -306,6 +319,11 @@ mod test_ {
                 [groups.active]
                 explicitly-active-group = true
                 explicitly-inactive-group = false
+
+                # Default inactive
+                deprecated = true
+                nursery = true
+                pedantic = true
             "#})
             .with_scriptlet(
                 "vexes/test.star",
@@ -323,6 +341,70 @@ mod test_ {
 
                         check['false'](vex.active('explicitly-inactive-lint'))
                         check['false'](vex.active('some-lint', group='explicitly-inactive-group'))
+
+                        pre_deactivated_groups = [
+                            'deprecated',
+                            'nursery',
+                            'pedantic',
+                        ]
+                        for pre_deactivated_group in pre_deactivated_groups:
+                            check['true'](vex.active('some-lint', group=pre_deactivated_group))
+                "#,
+                check_path = VexTest::CHECK_STARLARK_PATH},
+            )
+            .try_run()
+            .unwrap();
+        VexTest::new("default-inactive")
+            .with_scriptlet(
+                "vexes/test.star",
+                formatdoc! {r#"
+                    load('{check_path}', 'check')
+
+                    def init():
+                        vex.observe('open_project', on_open_project)
+
+                    def on_open_project(event):
+                        default_inactive_groups = [
+                            'deprecated',
+                            'nursery',
+                            'pedantic',
+                        ]
+                        for group in default_inactive_groups:
+                            check['false'](vex.active('some-lint', group=group))
+                "#,
+                check_path = VexTest::CHECK_STARLARK_PATH},
+            )
+            .try_run()
+            .unwrap();
+        VexTest::new("default-inactive-others-overridden")
+            .with_manifest(indoc! {r#"
+                [vex]
+                version = "1"
+
+                [groups.active]
+                unrelated_group = true
+
+                # Default inactive
+                deprecated = true
+                nursery = true
+                pedantic = true
+            "#})
+            .with_scriptlet(
+                "vexes/test.star",
+                formatdoc! {r#"
+                    load('{check_path}', 'check')
+
+                    def init():
+                        vex.observe('open_project', on_open_project)
+
+                    def on_open_project(event):
+                        overridden_default_inactive_groups = [
+                            'deprecated',
+                            'nursery',
+                            'pedantic',
+                        ]
+                        for group in overridden_default_inactive_groups:
+                            check['true'](vex.active('some-lint', group=group))
                 "#,
                 check_path = VexTest::CHECK_STARLARK_PATH},
             )
