@@ -84,7 +84,7 @@ pub fn scan_project(
                     on_match,
                 } => project_queries.push((language, query, on_match)),
                 Intent::Observe { .. } => panic!("internal error: non-init observe"),
-                Intent::Warn(irr) => irritations.push(irr),
+                Intent::Warn(irr) => irritations.push(*irr),
                 Intent::ScanFile { .. } => {
                     panic!("internal error: unexpected ScanFile intent declared")
                 }
@@ -207,7 +207,7 @@ fn scan_file(file: &SourceFile, opts: VexFileOptions<'_>) -> Result<FileRunData>
                     on_match,
                 } => file_queries.push((language, query, on_match)),
                 Intent::Observe { .. } => panic!("internal error: non-init observe"),
-                Intent::Warn(irr) => irritations.push(irr.clone()),
+                Intent::Warn(irr) => irritations.push(*irr),
                 Intent::ScanFile { .. } => {
                     panic!("internal error: unexpected ScanFile intent declared")
                 }
@@ -266,7 +266,7 @@ fn scan_file(file: &SourceFile, opts: VexFileOptions<'_>) -> Result<FileRunData>
                             Intent::Observe { .. } => {
                                 panic!("internal error: non-init observe")
                             }
-                            Intent::Warn(irr) => irritations.push(irr),
+                            Intent::Warn(irr) => irritations.push(*irr),
                             Intent::ScanFile { .. } => {
                                 panic!("internal error: unexpected ScanFile intent declared")
                             }

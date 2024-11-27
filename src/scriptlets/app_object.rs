@@ -193,7 +193,7 @@ impl AppObject {
             if let Some(info) = info {
                 irritation_renderer.set_info(info);
             }
-            ret_data.declare_intent(UnfrozenIntent::Warn(irritation_renderer.render()));
+            ret_data.declare_intent(UnfrozenIntent::Warn(Box::new(irritation_renderer.render())));
 
             Ok(NoneType)
         }

@@ -56,7 +56,7 @@ impl Irritation {
         let group_id = group_id
             .as_ref()
             .map(|group_id| heap.alloc(group_id.as_str()))
-            .unwrap_or_else(|| Value::new_none());
+            .unwrap_or_else(Value::new_none);
         let lenient = Value::new_bool(lenient);
         let message = heap.alloc(message);
         let at = at
@@ -376,7 +376,7 @@ impl<'v> IrritationRenderer<'v> {
         let file_name = source.as_ref().map(|source| source.pretty_path().as_str());
         let group_info = group_id
             .as_ref()
-            .map(|group_id| format!("this lint is part of the ‘{group_id}’ group"));
+            .map(|group_id| format!("this lint is from the ‘{group_id}’ group"));
         let snippet = Snippet {
             title: Some(Annotation {
                 id: Some(lint_id.as_str()),
@@ -448,7 +448,7 @@ impl<'v> IrritationRenderer<'v> {
                 .chain(group_info.iter().map(|group_info| Annotation {
                     id: None,
                     label: Some(group_info),
-                    annotation_type: AnnotationType::Info,
+                    annotation_type: AnnotationType::Note,
                 }))
                 .collect(),
         };
