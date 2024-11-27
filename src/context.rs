@@ -151,7 +151,7 @@ impl Deref for Context {
 }
 
 #[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
-#[serde(rename_all = "kebab-case")]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Manifest {
     #[serde(rename = "vex")]
     pub run: RunConfig,
@@ -178,7 +178,7 @@ impl Manifest {
         [files]
         ignore = [ "vex.toml", "vexes/", ".git/", ".gitignore", "/target/" ]
 
-        [python]
+        [languages.python]
         use-for = [ "*.star" ]
     "#};
 
@@ -266,6 +266,7 @@ impl Manifest {
 }
 
 #[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct RunConfig {
     pub version: Version,
 
@@ -304,6 +305,7 @@ impl Default for VexesDir {
 }
 
 #[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct FilesConfig {
     #[serde(default, rename = "ignore")]
     pub ignores: IgnoreData,
@@ -313,12 +315,14 @@ pub struct FilesConfig {
 }
 
 #[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct LintsConfig {
     #[serde(rename = "active")]
     pub active_lints_config: BTreeMap<String, bool>,
 }
 
 #[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct GroupsConfig {
     #[serde(rename = "active")]
     pub active_groups_config: BTreeMap<String, bool>,
@@ -362,6 +366,7 @@ impl Deref for LanguagesConfig {
 }
 
 #[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct LanguageOptions {
     #[serde(rename = "use-for", default)]
     file_associations: Vec<RawFilePattern<String>>,
