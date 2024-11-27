@@ -69,7 +69,7 @@ impl PreinitingScriptlet {
         frozen_heap: &FrozenHeap,
     ) -> Result<InitingScriptlet> {
         let Self { path, ast, loads } = self;
-        let PreinitOptions { lenient, verbosity } = opts;
+        let PreinitOptions { verbosity } = opts;
 
         let preinited_module = {
             let preinited_module = Module::new();
@@ -88,7 +88,7 @@ impl PreinitingScriptlet {
                 eval.set_loader(&loader);
                 eval.set_print_handler(&print_handler);
                 eval.extra = Some(&temp_data);
-                eval.eval_module(ast, &Self::globals(*lenient))?;
+                eval.eval_module(ast, &Self::globals())?;
             };
             preinited_module.freeze()?
         };
@@ -100,9 +100,9 @@ impl PreinitingScriptlet {
         })
     }
 
-    fn globals(lenient: bool) -> Globals {
+    fn globals() -> Globals {
         let mut builder = GlobalsBuilder::extended_by(&[LibraryExtension::Print]);
-        let app = AppObject::new(lenient);
+        let app = AppObject::new();
         builder.set(AppObject::NAME, builder.alloc(app));
         builder.build()
     }

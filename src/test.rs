@@ -2,7 +2,6 @@ use std::{
     collections::BTreeMap,
     fs::{self, File},
     io::Write,
-    iter,
 };
 
 use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
@@ -41,7 +40,6 @@ pub(crate) fn run_tests(script_sources: &[impl ScriptSource]) -> Result<()> {
     let store = {
         let preinit_opts = PreinitOptions {
             verbosity: Verbosity::Quiet,
-            ..PreinitOptions::default()
         };
         let init_opts = InitOptions {
             verbosity: Verbosity::Quiet,
@@ -161,11 +159,11 @@ pub(crate) fn run_tests(script_sources: &[impl ScriptSource]) -> Result<()> {
             })?;
     }
 
-    let collect_run_data = |lenient| {
+    let run_data = {
         let sub_ctx = Context::new_with_manifest(&temp_dir_path, Manifest::default());
         let sub_store = {
             let verbosity = Verbosity::Quiet;
-            let preinit_opts = PreinitOptions { lenient, verbosity };
+            let preinit_opts = PreinitOptions { verbosity };
             let init_opts = InitOptions { verbosity };
             PreinitingStore::new(script_sources)?
                 .preinit(preinit_opts)?
@@ -178,20 +176,12 @@ pub(crate) fn run_tests(script_sources: &[impl ScriptSource]) -> Result<()> {
             MaxProblems::Unlimited,
             MaxConcurrentFileLimit::new(1),
             Verbosity::Quiet,
-        )
+        )?
     };
-    let nonlenient_run = collect_run_data(false)?;
-    let lenient_run = collect_run_data(true)?;
 
     {
         let handler_module = HandlerModule::new();
-
-        let irritations = nonlenient_run
-            .irritations
-            .into_iter()
-            .zip(iter::repeat(false))
-            .chain(lenient_run.irritations.into_iter().zip(iter::repeat(true)));
-        let event = PostTestRunEvent::new(irritations, handler_module.heap());
+        let event = PostTestRunEvent::new(run_data.irritations, handler_module.heap());
 
         let warning_filter = WarningFilter::all();
         let observer_opts = ObserveOptions {
@@ -411,9 +401,6 @@ mod test {
                             vex.observe('post_test_run', on_post_test_run)
 
                         def on_open_project(event):
-                            if vex.lenient:
-                                return
-
                             vex.search(
                                 'rust',
                                 '''

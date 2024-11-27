@@ -42,7 +42,7 @@ impl Irritation {
         self.at.as_ref().map(|(loc, _)| &loc.path)
     }
 
-    pub fn to_value_on<'v>(&self, lenient: bool, heap: &'v Heap) -> Value<'v> {
+    pub fn to_value_on<'v>(&self, heap: &'v Heap) -> Value<'v> {
         let Self {
             lint_id,
             group_id,
@@ -57,7 +57,6 @@ impl Irritation {
             .as_ref()
             .map(|group_id| heap.alloc(group_id.as_str()))
             .unwrap_or_else(Value::new_none);
-        let lenient = Value::new_bool(lenient);
         let message = heap.alloc(message);
         let at = at
             .as_ref()
@@ -76,7 +75,6 @@ impl Irritation {
         heap.alloc(IrritationValue {
             lint_id,
             group_id,
-            lenient,
             message,
             at,
             show_also,
@@ -184,7 +182,6 @@ impl Display for Irritation {
 struct IrritationValue<'v> {
     lint_id: Value<'v>,
     group_id: Value<'v>,
-    lenient: Value<'v>,
     message: Value<'v>,
     at: Value<'v>,
     show_also: Value<'v>,
@@ -195,7 +192,6 @@ struct IrritationValue<'v> {
 impl<'v> IrritationValue<'v> {
     const LINT_ID_ATTR_NAME: &'static str = "id";
     const GROUP_ID_ATTR_NAME: &'static str = "group";
-    const LENIENT_ATTR_NAME: &'static str = "lenient";
     const MESSAGE_ATTR_NAME: &'static str = "message";
     const AT_ATTR_NAME: &'static str = "at";
     const SHOW_ALSO_ATTR_NAME: &'static str = "show_also";
@@ -208,7 +204,6 @@ impl<'v> StarlarkValue<'v> for IrritationValue<'v> {
         [
             Self::LINT_ID_ATTR_NAME,
             Self::GROUP_ID_ATTR_NAME,
-            Self::LENIENT_ATTR_NAME,
             Self::MESSAGE_ATTR_NAME,
             Self::AT_ATTR_NAME,
             Self::SHOW_ALSO_ATTR_NAME,
@@ -223,7 +218,6 @@ impl<'v> StarlarkValue<'v> for IrritationValue<'v> {
         match attr {
             Self::LINT_ID_ATTR_NAME => Some(self.lint_id.dupe()),
             Self::GROUP_ID_ATTR_NAME => Some(self.group_id.dupe()),
-            Self::LENIENT_ATTR_NAME => Some(self.lenient.dupe()),
             Self::MESSAGE_ATTR_NAME => Some(self.message.dupe()),
             Self::AT_ATTR_NAME => Some(self.at.dupe()),
             Self::SHOW_ALSO_ATTR_NAME => Some(self.show_also.dupe()),
@@ -236,7 +230,6 @@ impl<'v> StarlarkValue<'v> for IrritationValue<'v> {
         [
             Self::LINT_ID_ATTR_NAME,
             Self::GROUP_ID_ATTR_NAME,
-            Self::LENIENT_ATTR_NAME,
             Self::MESSAGE_ATTR_NAME,
             Self::AT_ATTR_NAME,
             Self::SHOW_ALSO_ATTR_NAME,
