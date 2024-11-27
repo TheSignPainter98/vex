@@ -9,6 +9,7 @@ mod cli;
 mod context;
 mod dump;
 mod error;
+mod id;
 mod ignore_markers;
 mod irritation;
 mod logger;
@@ -24,7 +25,6 @@ mod supported_language;
 mod test;
 mod trigger;
 mod verbosity;
-mod vex_id;
 mod warning_filter;
 
 #[cfg(test)]
@@ -33,17 +33,16 @@ mod vextest;
 use std::{env, process::ExitCode};
 
 use camino::Utf8PathBuf;
-use context::Manifest;
 use indoc::{formatdoc, printdoc};
 use log::{debug, info, log_enabled};
 use rayon::ThreadPoolBuilder;
 use strum::IntoEnumIterator;
-use warning_filter::ActiveIds;
 
 use crate::{
     cli::{Args, CheckCmd, Command, InitCmd, ListCmd, ToList},
-    context::{Context, EXAMPLE_VEX_FILE},
+    context::{Context, Manifest, EXAMPLE_VEX_FILE},
     error::{Error, IOAction},
+    id::{GroupId, LintId},
     plural::Plural,
     result::Result,
     scan::ProjectRunData,
@@ -51,8 +50,7 @@ use crate::{
     source_path::PrettyPath,
     supported_language::SupportedLanguage,
     verbosity::Verbosity,
-    vex_id::VexId,
-    warning_filter::WarningFilter,
+    warning_filter::{ExclusionSet, WarningFilter},
 };
 
 // TODO(kcza): move the subcommands to separate files
@@ -197,9 +195,9 @@ pub(crate) fn try_make_warning_filter(manifest: &Manifest) -> Result<WarningFilt
         .iter()
         .filter(|(_, active)| !*active)
         .map(|(raw_id, _)| raw_id)
-        .map(|raw_id| VexId::try_from(raw_id.clone()))
+        .map(|raw_id| LintId::try_from(raw_id.clone()))
         .collect::<Result<_>>()?;
-    let active_lints = ActiveIds::from_inactive(inactive_lints);
+    let active_lints = ExclusionSet::from_excluded(inactive_lints);
 
     let default_inactive_groups =
         ["deprecated", "nursery", "pedantic"]
@@ -220,9 +218,9 @@ pub(crate) fn try_make_warning_filter(manifest: &Manifest) -> Result<WarningFilt
         .map(|(raw_id, _)| raw_id.as_str());
     let inactive_groups: Vec<_> = default_inactive_groups
         .chain(requested_inactive_groups)
-        .map(|raw_id| VexId::try_from(raw_id.to_owned()))
+        .map(|raw_id| GroupId::try_from(raw_id.to_owned()))
         .collect::<Result<_>>()?;
-    let active_groups = ActiveIds::from_inactive(inactive_groups);
+    let active_groups = ExclusionSet::from_excluded(inactive_groups);
 
     Ok(WarningFilter::new(active_lints, active_groups))
 }

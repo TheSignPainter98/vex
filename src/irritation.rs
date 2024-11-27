@@ -10,16 +10,17 @@ use starlark_derive::{
 };
 
 use crate::{
+    id::{GroupId, LintId},
     logger,
     scriptlets::{main_annotation::MainAnnotation, Location, Node},
     source_path::PrettyPath,
-    vex_id::VexId,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Allocative, Serialize, ProvidesStaticType)]
 #[non_exhaustive]
 pub struct Irritation {
-    vex_id: VexId,
+    lint_id: LintId,
+    group_id: Option<GroupId>,
     message: String,
     at: Option<(IrritationSource, Option<String>)>,
     show_also: Vec<(IrritationSource, String)>,
@@ -28,8 +29,13 @@ pub struct Irritation {
 }
 
 impl Irritation {
-    pub fn vex_id(&self) -> &VexId {
-        &self.vex_id
+    pub fn lint_id(&self) -> &LintId {
+        &self.lint_id
+    }
+
+    #[allow(unused)]
+    pub fn group_id(&self) -> Option<&GroupId> {
+        self.group_id.as_ref()
     }
 
     pub fn path(&self) -> Option<&PrettyPath> {
@@ -38,14 +44,19 @@ impl Irritation {
 
     pub fn to_value_on<'v>(&self, lenient: bool, heap: &'v Heap) -> Value<'v> {
         let Self {
-            vex_id,
+            lint_id,
+            group_id,
             message,
             at,
             show_also,
             info,
             rendered,
         } = self;
-        let vex_id = heap.alloc(vex_id.as_ref());
+        let lint_id = heap.alloc(lint_id.as_str());
+        let group_id = group_id
+            .as_ref()
+            .map(|group_id| heap.alloc(group_id.as_str()))
+            .unwrap_or_else(|| Value::new_none());
         let lenient = Value::new_bool(lenient);
         let message = heap.alloc(message);
         let at = at
@@ -63,7 +74,8 @@ impl Irritation {
             .unwrap_or_default();
         let rendered = rendered.clone();
         heap.alloc(IrritationValue {
-            vex_id,
+            lint_id,
+            group_id,
             lenient,
             message,
             at,
@@ -77,7 +89,8 @@ impl Irritation {
 impl Ord for Irritation {
     fn cmp(&self, other: &Self) -> Ordering {
         let Self {
-            vex_id,
+            lint_id,
+            group_id: _,
             message,
             at,
             show_also,
@@ -95,7 +108,7 @@ impl Ord for Irritation {
         }
         return (
             at.as_ref().map(loc),
-            vex_id,
+            lint_id,
             ComparableIterator(show_also.iter().map(loc)),
             info,
             at.as_ref().map(label),
@@ -104,7 +117,7 @@ impl Ord for Irritation {
         )
             .cmp(&(
                 other.at.as_ref().map(loc),
-                &other.vex_id,
+                &other.lint_id,
                 ComparableIterator(other.show_also.iter().map(loc)),
                 &other.info,
                 other.at.as_ref().map(label),
@@ -169,7 +182,8 @@ impl Display for Irritation {
 
 #[derive(Clone, Debug, Allocative, NoSerialize, ProvidesStaticType, Trace)]
 struct IrritationValue<'v> {
-    vex_id: Value<'v>,
+    lint_id: Value<'v>,
+    group_id: Value<'v>,
     lenient: Value<'v>,
     message: Value<'v>,
     at: Value<'v>,
@@ -179,7 +193,8 @@ struct IrritationValue<'v> {
 }
 
 impl<'v> IrritationValue<'v> {
-    const VEX_ID_ATTR_NAME: &'static str = "id";
+    const LINT_ID_ATTR_NAME: &'static str = "id";
+    const GROUP_ID_ATTR_NAME: &'static str = "group";
     const LENIENT_ATTR_NAME: &'static str = "lenient";
     const MESSAGE_ATTR_NAME: &'static str = "message";
     const AT_ATTR_NAME: &'static str = "at";
@@ -191,7 +206,8 @@ impl<'v> IrritationValue<'v> {
 impl<'v> StarlarkValue<'v> for IrritationValue<'v> {
     fn dir_attr(&self) -> Vec<String> {
         [
-            Self::VEX_ID_ATTR_NAME,
+            Self::LINT_ID_ATTR_NAME,
+            Self::GROUP_ID_ATTR_NAME,
             Self::LENIENT_ATTR_NAME,
             Self::MESSAGE_ATTR_NAME,
             Self::AT_ATTR_NAME,
@@ -205,7 +221,8 @@ impl<'v> StarlarkValue<'v> for IrritationValue<'v> {
 
     fn get_attr(&self, attr: &str, _heap: &'v Heap) -> Option<Value<'v>> {
         match attr {
-            Self::VEX_ID_ATTR_NAME => Some(self.vex_id.dupe()),
+            Self::LINT_ID_ATTR_NAME => Some(self.lint_id.dupe()),
+            Self::GROUP_ID_ATTR_NAME => Some(self.group_id.dupe()),
             Self::LENIENT_ATTR_NAME => Some(self.lenient.dupe()),
             Self::MESSAGE_ATTR_NAME => Some(self.message.dupe()),
             Self::AT_ATTR_NAME => Some(self.at.dupe()),
@@ -217,7 +234,7 @@ impl<'v> StarlarkValue<'v> for IrritationValue<'v> {
 
     fn has_attr(&self, attr: &str, _heap: &'v Heap) -> bool {
         [
-            Self::VEX_ID_ATTR_NAME,
+            Self::LINT_ID_ATTR_NAME,
             Self::LENIENT_ATTR_NAME,
             Self::MESSAGE_ATTR_NAME,
             Self::AT_ATTR_NAME,
@@ -309,7 +326,8 @@ impl Display for IrritationSource {
 }
 
 pub struct IrritationRenderer<'v> {
-    vex_id: VexId,
+    lint_id: LintId,
+    group_id: Option<GroupId>,
     message: &'v str,
     source: Option<MainAnnotation<'v>>,
     show_also: Vec<(Node<'v>, &'v str)>,
@@ -317,14 +335,19 @@ pub struct IrritationRenderer<'v> {
 }
 
 impl<'v> IrritationRenderer<'v> {
-    pub fn new(vex_id: VexId, message: &'v str) -> Self {
+    pub fn new(lint_id: LintId, message: &'v str) -> Self {
         Self {
-            vex_id,
+            lint_id,
+            group_id: None,
             message,
             source: None,
             show_also: Vec::with_capacity(0),
             info: None,
         }
+    }
+
+    pub fn set_group_id(&mut self, group_id: GroupId) {
+        self.group_id = Some(group_id);
     }
 
     pub fn set_source(&mut self, source: MainAnnotation<'v>) {
@@ -341,7 +364,8 @@ impl<'v> IrritationRenderer<'v> {
 
     pub fn render(self) -> Irritation {
         let Self {
-            vex_id,
+            lint_id,
+            group_id,
             source,
             message,
             show_also,
@@ -349,9 +373,12 @@ impl<'v> IrritationRenderer<'v> {
         } = self;
 
         let file_name = source.as_ref().map(|source| source.pretty_path().as_str());
+        let group_info = group_id
+            .as_ref()
+            .map(|group_id| format!("this lint is part of the ‘{group_id}’ group"));
         let snippet = Snippet {
             title: Some(Annotation {
-                id: Some(vex_id.as_ref()),
+                id: Some(lint_id.as_str()),
                 label: Some(message),
                 annotation_type: AnnotationType::Warning,
             }),
@@ -417,6 +444,11 @@ impl<'v> IrritationRenderer<'v> {
                     label: Some(info),
                     annotation_type: AnnotationType::Info,
                 })
+                .chain(group_info.iter().map(|group_info| Annotation {
+                    id: None,
+                    label: Some(group_info),
+                    annotation_type: AnnotationType::Info,
+                }))
                 .collect(),
         };
 
@@ -437,7 +469,8 @@ impl<'v> IrritationRenderer<'v> {
             .collect();
         let info = info.map(|e| e.to_string());
         Irritation {
-            vex_id,
+            lint_id,
+            group_id,
             message,
             at,
             show_also,

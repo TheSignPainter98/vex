@@ -342,7 +342,7 @@ impl<'v> IrritationsByFile<'v> {
                 .unwrap_or(Cow::Borrowed("no-file"));
             match entry_map.entry(key) {
                 Entry::Occupied(mut entry) => {
-                    match entry.get_mut().entry(irritation.vex_id().to_string()) {
+                    match entry.get_mut().entry(irritation.lint_id().to_string()) {
                         Entry::Occupied(mut entry) => entry.get_mut().push((irritation, lenient)),
                         Entry::Vacant(entry) => {
                             entry.insert(smallvec![(irritation, lenient)]);
@@ -351,7 +351,7 @@ impl<'v> IrritationsByFile<'v> {
                 }
                 Entry::Vacant(entry) => {
                     entry.insert(BTreeMap::from_iter([(
-                        irritation.vex_id().to_string(),
+                        irritation.lint_id().to_string(),
                         smallvec![(irritation, lenient)],
                     )]));
                 }

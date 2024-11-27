@@ -16,6 +16,7 @@ use starlark_derive::starlark_value;
 
 use crate::{
     error::Error,
+    id::{GroupId, LintId},
     irritation::IrritationRenderer,
     query::Query,
     result::Result,
@@ -30,7 +31,6 @@ use crate::{
     },
     source_path::PrettyPath,
     supported_language::SupportedLanguage,
-    vex_id::VexId,
 };
 
 #[derive(Debug, PartialEq, Eq, new, ProvidesStaticType, NoSerialize, Allocative)]
@@ -79,10 +79,10 @@ impl AppObject {
                 ],
             )?;
 
-            let lint_id = VexId::try_from(id.to_string())?;
+            let lint_id = LintId::try_from(id.to_string())?;
             let group_id = group
                 .map(ToOwned::to_owned)
-                .map(VexId::try_from)
+                .map(GroupId::try_from)
                 .transpose()?;
             let temp_data = TempData::get_from(eval);
             let active = temp_data.warning_filter.is_some_and(|warning_filter| {
@@ -134,11 +134,12 @@ impl AppObject {
         #[allow(clippy::too_many_arguments)]
         fn warn<'v>(
             #[starlark(this)] _this: Value<'v>,
-            #[starlark(require=pos)] vex_id: &'v str,
+            #[starlark(require=pos)] lint_id: &'v str,
             #[starlark(require=pos)] message: &'v str,
             #[starlark(require=named)] at: Option<MainAnnotation<'v>>,
             #[starlark(require=named)] show_also: Option<UnpackList<(Node<'v>, &'v str)>>,
             #[starlark(require=named)] info: Option<&'v str>,
+            #[starlark(require=named)] group: Option<&'v str>,
             eval: &mut Evaluator<'v, '_>,
         ) -> anyhow::Result<NoneType> {
             AppObject::check_attr_available(
@@ -163,12 +164,15 @@ impl AppObject {
                 .into());
             }
 
-            let vex_id = VexId::try_from(vex_id.to_string())?;
+            let lint_id = LintId::try_from(lint_id.to_owned())?;
+            let group_id = group
+                .map(|group| GroupId::try_from(group.to_owned()))
+                .transpose()?;
 
             let temp_data = TempData::get_from(eval);
             let ignored = at.as_ref().and_then(|at| at.node()).is_some_and(|node| {
                 temp_data.ignore_markers.is_some_and(|ignore_markers| {
-                    ignore_markers.is_ignored(node.byte_range().start, &vex_id)
+                    ignore_markers.is_ignored(node.byte_range().start, &lint_id)
                 })
             });
             if ignored {
@@ -176,9 +180,12 @@ impl AppObject {
             }
 
             let ret_data = UnfrozenRetainedData::get_from(eval.module());
-            let mut irritation_renderer = IrritationRenderer::new(vex_id, message);
+            let mut irritation_renderer = IrritationRenderer::new(lint_id, message);
+            if let Some(group_id) = group_id {
+                irritation_renderer.set_group_id(group_id);
+            }
             if let Some(at) = at {
-                irritation_renderer.set_source(at)
+                irritation_renderer.set_source(at);
             }
             if let Some(show_also) = show_also {
                 irritation_renderer.set_show_also(show_also.items);
