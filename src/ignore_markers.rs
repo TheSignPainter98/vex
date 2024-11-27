@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use smallvec::SmallVec;
 
-use crate::{error::Error, result::RecoverableResult, vex_id::VexId};
+use crate::{error::Error, id::LintId, result::RecoverableResult};
 
 #[derive(Debug)]
 pub struct IgnoreMarkers {
@@ -15,7 +15,7 @@ impl IgnoreMarkers {
         IgnoreMarkersBuilder::new()
     }
 
-    pub fn is_ignored(&self, byte_index: usize, vex_id: &VexId) -> bool {
+    pub fn is_ignored(&self, byte_index: usize, id: &LintId) -> bool {
         if self.markers.is_empty() {
             return false;
         }
@@ -38,7 +38,7 @@ impl IgnoreMarkers {
                 .partition_point(|marker| marker.byte_range.start <= byte_index);
         self.markers[first_possible_index..last_possible_index]
             .iter()
-            .filter(|marker| marker.filter.covers(vex_id))
+            .filter(|marker| marker.filter.covers(id))
             .any(|marker| marker.byte_range.contains(&byte_index))
     }
 
@@ -63,7 +63,7 @@ impl IgnoreMarkersBuilder {
         Self::default()
     }
 
-    pub fn add(&mut self, byte_range: Range<usize>, filter: VexIdFilter) {
+    pub fn add(&mut self, byte_range: Range<usize>, filter: LintIdFilter) {
         self.markers.push(IgnoreMarker { byte_range, filter })
     }
 
@@ -102,24 +102,24 @@ impl IgnoreMarkersBuilder {
 #[derive(Debug)]
 pub struct IgnoreMarker {
     byte_range: Range<usize>,
-    filter: VexIdFilter,
+    filter: LintIdFilter,
 }
 
 #[cfg(test)]
 impl IgnoreMarker {
-    pub fn filter(&self) -> &VexIdFilter {
+    pub fn filter(&self) -> &LintIdFilter {
         &self.filter
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum VexIdFilter {
+pub enum LintIdFilter {
     All,
-    Specific(SmallVec<[VexId; 2]>),
+    Specific(SmallVec<[LintId; 2]>),
 }
 
-impl VexIdFilter {
-    // This function creates a new `VexIdFilter` from a comma-separated list of stringified
+impl LintIdFilter {
+    // This function creates a new `LintIdFilter` from a comma-separated list of stringified
     // pretty vex ids. If any vex ids are unknown, the first unknown one will be returned as an
     // error.
     pub fn try_from_iter<'a>(
@@ -136,7 +136,7 @@ impl VexIdFilter {
                 star_found = true;
                 continue;
             }
-            match VexId::try_from(raw_id.to_string()) {
+            match LintId::try_from(raw_id.to_string()) {
                 Ok(id) => ids.push(id),
                 Err(err) => errs.push(err),
             };
@@ -157,10 +157,10 @@ impl VexIdFilter {
         RecoverableResult::Ok(ret)
     }
 
-    fn covers(&self, vex_id: &VexId) -> bool {
+    fn covers(&self, id: &LintId) -> bool {
         match self {
             Self::All => true,
-            Self::Specific(ids) => ids.contains(vex_id),
+            Self::Specific(ids) => ids.contains(id),
         }
     }
 
@@ -188,9 +188,9 @@ mod test {
 
     #[test]
     fn ignore_ranges() {
-        let vex_id = VexId::try_from("foo-bar".to_string()).unwrap();
+        let lint_id = LintId::try_from("foo-bar".to_string()).unwrap();
         let ignore_markers = {
-            let filter = VexIdFilter::Specific(smallvec![vex_id.clone()]);
+            let filter = LintIdFilter::Specific(smallvec![lint_id.clone()]);
             let mut builder = IgnoreMarkers::builder();
             builder.add(3..10, filter.clone());
             builder.add(4..9, filter.clone());
@@ -216,10 +216,10 @@ mod test {
         ];
         tests.into_iter().for_each(|(index, expected)| {
             assert_eq!(
-                ignore_markers.is_ignored(index, &vex_id),
+                ignore_markers.is_ignored(index, &lint_id),
                 expected,
                 "index {index}: expected {expected}, got {}",
-                ignore_markers.is_ignored(index, &vex_id)
+                ignore_markers.is_ignored(index, &lint_id)
             );
         });
     }
@@ -230,12 +230,12 @@ mod test {
 
         const ID1: &str = "some-okay-id";
         const ID2: &str = "some-okay-id";
-        match VexIdFilter::try_from_iter([ID1, ID2].into_iter()) {
+        match LintIdFilter::try_from_iter([ID1, ID2].into_iter()) {
             Ok(filter) => assert_eq!(
                 filter,
-                VexIdFilter::Specific(smallvec![
-                    VexId::try_from(ID1.to_string()).unwrap(),
-                    VexId::try_from(ID2.to_string()).unwrap()
+                LintIdFilter::Specific(smallvec![
+                    LintId::try_from(ID1.to_string()).unwrap(),
+                    LintId::try_from(ID2.to_string()).unwrap()
                 ])
             ),
             Recovered(_, errs) => panic!("unexpected errors: {errs:?}"),
@@ -243,7 +243,7 @@ mod test {
             Err(err) => panic!("unexpected unrecoverable error: {err}"),
         }
 
-        match VexIdFilter::try_from_iter(["hello", "*", "<><><><>"].into_iter()) {
+        match LintIdFilter::try_from_iter(["hello", "*", "<><><><>"].into_iter()) {
             Ok(_) => panic!("expected result"),
             Recovered(filter, errs) => {
                 assert!(!errs.is_empty());
@@ -256,7 +256,7 @@ mod test {
                     }
                 )));
 
-                assert_eq!(filter, VexIdFilter::All);
+                assert_eq!(filter, LintIdFilter::All);
             }
             Err(err) => panic!("unexpected unrecoverable error: {err}"),
         }

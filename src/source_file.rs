@@ -11,7 +11,7 @@ use crate::{
     cli::MaxConcurrentFileLimit,
     context::{Context, Manifest},
     error::{Error, IOAction},
-    ignore_markers::{IgnoreMarkers, VexIdFilter},
+    ignore_markers::{IgnoreMarkers, LintIdFilter},
     result::{RecoverableResult, Result},
     scriptlets::{Location, Node},
     source_path::SourcePath,
@@ -251,7 +251,7 @@ impl ParsedSourceFile {
                     let raw_parts = raw_text[ids_start_index..]
                         .split(',')
                         .map(|raw_part| raw_part.trim());
-                    let filter = match VexIdFilter::try_from_iter(raw_parts) {
+                    let filter = match LintIdFilter::try_from_iter(raw_parts) {
                         RecoverableResult::Ok(filter) => filter,
                         RecoverableResult::Recovered(filter, errs) => {
                             for err in errs {
@@ -315,7 +315,7 @@ mod test {
 
     use indoc::indoc;
 
-    use crate::vex_id::VexId;
+    use crate::id::LintId;
 
     use super::{sources_in_dir, *};
 
@@ -382,16 +382,16 @@ mod test {
             panic!("incorrect markers")
         };
         assert!(
-            matches!(marker.filter(), VexIdFilter::All),
+            matches!(marker.filter(), LintIdFilter::All),
             "incorrect marker, got {marker:?}"
         )
     }
 
     #[test]
     fn specific_ignore_markers() {
-        let id1 = VexId::try_from("some-lint".to_string()).unwrap();
-        let id2 = VexId::try_from("some-other-lint".to_string()).unwrap();
-        let id3 = VexId::try_from("some-different-lint".to_string()).unwrap();
+        let id1 = LintId::try_from("some-lint".to_string()).unwrap();
+        let id2 = LintId::try_from("some-other-lint".to_string()).unwrap();
+        let id3 = LintId::try_from("some-different-lint".to_string()).unwrap();
         let source_file = ParsedSourceFile::new_with_content(
             SourcePath::new_in("src/main.rs".into(), "".into()),
             indoc! {r#"
@@ -409,8 +409,8 @@ mod test {
             panic!("incorrect markers")
         };
         let specific_ids = match marker.filter() {
-            VexIdFilter::All => panic!("incorrect marker, got {marker:?}"),
-            VexIdFilter::Specific(ids) => ids,
+            LintIdFilter::All => panic!("incorrect marker, got {marker:?}"),
+            LintIdFilter::Specific(ids) => ids,
         };
         assert_eq!(&specific_ids[..], [id1, id2, id3]);
     }
@@ -434,8 +434,8 @@ mod test {
             panic!("incorrect markers")
         };
         let specific_ids = match marker.filter() {
-            VexIdFilter::All => panic!("incorrect marker, got {marker:?}"),
-            VexIdFilter::Specific(ids) => ids,
+            LintIdFilter::All => panic!("incorrect marker, got {marker:?}"),
+            LintIdFilter::Specific(ids) => ids,
         };
         assert!(specific_ids.is_empty());
     }
@@ -459,7 +459,7 @@ mod test {
             panic!("incorrect markers");
         };
         match marker.filter() {
-            VexIdFilter::Specific(ids) => assert!(ids.is_empty()),
+            LintIdFilter::Specific(ids) => assert!(ids.is_empty()),
             _ => panic!("unexpected filter in marker: {marker:?}"),
         }
     }

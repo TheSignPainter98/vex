@@ -8,13 +8,13 @@ use starlark::{
 use starlark_derive::{starlark_value, NoSerialize, ProvidesStaticType, Trace};
 
 use crate::{
-    active_lints::ActiveLints,
     ignore_markers::IgnoreMarkers,
     result::Result,
     scriptlets::{
         action::Action, event::EventKind, extra_data::TempData, handler_module::HandlerModule,
         print_handler::PrintHandler, query_cache::QueryCache,
     },
+    warning_filter::WarningFilter,
 };
 
 #[derive(Debug, derive_more::Display, NoSerialize, ProvidesStaticType, Allocative)]
@@ -133,7 +133,7 @@ pub struct ObserveOptions<'v> {
     pub query_cache: Option<&'v QueryCache>,
     pub ignore_markers: Option<&'v IgnoreMarkers>,
     pub print_handler: &'v PrintHandler<'v>,
-    pub active_lints: Option<&'v ActiveLints>,
+    pub warning_filter: Option<&'v WarningFilter>,
 }
 
 impl Observable for Observer {
@@ -148,13 +148,13 @@ impl Observable for Observer {
             query_cache,
             ignore_markers,
             print_handler,
-            active_lints,
+            warning_filter,
         } = opts;
         let temp_data = TempData {
             action,
             query_cache,
             ignore_markers,
-            active_lints,
+            warning_filter,
         };
         let mut eval = Evaluator::new(handler_module);
         eval.extra = Some(&temp_data);

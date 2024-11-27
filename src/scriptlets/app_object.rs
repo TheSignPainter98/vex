@@ -16,6 +16,7 @@ use starlark_derive::starlark_value;
 
 use crate::{
     error::Error,
+    id::{GroupId, LintId},
     irritation::IrritationRenderer,
     query::Query,
     result::Result,
@@ -30,7 +31,6 @@ use crate::{
     },
     source_path::PrettyPath,
     supported_language::SupportedLanguage,
-    vex_id::VexId,
 };
 
 #[derive(Debug, PartialEq, Eq, new, ProvidesStaticType, NoSerialize, Allocative)]
@@ -67,6 +67,7 @@ impl AppObject {
         fn active<'v>(
             #[starlark(this)] _this: Value<'v>,
             #[starlark(require=pos)] id: &'v str,
+            #[starlark(require=named)] group: Option<&'v str>,
             eval: &mut Evaluator<'v, '_>,
         ) -> anyhow::Result<bool> {
             AppObject::check_attr_available(
@@ -78,11 +79,20 @@ impl AppObject {
                 ],
             )?;
 
-            let vex_id = VexId::try_from(id.to_string())?;
+            let lint_id = LintId::try_from(id.to_string())?;
+            let group_id = group
+                .map(ToOwned::to_owned)
+                .map(GroupId::try_from)
+                .transpose()?;
             let temp_data = TempData::get_from(eval);
-            Ok(temp_data
-                .active_lints
-                .is_some_and(|active_lints| active_lints.is_active(&vex_id)))
+            let active = temp_data.warning_filter.is_some_and(|warning_filter| {
+                if let Some(group_id) = group_id {
+                    warning_filter.is_active_with_group(&lint_id, &group_id)
+                } else {
+                    warning_filter.is_active(&lint_id)
+                }
+            });
+            Ok(active)
         }
 
         fn search<'v>(
@@ -124,11 +134,12 @@ impl AppObject {
         #[allow(clippy::too_many_arguments)]
         fn warn<'v>(
             #[starlark(this)] _this: Value<'v>,
-            #[starlark(require=pos)] vex_id: &'v str,
+            #[starlark(require=pos)] lint_id: &'v str,
             #[starlark(require=pos)] message: &'v str,
             #[starlark(require=named)] at: Option<MainAnnotation<'v>>,
             #[starlark(require=named)] show_also: Option<UnpackList<(Node<'v>, &'v str)>>,
             #[starlark(require=named)] info: Option<&'v str>,
+            #[starlark(require=named)] group: Option<&'v str>,
             eval: &mut Evaluator<'v, '_>,
         ) -> anyhow::Result<NoneType> {
             AppObject::check_attr_available(
@@ -153,12 +164,15 @@ impl AppObject {
                 .into());
             }
 
-            let vex_id = VexId::try_from(vex_id.to_string())?;
+            let lint_id = LintId::try_from(lint_id.to_owned())?;
+            let group_id = group
+                .map(|group| GroupId::try_from(group.to_owned()))
+                .transpose()?;
 
             let temp_data = TempData::get_from(eval);
             let ignored = at.as_ref().and_then(|at| at.node()).is_some_and(|node| {
                 temp_data.ignore_markers.is_some_and(|ignore_markers| {
-                    ignore_markers.is_ignored(node.byte_range().start, &vex_id)
+                    ignore_markers.is_ignored(node.byte_range().start, &lint_id)
                 })
             });
             if ignored {
@@ -166,9 +180,12 @@ impl AppObject {
             }
 
             let ret_data = UnfrozenRetainedData::get_from(eval.module());
-            let mut irritation_renderer = IrritationRenderer::new(vex_id, message);
+            let mut irritation_renderer = IrritationRenderer::new(lint_id, message);
+            if let Some(group_id) = group_id {
+                irritation_renderer.set_group_id(group_id);
+            }
             if let Some(at) = at {
-                irritation_renderer.set_source(at)
+                irritation_renderer.set_source(at);
             }
             if let Some(show_also) = show_also {
                 irritation_renderer.set_show_also(show_also.items);
@@ -176,7 +193,7 @@ impl AppObject {
             if let Some(info) = info {
                 irritation_renderer.set_info(info);
             }
-            ret_data.declare_intent(UnfrozenIntent::Warn(irritation_renderer.render()));
+            ret_data.declare_intent(UnfrozenIntent::Warn(Box::new(irritation_renderer.render())));
 
             Ok(NoneType)
         }
@@ -302,22 +319,25 @@ mod test {
 
                         vex.warn('{VEX_NAME}', 'test-01')
                         vex.warn('{VEX_NAME}', 'test-00')
-                        vex.warn('{VEX_NAME}', 'test-03', info=info)
-                        vex.warn('{VEX_NAME}', 'test-02', info=info)
-                        vex.warn('{VEX_NAME}', 'test-04', at=at_path_unlabelled)
-                        vex.warn('{VEX_NAME}', 'test-05', at=at_path_labelled)
-                        vex.warn('{VEX_NAME}', 'test-07', at=at_node_unlabelled)
-                        vex.warn('{VEX_NAME}', 'test-06', at=at_node_unlabelled)
-                        vex.warn('{VEX_NAME}', 'test-09', at=at_node_labelled)
-                        vex.warn('{VEX_NAME}', 'test-08', at=at_node_labelled)
-                        vex.warn('{VEX_NAME}', 'test-11', at=at_node_unlabelled, show_also=show_also)
-                        vex.warn('{VEX_NAME}', 'test-10', at=at_node_unlabelled, show_also=show_also)
-                        vex.warn('{VEX_NAME}', 'test-13', at=at_node_labelled, show_also=show_also)
-                        vex.warn('{VEX_NAME}', 'test-12', at=at_node_labelled, show_also=show_also)
-                        vex.warn('{VEX_NAME}', 'test-15', at=at_node_unlabelled, show_also=show_also, info=info)
-                        vex.warn('{VEX_NAME}', 'test-14', at=at_node_unlabelled, show_also=show_also, info=info)
-                        vex.warn('{VEX_NAME}', 'test-17', at=at_node_labelled, show_also=show_also, info=info)
-                        vex.warn('{VEX_NAME}', 'test-16', at=at_node_labelled, show_also=show_also, info=info)
+                        vex.warn('{VEX_NAME}', 'test-02-dup', group='group-2')
+                        vex.warn('{VEX_NAME}', 'test-02-dup', group='group-1')
+                        vex.warn('{VEX_NAME}', 'test-05', info=info)
+                        vex.warn('{VEX_NAME}', 'test-04', info=info)
+                        vex.warn('{VEX_NAME}', 'test-06', at=at_path_unlabelled)
+                        vex.warn('{VEX_NAME}', 'test-07', at=at_path_labelled)
+                        vex.warn('{VEX_NAME}', 'test-09', at=at_node_unlabelled)
+                        vex.warn('{VEX_NAME}', 'test-08', at=at_node_unlabelled)
+                        vex.warn('{VEX_NAME}', 'test-11', at=at_node_labelled)
+                        vex.warn('{VEX_NAME}', 'test-10', at=at_node_labelled)
+                        vex.warn('{VEX_NAME}', 'test-13', at=at_node_unlabelled, show_also=show_also)
+                        vex.warn('{VEX_NAME}', 'test-12', at=at_node_unlabelled, show_also=show_also)
+                        vex.warn('{VEX_NAME}', 'test-15', at=at_node_labelled, show_also=show_also)
+                        vex.warn('{VEX_NAME}', 'test-14', at=at_node_labelled, show_also=show_also)
+                        vex.warn('{VEX_NAME}', 'test-17', at=at_node_unlabelled, show_also=show_also, info=info)
+                        vex.warn('{VEX_NAME}', 'test-16', at=at_node_unlabelled, show_also=show_also, info=info)
+                        vex.warn('{VEX_NAME}', 'test-19', at=at_node_labelled, show_also=show_also, info=info)
+                        vex.warn('{VEX_NAME}', 'test-18', at=at_node_labelled, show_also=show_also, info=info)
+                        vex.warn('{VEX_NAME}', 'test-20', at=at_node_labelled, show_also=show_also, info=info, group='group-3')
                 "#},
             )
             .with_source_file(
@@ -335,7 +355,7 @@ mod test {
             .into_iter()
             .map(|irr| irr.to_string())
             .collect::<Vec<_>>();
-        assert_eq!(irritations.len(), 18);
+        assert_eq!(irritations.len(), 21);
 
         let assert_contains = |irritation: &str, strings: &[&str]| {
             strings.iter().for_each(|string| {
@@ -347,46 +367,48 @@ mod test {
         };
         assert_contains(&irritations[0], &[VEX_NAME, "test-00"]);
         assert_contains(&irritations[1], &[VEX_NAME, "test-01"]);
-        assert_contains(&irritations[2], &[VEX_NAME, "test-02", INFO]);
-        assert_contains(&irritations[3], &[VEX_NAME, "test-03", INFO]);
-        assert_contains(&irritations[4], &[VEX_NAME, "test-04", FILE_NAME]);
+        assert_contains(&irritations[2], &[VEX_NAME, "test-02-dup", "group-2"]);
+        assert_contains(&irritations[3], &[VEX_NAME, "test-02-dup", "group-1"]);
+        assert_contains(&irritations[4], &[VEX_NAME, "test-04", INFO]);
+        assert_contains(&irritations[5], &[VEX_NAME, "test-05", INFO]);
+        assert_contains(&irritations[6], &[VEX_NAME, "test-06", FILE_NAME]);
         assert_contains(
-            &irritations[5],
-            &[VEX_NAME, "test-05", FILE_NAME, AT_PATH_LABEL],
+            &irritations[7],
+            &[VEX_NAME, "test-07", FILE_NAME, AT_PATH_LABEL],
         );
-        assert_contains(&irritations[6], &[VEX_NAME, "test-06"]);
-        assert_contains(&irritations[7], &[VEX_NAME, "test-07"]);
-        assert_contains(&irritations[8], &[VEX_NAME, "test-08", AT_NODE_LABEL]);
-        assert_contains(&irritations[9], &[VEX_NAME, "test-09", AT_NODE_LABEL]);
-        assert_contains(
-            &irritations[10],
-            &[VEX_NAME, "test-10", SHOW_ALSO_L, SHOW_ALSO_R],
-        );
-        assert_contains(
-            &irritations[11],
-            &[VEX_NAME, "test-11", SHOW_ALSO_L, SHOW_ALSO_R],
-        );
+        assert_contains(&irritations[8], &[VEX_NAME, "test-08"]);
+        assert_contains(&irritations[9], &[VEX_NAME, "test-09"]);
+        assert_contains(&irritations[10], &[VEX_NAME, "test-10", AT_NODE_LABEL]);
+        assert_contains(&irritations[11], &[VEX_NAME, "test-11", AT_NODE_LABEL]);
         assert_contains(
             &irritations[12],
-            &[VEX_NAME, "test-12", AT_NODE_LABEL, SHOW_ALSO_L, SHOW_ALSO_R],
+            &[VEX_NAME, "test-12", SHOW_ALSO_L, SHOW_ALSO_R],
         );
         assert_contains(
             &irritations[13],
-            &[VEX_NAME, "test-13", AT_NODE_LABEL, SHOW_ALSO_L, SHOW_ALSO_R],
+            &[VEX_NAME, "test-13", SHOW_ALSO_L, SHOW_ALSO_R],
         );
         assert_contains(
             &irritations[14],
-            &[VEX_NAME, "test-14", SHOW_ALSO_L, SHOW_ALSO_R, INFO],
+            &[VEX_NAME, "test-14", AT_NODE_LABEL, SHOW_ALSO_L, SHOW_ALSO_R],
         );
         assert_contains(
             &irritations[15],
-            &[VEX_NAME, "test-15", SHOW_ALSO_L, SHOW_ALSO_R, INFO],
+            &[VEX_NAME, "test-15", AT_NODE_LABEL, SHOW_ALSO_L, SHOW_ALSO_R],
         );
         assert_contains(
             &irritations[16],
+            &[VEX_NAME, "test-16", SHOW_ALSO_L, SHOW_ALSO_R, INFO],
+        );
+        assert_contains(
+            &irritations[17],
+            &[VEX_NAME, "test-17", SHOW_ALSO_L, SHOW_ALSO_R, INFO],
+        );
+        assert_contains(
+            &irritations[18],
             &[
                 VEX_NAME,
-                "test-16",
+                "test-18",
                 AT_NODE_LABEL,
                 SHOW_ALSO_L,
                 SHOW_ALSO_R,
@@ -394,14 +416,26 @@ mod test {
             ],
         );
         assert_contains(
-            &irritations[17],
+            &irritations[19],
             &[
                 VEX_NAME,
-                "test-17",
+                "test-19",
                 AT_NODE_LABEL,
                 SHOW_ALSO_L,
                 SHOW_ALSO_R,
                 INFO,
+            ],
+        );
+        assert_contains(
+            &irritations[20],
+            &[
+                VEX_NAME,
+                "test-20",
+                AT_NODE_LABEL,
+                SHOW_ALSO_L,
+                SHOW_ALSO_R,
+                INFO,
+                "group-3",
             ],
         );
 

@@ -11,7 +11,6 @@ use log::{error, log_enabled};
 use starlark::values::FrozenHeap;
 
 use crate::{
-    active_lints::ActiveLints,
     associations::Associations,
     cli::{MaxConcurrentFileLimit, MaxProblems},
     context::{Context, Manifest},
@@ -30,6 +29,7 @@ use crate::{
     },
     source_path::{PrettyPath, SourcePath},
     verbosity::Verbosity,
+    warning_filter::WarningFilter,
 };
 
 pub fn test() -> Result<()> {
@@ -56,13 +56,13 @@ pub(crate) fn run_tests(script_sources: &[impl ScriptSource]) -> Result<()> {
         let frozen_heap = FrozenHeap::new();
         let event = PreTestRunEvent;
         let handler_module = HandlerModule::new();
-        let active_lints = ActiveLints::all();
+        let warning_filter = WarningFilter::all();
         let observe_opts = ObserveOptions {
             action: Action::Vexing(event.kind()),
             query_cache: Some(&query_cache),
             ignore_markers: None,
             print_handler: &PrintHandler::new(logger::verbosity(), event.kind().name()),
-            active_lints: Some(&active_lints),
+            warning_filter: Some(&warning_filter),
         };
         store.observers_for(event.kind()).observe(
             &handler_module,
@@ -174,7 +174,7 @@ pub(crate) fn run_tests(script_sources: &[impl ScriptSource]) -> Result<()> {
         scan::scan_project(
             &sub_ctx,
             &sub_store,
-            ActiveLints::all(),
+            WarningFilter::all(),
             MaxProblems::Unlimited,
             MaxConcurrentFileLimit::new(1),
             Verbosity::Quiet,
@@ -193,13 +193,13 @@ pub(crate) fn run_tests(script_sources: &[impl ScriptSource]) -> Result<()> {
             .chain(lenient_run.irritations.into_iter().zip(iter::repeat(true)));
         let event = PostTestRunEvent::new(irritations, handler_module.heap());
 
-        let active_lints = ActiveLints::all();
+        let warning_filter = WarningFilter::all();
         let observer_opts = ObserveOptions {
             action: Action::Vexing(event.kind()),
             query_cache: Some(&query_cache),
             ignore_markers: None,
             print_handler: &PrintHandler::new(logger::verbosity(), event.kind().name()),
-            active_lints: Some(&active_lints),
+            warning_filter: Some(&warning_filter),
         };
         store.observers_for(event.kind()).observe(
             &handler_module,
@@ -436,6 +436,11 @@ mod test {
                             )
                             vex.warn(
                                 'test',
+                                'with-group',
+                                group='some-group'
+                            )
+                            vex.warn(
+                                'test',
                                 'with-at-without-label',
                                 at=bin_expr,
                             )
@@ -474,6 +479,10 @@ mod test {
                             expected_warnings = [{{
                                 'id': 'test',
                                 'message': 'just-message',
+                            }}, {{
+                                'id': 'test',
+                                'message': 'with-group',
+                                'group': 'some-group',
                             }}, {{
                                 'id': 'test',
                                 'message': 'with-info',
@@ -554,6 +563,12 @@ mod test {
                                         check['eq'](actual_label, None)
                                 else:
                                     check['eq'](actual_warning.at, None)
+
+                                actual_group = actual_warning.group
+                                if 'group' in expected_warning:
+                                    check['eq'](actual_group, expected_warning['group'])
+                                else:
+                                    check['eq'](actual_group, None)
 
                                 actual_show_also = actual_warning.show_also
                                 if 'show_also' in expected_warning:

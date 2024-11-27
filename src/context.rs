@@ -163,6 +163,9 @@ pub struct Manifest {
     pub lints: LintsConfig,
 
     #[serde(default)]
+    pub groups: GroupsConfig,
+
+    #[serde(default)]
     pub languages: LanguagesConfig,
 }
 
@@ -315,9 +318,21 @@ pub struct LintsConfig {
     pub active_lints_config: BTreeMap<String, bool>,
 }
 
-#[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
+#[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
 pub struct GroupsConfig {
-    active: BTreeMap<String, bool>,
+    #[serde(rename = "active")]
+    pub active_groups_config: BTreeMap<String, bool>,
+}
+
+impl Default for GroupsConfig {
+    fn default() -> Self {
+        Self {
+            active_groups_config: ["deprecated", "nursery", "pedantic"]
+                .into_iter()
+                .map(|group| (group.to_owned(), false))
+                .collect(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
@@ -388,11 +403,11 @@ mod test {
     use toml_edit::Document;
 
     use crate::{
-        active_lints::ActiveLints,
         cli::{MaxConcurrentFileLimit, MaxProblems},
         scan::{self, ProjectRunData},
         scriptlets::{source, InitOptions, PreinitOptions, PreinitingStore},
         verbosity::Verbosity,
+        warning_filter::WarningFilter,
     };
 
     use super::*;
@@ -410,6 +425,18 @@ mod test {
                 .map(RawFilePattern::to_string)
                 .collect::<Vec<_>>(),
             &["vex.toml", "vexes/", ".git/", ".gitignore", "/target/"]
+        );
+
+        assert_eq!(
+            init_manifest
+                .groups
+                .active_groups_config
+                .into_iter()
+                .collect::<Vec<_>>(),
+            ["deprecated", "nursery", "pedantic"]
+                .into_iter()
+                .map(|group| (group.to_owned(), false))
+                .collect::<Vec<_>>(),
         );
 
         let raw_manifest: Document = Manifest::DEFAULT_CONTENT.parse().unwrap();
@@ -492,7 +519,7 @@ mod test {
         let ProjectRunData { irritations, .. } = scan::scan_project(
             &ctx,
             &store,
-            ActiveLints::all(),
+            WarningFilter::all(),
             MaxProblems::Unlimited,
             MaxConcurrentFileLimit::new(1),
             Verbosity::default(),
@@ -554,6 +581,10 @@ mod test {
             lint-id-1 = false
             lint-id-2 = true
 
+            [groups.active]
+            group-id-1 = false
+            group-id-2 = true
+
             [languages.python]
             use-for = ["*.star", "*.py2"]
         "#};
@@ -566,6 +597,10 @@ mod test {
         assert_eq!(
             parsed_manifest.lints.active_lints_config,
             BTreeMap::from_iter([("lint-id-1".into(), false), ("lint-id-2".into(), true)])
+        );
+        assert_eq!(
+            parsed_manifest.groups.active_groups_config,
+            BTreeMap::from_iter([("group-id-1".into(), false), ("group-id-2".into(), true)])
         );
         assert_eq!(
             parsed_manifest.languages.deref()[&SupportedLanguage::Python]

@@ -82,7 +82,7 @@ pub enum UnfrozenIntent<'v> {
         event_kind: EventKind,
         observer: UnfrozenObserver<'v>,
     },
-    Warn(Irritation),
+    Warn(Box<Irritation>),
     ScanFile {
         file_name: PrettyPath,
         language: SupportedLanguage,
@@ -180,7 +180,7 @@ pub enum Intent {
         event_kind: EventKind,
         observer: Observer,
     },
-    Warn(Irritation),
+    Warn(Box<Irritation>),
     ScanFile {
         file_name: PrettyPath,
         language: SupportedLanguage,

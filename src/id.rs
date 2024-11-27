@@ -15,13 +15,71 @@ use crate::{
     result::Result,
 };
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd, Allocative, Serialize)]
+pub struct LintId(Id);
+
+impl LintId {
+    pub fn as_str(&self) -> &str {
+        self.0.as_ref()
+    }
+}
+
+impl TryFrom<String> for LintId {
+    type Error = Error;
+
+    fn try_from(value: String) -> Result<Self> {
+        Ok(Self(value.try_into()?))
+    }
+}
+
+impl AsRef<Id> for LintId {
+    fn as_ref(&self) -> &Id {
+        &self.0
+    }
+}
+
+impl Display for LintId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.as_str().fmt(f)
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd, Allocative, Serialize)]
+pub struct GroupId(Id);
+
+impl GroupId {
+    pub fn as_str(&self) -> &str {
+        self.0.as_ref()
+    }
+}
+
+impl TryFrom<String> for GroupId {
+    type Error = Error;
+
+    fn try_from(value: String) -> Result<Self> {
+        Ok(Self(value.try_into()?))
+    }
+}
+
+impl AsRef<Id> for GroupId {
+    fn as_ref(&self) -> &Id {
+        &self.0
+    }
+}
+
+impl Display for GroupId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.as_str().fmt(f)
+    }
+}
+
 #[derive(Debug, Clone, Allocative, Eq, PartialEq, Serialize)]
-pub struct VexId {
+struct Id {
     hash: u64,
     name: String,
 }
 
-impl VexId {
+impl Id {
     fn new_raw(name: String) -> Self {
         let hash = {
             let mut hasher = DefaultHasher::new();
@@ -32,7 +90,7 @@ impl VexId {
     }
 }
 
-impl TryFrom<String> for VexId {
+impl TryFrom<String> for Id {
     type Error = Error;
 
     fn try_from(raw_id: String) -> Result<Self> {
@@ -88,31 +146,31 @@ impl TryFrom<String> for VexId {
     }
 }
 
-impl Ord for VexId {
+impl Ord for Id {
     fn cmp(&self, other: &Self) -> Ordering {
         self.name.cmp(&other.name)
     }
 }
 
-impl PartialOrd for VexId {
+impl PartialOrd for Id {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Hash for VexId {
+impl Hash for Id {
     fn hash<H: Hasher>(&self, state: &mut H) {
         state.write_u64(self.hash);
     }
 }
 
-impl AsRef<str> for VexId {
+impl AsRef<str> for Id {
     fn as_ref(&self) -> &str {
         &self.name
     }
 }
 
-impl Display for VexId {
+impl Display for Id {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.name)
     }
@@ -124,12 +182,8 @@ mod test {
 
     #[test]
     fn try_from() {
-        let check_valid = |raw_id: &str| {
-            assert_eq!(
-                VexId::try_from(raw_id.to_string()).unwrap().as_ref(),
-                raw_id
-            )
-        };
+        let check_valid =
+            |raw_id: &str| assert_eq!(Id::try_from(raw_id.to_string()).unwrap().as_ref(), raw_id);
         check_valid("hello");
         check_valid("hello1234");
         check_valid("hello:world:1234");
@@ -138,7 +192,7 @@ mod test {
         macro_rules! check_invalid {
             ($raw_id:literal, $pred:expr $(,)?) => {
                 let Error::InvalidID { raw_id, reason } =
-                    VexId::try_from($raw_id.to_string()).unwrap_err()
+                    Id::try_from($raw_id.to_string()).unwrap_err()
                 else {
                     panic!("incorrect error");
                 };

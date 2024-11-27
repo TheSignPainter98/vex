@@ -175,7 +175,7 @@ impl<'s> VexTest<'s> {
                     .unwrap();
             }
 
-            let active_lints = crate::make_active_lints(&ctx.manifest)?;
+            let warning_filter = crate::try_make_warning_filter(&ctx.manifest)?;
 
             let verbosity = Verbosity::default();
             let preinit_opts = PreinitOptions {
@@ -189,7 +189,7 @@ impl<'s> VexTest<'s> {
             scan::scan_project(
                 &ctx,
                 &store,
-                active_lints,
+                warning_filter,
                 self.max_problems,
                 MaxConcurrentFileLimit::new(1),
                 verbosity,

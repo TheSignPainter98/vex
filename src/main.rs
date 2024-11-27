@@ -4,12 +4,12 @@
 #[macro_use]
 extern crate pretty_assertions;
 
-mod active_lints;
 mod associations;
 mod cli;
 mod context;
 mod dump;
 mod error;
+mod id;
 mod ignore_markers;
 mod irritation;
 mod logger;
@@ -25,7 +25,7 @@ mod supported_language;
 mod test;
 mod trigger;
 mod verbosity;
-mod vex_id;
+mod warning_filter;
 
 #[cfg(test)]
 mod vextest;
@@ -33,17 +33,16 @@ mod vextest;
 use std::{env, process::ExitCode};
 
 use camino::Utf8PathBuf;
-use context::Manifest;
 use indoc::{formatdoc, printdoc};
 use log::{debug, info, log_enabled};
 use rayon::ThreadPoolBuilder;
 use strum::IntoEnumIterator;
 
 use crate::{
-    active_lints::ActiveLints,
     cli::{Args, CheckCmd, Command, InitCmd, ListCmd, ToList},
-    context::{Context, EXAMPLE_VEX_FILE},
+    context::{Context, Manifest, EXAMPLE_VEX_FILE},
     error::{Error, IOAction},
+    id::{GroupId, LintId},
     plural::Plural,
     result::Result,
     scan::ProjectRunData,
@@ -51,7 +50,7 @@ use crate::{
     source_path::PrettyPath,
     supported_language::SupportedLanguage,
     verbosity::Verbosity,
-    vex_id::VexId,
+    warning_filter::{ExclusionSet, WarningFilter},
 };
 
 // TODO(kcza): move the subcommands to separate files
@@ -136,7 +135,7 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
         .build_global()
         .expect("internal error: failed to configure global thread pool");
 
-    let active_lints = make_active_lints(&ctx.manifest)?;
+    let warning_filter = try_make_warning_filter(&ctx.manifest)?;
     let ProjectRunData {
         irritations,
         num_files_scanned,
@@ -144,7 +143,7 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
     } = scan::scan_project(
         &ctx,
         &store,
-        active_lints,
+        warning_filter,
         cmd_args.max_problems,
         cmd_args.max_concurrent_files,
         verbosity,
@@ -189,16 +188,41 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn make_active_lints(manifest: &Manifest) -> Result<ActiveLints> {
-    let inactive: Vec<_> = manifest
+pub(crate) fn try_make_warning_filter(manifest: &Manifest) -> Result<WarningFilter> {
+    let inactive_lints: Vec<_> = manifest
         .lints
         .active_lints_config
         .iter()
         .filter(|(_, active)| !*active)
         .map(|(raw_id, _)| raw_id)
-        .map(|raw_id| VexId::try_from(raw_id.clone()))
+        .map(|raw_id| LintId::try_from(raw_id.clone()))
         .collect::<Result<_>>()?;
-    Ok(ActiveLints::from_inactive(inactive))
+    let active_lints = ExclusionSet::from_excluded(inactive_lints);
+
+    let default_inactive_groups =
+        ["deprecated", "nursery", "pedantic"]
+            .into_iter()
+            .filter(|group| {
+                !manifest
+                    .groups
+                    .active_groups_config
+                    .get(*group)
+                    .copied()
+                    .unwrap_or(false)
+            });
+    let requested_inactive_groups = manifest
+        .groups
+        .active_groups_config
+        .iter()
+        .filter(|(_, active)| !*active)
+        .map(|(raw_id, _)| raw_id.as_str());
+    let inactive_groups: Vec<_> = default_inactive_groups
+        .chain(requested_inactive_groups)
+        .map(|raw_id| GroupId::try_from(raw_id.to_owned()))
+        .collect::<Result<_>>()?;
+    let active_groups = ExclusionSet::from_excluded(inactive_groups);
+
+    Ok(WarningFilter::new(active_lints, active_groups))
 }
 
 fn init(init_args: InitCmd) -> Result<()> {
@@ -289,6 +313,15 @@ mod test_ {
                 [lints.active]
                 explicitly-active-lint = true
                 explicitly-inactive-lint = false
+
+                [groups.active]
+                explicitly-active-group = true
+                explicitly-inactive-group = false
+
+                # Default inactive
+                deprecated = true
+                nursery = true
+                pedantic = true
             "#})
             .with_scriptlet(
                 "vexes/test.star",
@@ -301,8 +334,75 @@ mod test_ {
                     def on_open_project(event):
                         check['true'](vex.active('explicitly-active-lint'))
                         check['true'](vex.active('unspecified-lint'))
+                        check['true'](vex.active('some-lint', group='explicitly-active-group'))
+                        check['true'](vex.active('some-lint', group='unspecified-group'))
 
                         check['false'](vex.active('explicitly-inactive-lint'))
+                        check['false'](vex.active('some-lint', group='explicitly-inactive-group'))
+
+                        pre_deactivated_groups = [
+                            'deprecated',
+                            'nursery',
+                            'pedantic',
+                        ]
+                        for pre_deactivated_group in pre_deactivated_groups:
+                            check['true'](vex.active('some-lint', group=pre_deactivated_group))
+                "#,
+                check_path = VexTest::CHECK_STARLARK_PATH},
+            )
+            .try_run()
+            .unwrap();
+        VexTest::new("default-inactive")
+            .with_scriptlet(
+                "vexes/test.star",
+                formatdoc! {r#"
+                    load('{check_path}', 'check')
+
+                    def init():
+                        vex.observe('open_project', on_open_project)
+
+                    def on_open_project(event):
+                        default_inactive_groups = [
+                            'deprecated',
+                            'nursery',
+                            'pedantic',
+                        ]
+                        for group in default_inactive_groups:
+                            check['false'](vex.active('some-lint', group=group))
+                "#,
+                check_path = VexTest::CHECK_STARLARK_PATH},
+            )
+            .try_run()
+            .unwrap();
+        VexTest::new("default-inactive-others-overridden")
+            .with_manifest(indoc! {r#"
+                [vex]
+                version = "1"
+
+                [groups.active]
+                unrelated_group = true
+
+                # Default inactive
+                deprecated = true
+                nursery = true
+                pedantic = true
+            "#})
+            .with_scriptlet(
+                "vexes/test.star",
+                formatdoc! {r#"
+                    load('{check_path}', 'check')
+
+                    def init():
+                        vex.observe('open_project', on_open_project)
+
+                    def on_open_project(event):
+                        overridden_default_inactive_groups = [
+                            'deprecated',
+                            'nursery',
+                            'pedantic',
+                        ]
+                        for group in overridden_default_inactive_groups:
+                            check['true'](vex.active('some-lint', group=group))
                 "#,
                 check_path = VexTest::CHECK_STARLARK_PATH},
             )

@@ -8,7 +8,6 @@ use starlark::{
 use starlark_derive::{starlark_value, NoSerialize, Trace};
 
 use crate::{
-    active_lints::ActiveLints,
     ignore_markers::IgnoreMarkers,
     scriptlets::{
         action::Action,
@@ -16,6 +15,7 @@ use crate::{
         query_cache::QueryCache,
         Intents,
     },
+    warning_filter::WarningFilter,
 };
 
 #[derive(Debug, Display, ProvidesStaticType, NoSerialize, Allocative, Trace)]
@@ -104,7 +104,7 @@ pub struct TempData<'v> {
     pub action: Action,
     pub query_cache: Option<&'v QueryCache>,
     pub ignore_markers: Option<&'v IgnoreMarkers>,
-    pub active_lints: Option<&'v ActiveLints>,
+    pub warning_filter: Option<&'v WarningFilter>,
 }
 
 impl<'v> TempData<'v> {
