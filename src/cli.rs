@@ -127,10 +127,6 @@ pub struct CheckCmd {
     #[arg(long, default_value_t = MaxConcurrentFileLimit::default(), value_parser = MaxConcurrentFileLimit::parser(), value_name = "max")]
     pub max_concurrent_files: MaxConcurrentFileLimit,
 
-    /// Reduce strictness
-    #[arg(long)]
-    pub lenient: bool,
-
     /// Exit early after this many problems (pass `unlimited` for no max)
     #[arg(long, default_value_t = MaxProblems::default(), value_parser = MaxProblems::parser(), value_name = "max")]
     pub max_problems: MaxProblems,

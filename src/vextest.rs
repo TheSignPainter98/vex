@@ -29,7 +29,6 @@ pub struct VexTest<'s> {
     bare: bool,
     manifest_content: Option<Cow<'s, str>>,
     max_problems: MaxProblems,
-    lenient: bool,
     fire_test_events: bool,
     scriptlets: Vec<TestSource<Utf8PathBuf, Cow<'s, str>>>,
     source_files: BTreeMap<Utf8PathBuf, Cow<'s, str>>,
@@ -57,11 +56,6 @@ impl<'s> VexTest<'s> {
 
     pub fn with_max_problems(mut self, max_problems: MaxProblems) -> Self {
         self.max_problems = max_problems;
-        self
-    }
-
-    pub fn with_lenient(mut self, lenient: bool) -> Self {
-        self.lenient = lenient;
         self
     }
 
@@ -178,10 +172,7 @@ impl<'s> VexTest<'s> {
             let warning_filter = crate::try_make_warning_filter(&ctx.manifest)?;
 
             let verbosity = Verbosity::default();
-            let preinit_opts = PreinitOptions {
-                lenient: self.lenient,
-                verbosity,
-            };
+            let preinit_opts = PreinitOptions { verbosity };
             let init_opts = InitOptions { verbosity };
             let store = PreinitingStore::new(&self.scriptlets)?
                 .preinit(preinit_opts)?

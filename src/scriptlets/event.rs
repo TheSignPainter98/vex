@@ -277,10 +277,7 @@ pub struct PostTestRunEvent<'v> {
 impl<'v> PostTestRunEvent<'v> {
     const COLLATED_IRRITATIONS_ATTR_NAME: &'static str = "warnings";
 
-    pub fn new(
-        irritations_iter: impl IntoIterator<Item = (Irritation, bool)>,
-        heap: &'v Heap,
-    ) -> Self {
+    pub fn new(irritations_iter: impl IntoIterator<Item = Irritation>, heap: &'v Heap) -> Self {
         let irritations = heap.alloc(IrritationsByFile::new(irritations_iter, heap));
         Self { irritations }
     }
@@ -333,9 +330,9 @@ struct IrritationsByFile<'v> {
 }
 
 impl<'v> IrritationsByFile<'v> {
-    fn new(irritations: impl IntoIterator<Item = (Irritation, bool)>, heap: &'v Heap) -> Self {
+    fn new(irritations: impl IntoIterator<Item = Irritation>, heap: &'v Heap) -> Self {
         let mut entry_map: BTreeMap<_, BTreeMap<_, SmallVec<[_; 2]>>> = BTreeMap::new();
-        for (irritation, lenient) in irritations {
+        for irritation in irritations {
             let key = irritation
                 .path()
                 .map(|path| Cow::Owned(path.to_string()))
@@ -343,16 +340,16 @@ impl<'v> IrritationsByFile<'v> {
             match entry_map.entry(key) {
                 Entry::Occupied(mut entry) => {
                     match entry.get_mut().entry(irritation.lint_id().to_string()) {
-                        Entry::Occupied(mut entry) => entry.get_mut().push((irritation, lenient)),
+                        Entry::Occupied(mut entry) => entry.get_mut().push(irritation),
                         Entry::Vacant(entry) => {
-                            entry.insert(smallvec![(irritation, lenient)]);
+                            entry.insert(smallvec![irritation]);
                         }
                     }
                 }
                 Entry::Vacant(entry) => {
                     entry.insert(BTreeMap::from_iter([(
                         irritation.lint_id().to_string(),
-                        smallvec![(irritation, lenient)],
+                        smallvec![irritation],
                     )]));
                 }
             }
@@ -390,7 +387,7 @@ struct IrritationsById<'v> {
 
 impl<'v> IrritationsById<'v> {
     fn new(
-        iter: impl IntoIterator<Item = (String, SmallVec<[(Irritation, bool); 2]>)>,
+        iter: impl IntoIterator<Item = (String, SmallVec<[Irritation; 2]>)>,
         heap: &'v Heap,
     ) -> Self {
         let entries = heap.alloc(AllocDict(
@@ -422,12 +419,8 @@ impl<'v> AllocValue<'v> for IrritationsById<'v> {
 struct Irritations<'v>(Vec<Value<'v>>);
 
 impl<'v> Irritations<'v> {
-    fn new(iter: impl IntoIterator<Item = (Irritation, bool)>, heap: &'v Heap) -> Self {
-        Self(
-            iter.into_iter()
-                .map(|(irr, lenient)| irr.to_value_on(lenient, heap))
-                .collect(),
-        )
+    fn new(iter: impl IntoIterator<Item = Irritation>, heap: &'v Heap) -> Self {
+        Self(iter.into_iter().map(|irr| irr.to_value_on(heap)).collect())
     }
 }
 

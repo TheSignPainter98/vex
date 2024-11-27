@@ -8,7 +8,7 @@ use starlark::{
     eval::Evaluator,
     starlark_module,
     values::{
-        list::UnpackList, none::NoneType, Heap, NoSerialize, ProvidesStaticType, StarlarkValue,
+        list::UnpackList, none::NoneType, NoSerialize, ProvidesStaticType, StarlarkValue,
         StringValue, Value,
     },
 };
@@ -34,13 +34,10 @@ use crate::{
 };
 
 #[derive(Debug, PartialEq, Eq, new, ProvidesStaticType, NoSerialize, Allocative)]
-pub struct AppObject {
-    lenient: bool,
-}
+pub struct AppObject;
 
 impl AppObject {
     pub const NAME: &'static str = "vex";
-    const LENIENT_ATTR_NAME: &'static str = "lenient";
 
     #[allow(clippy::type_complexity)]
     #[starlark_module]
@@ -246,24 +243,6 @@ impl<'v> StarlarkValue<'v> for AppObject {
     fn get_methods() -> Option<&'static Methods> {
         static RES: MethodsStatic = MethodsStatic::new();
         RES.methods(AppObject::methods)
-    }
-
-    fn dir_attr(&self) -> Vec<String> {
-        [Self::LENIENT_ATTR_NAME]
-            .into_iter()
-            .map(Into::into)
-            .collect()
-    }
-
-    fn get_attr(&self, attr: &str, _: &'v Heap) -> Option<Value<'v>> {
-        match attr {
-            Self::LENIENT_ATTR_NAME => Some(Value::new_bool(self.lenient)),
-            _ => None,
-        }
-    }
-
-    fn has_attr(&self, attr: &str, _: &'v Heap) -> bool {
-        attr == Self::LENIENT_ATTR_NAME
     }
 }
 
@@ -617,60 +596,5 @@ mod test {
             });
 
         assert_yaml_snapshot!(irritations);
-    }
-
-    #[test]
-    fn lenient() {
-        let test_leniency = |lenient| {
-            let irritations = VexTest::new("default")
-                .with_lenient(lenient)
-                .with_scriptlet(
-                    "vexes/test.star",
-                    indoc! {r#"
-                        def init():
-                            lenient = vex.lenient
-                            def on_open_project(event):
-                                vex.warn("test", "vex.lenient=%s" % lenient)
-                                vex.warn("test", "vex.lenient=%s" % vex.lenient)
-                            vex.observe('open_project', on_open_project)
-
-                            vex.observe('open_project', on_open_project_standard)
-                            vex.observe('open_file', on_open_file)
-
-                        def on_open_project_standard(event):
-                            vex.warn("test", "vex.lenient=%s" % vex.lenient)
-                            vex.search(
-                                'rust',
-                                '(source_file)',
-                                on_match,
-                            )
-
-                        def on_match(event):
-                            vex.warn("test", "vex.lenient=%s" % vex.lenient)
-
-                        def on_open_file(event):
-                            vex.warn("test", "vex.lenient=%s" % vex.lenient)
-                    "#},
-                )
-                .with_source_file(
-                    "main.rs",
-                    indoc! {r#"
-                        fn main() {}
-                    "#},
-                )
-                .try_run()
-                .unwrap()
-                .irritations
-                .into_iter()
-                .map(|irr| irr.to_string())
-                .collect::<Vec<_>>();
-            assert_eq!(5, irritations.len());
-            let must_contain = format!("vex.lenient={}", if lenient { "True" } else { "False" });
-            assert!(irritations
-                .iter()
-                .all(|irr| irr.contains(&must_contain)), "expected {} to be lenient: got {irritations:?} but all must contain {must_contain}", if lenient { "all" } else { "none" });
-        };
-        test_leniency(true);
-        test_leniency(false);
     }
 }

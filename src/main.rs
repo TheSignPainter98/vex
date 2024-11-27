@@ -119,10 +119,7 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
     let verbosity = logger::verbosity();
 
     let store = {
-        let preinit_opts = PreinitOptions {
-            lenient: cmd_args.lenient,
-            verbosity,
-        };
+        let preinit_opts = PreinitOptions { verbosity };
         let init_opts = InitOptions { verbosity };
         PreinitingStore::new(&source::sources_in_dir(&ctx.vex_dir())?)?
             .preinit(preinit_opts)?
