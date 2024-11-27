@@ -1,0 +1,27 @@
+name: vex
+base: core24
+adopt-info: vex
+summary: A blazingly fast, hackable linter
+description: >
+  vex is a hackable linter, intended to act as an enforcer for subjective, project-local style preferences.
+  Taking input of a set of Starlark scripts which express style rules, it scans the project directories to find style problems.
+grade: stable
+confinement: strict
+
+apps:
+  vex:
+    command: bin/vex
+    plugs:
+      - home
+      - removable-media
+
+parts:
+  vex:
+    source: https://github.com/TheSignPainter98/vex.git
+    plugin: rust
+    override-build: |
+      snapcraftctl build
+
+      cp -a target/release/vex $SNAPCRAFT_PART_INSTALL/bin
+
+      snapcraftctl set-version $(grep '^version' Cargo.toml | cut -d' ' -f3 | sed 's/"//g')
