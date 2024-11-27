@@ -235,6 +235,7 @@ impl<'v> StarlarkValue<'v> for IrritationValue<'v> {
     fn has_attr(&self, attr: &str, _heap: &'v Heap) -> bool {
         [
             Self::LINT_ID_ATTR_NAME,
+            Self::GROUP_ID_ATTR_NAME,
             Self::LENIENT_ATTR_NAME,
             Self::MESSAGE_ATTR_NAME,
             Self::AT_ATTR_NAME,

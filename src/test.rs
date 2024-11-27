@@ -436,6 +436,11 @@ mod test {
                             )
                             vex.warn(
                                 'test',
+                                'with-group',
+                                group='some-group'
+                            )
+                            vex.warn(
+                                'test',
                                 'with-at-without-label',
                                 at=bin_expr,
                             )
@@ -474,6 +479,10 @@ mod test {
                             expected_warnings = [{{
                                 'id': 'test',
                                 'message': 'just-message',
+                            }}, {{
+                                'id': 'test',
+                                'message': 'with-group',
+                                'group': 'some-group',
                             }}, {{
                                 'id': 'test',
                                 'message': 'with-info',
@@ -554,6 +563,12 @@ mod test {
                                         check['eq'](actual_label, None)
                                 else:
                                     check['eq'](actual_warning.at, None)
+
+                                actual_group = actual_warning.group
+                                if 'group' in expected_warning:
+                                    check['eq'](actual_group, expected_warning['group'])
+                                else:
+                                    check['eq'](actual_group, None)
 
                                 actual_show_also = actual_warning.show_also
                                 if 'show_also' in expected_warning:

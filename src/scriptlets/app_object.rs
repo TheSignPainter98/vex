@@ -319,22 +319,25 @@ mod test {
 
                         vex.warn('{VEX_NAME}', 'test-01')
                         vex.warn('{VEX_NAME}', 'test-00')
-                        vex.warn('{VEX_NAME}', 'test-03', info=info)
-                        vex.warn('{VEX_NAME}', 'test-02', info=info)
-                        vex.warn('{VEX_NAME}', 'test-04', at=at_path_unlabelled)
-                        vex.warn('{VEX_NAME}', 'test-05', at=at_path_labelled)
-                        vex.warn('{VEX_NAME}', 'test-07', at=at_node_unlabelled)
-                        vex.warn('{VEX_NAME}', 'test-06', at=at_node_unlabelled)
-                        vex.warn('{VEX_NAME}', 'test-09', at=at_node_labelled)
-                        vex.warn('{VEX_NAME}', 'test-08', at=at_node_labelled)
-                        vex.warn('{VEX_NAME}', 'test-11', at=at_node_unlabelled, show_also=show_also)
-                        vex.warn('{VEX_NAME}', 'test-10', at=at_node_unlabelled, show_also=show_also)
-                        vex.warn('{VEX_NAME}', 'test-13', at=at_node_labelled, show_also=show_also)
-                        vex.warn('{VEX_NAME}', 'test-12', at=at_node_labelled, show_also=show_also)
-                        vex.warn('{VEX_NAME}', 'test-15', at=at_node_unlabelled, show_also=show_also, info=info)
-                        vex.warn('{VEX_NAME}', 'test-14', at=at_node_unlabelled, show_also=show_also, info=info)
-                        vex.warn('{VEX_NAME}', 'test-17', at=at_node_labelled, show_also=show_also, info=info)
-                        vex.warn('{VEX_NAME}', 'test-16', at=at_node_labelled, show_also=show_also, info=info)
+                        vex.warn('{VEX_NAME}', 'test-02-dup', group='group-2')
+                        vex.warn('{VEX_NAME}', 'test-02-dup', group='group-1')
+                        vex.warn('{VEX_NAME}', 'test-05', info=info)
+                        vex.warn('{VEX_NAME}', 'test-04', info=info)
+                        vex.warn('{VEX_NAME}', 'test-06', at=at_path_unlabelled)
+                        vex.warn('{VEX_NAME}', 'test-07', at=at_path_labelled)
+                        vex.warn('{VEX_NAME}', 'test-09', at=at_node_unlabelled)
+                        vex.warn('{VEX_NAME}', 'test-08', at=at_node_unlabelled)
+                        vex.warn('{VEX_NAME}', 'test-11', at=at_node_labelled)
+                        vex.warn('{VEX_NAME}', 'test-10', at=at_node_labelled)
+                        vex.warn('{VEX_NAME}', 'test-13', at=at_node_unlabelled, show_also=show_also)
+                        vex.warn('{VEX_NAME}', 'test-12', at=at_node_unlabelled, show_also=show_also)
+                        vex.warn('{VEX_NAME}', 'test-15', at=at_node_labelled, show_also=show_also)
+                        vex.warn('{VEX_NAME}', 'test-14', at=at_node_labelled, show_also=show_also)
+                        vex.warn('{VEX_NAME}', 'test-17', at=at_node_unlabelled, show_also=show_also, info=info)
+                        vex.warn('{VEX_NAME}', 'test-16', at=at_node_unlabelled, show_also=show_also, info=info)
+                        vex.warn('{VEX_NAME}', 'test-19', at=at_node_labelled, show_also=show_also, info=info)
+                        vex.warn('{VEX_NAME}', 'test-18', at=at_node_labelled, show_also=show_also, info=info)
+                        vex.warn('{VEX_NAME}', 'test-20', at=at_node_labelled, show_also=show_also, info=info, group='group-3')
                 "#},
             )
             .with_source_file(
@@ -352,7 +355,7 @@ mod test {
             .into_iter()
             .map(|irr| irr.to_string())
             .collect::<Vec<_>>();
-        assert_eq!(irritations.len(), 18);
+        assert_eq!(irritations.len(), 21);
 
         let assert_contains = |irritation: &str, strings: &[&str]| {
             strings.iter().for_each(|string| {
@@ -364,46 +367,48 @@ mod test {
         };
         assert_contains(&irritations[0], &[VEX_NAME, "test-00"]);
         assert_contains(&irritations[1], &[VEX_NAME, "test-01"]);
-        assert_contains(&irritations[2], &[VEX_NAME, "test-02", INFO]);
-        assert_contains(&irritations[3], &[VEX_NAME, "test-03", INFO]);
-        assert_contains(&irritations[4], &[VEX_NAME, "test-04", FILE_NAME]);
+        assert_contains(&irritations[2], &[VEX_NAME, "test-02-dup", "group-2"]);
+        assert_contains(&irritations[3], &[VEX_NAME, "test-02-dup", "group-1"]);
+        assert_contains(&irritations[4], &[VEX_NAME, "test-04", INFO]);
+        assert_contains(&irritations[5], &[VEX_NAME, "test-05", INFO]);
+        assert_contains(&irritations[6], &[VEX_NAME, "test-06", FILE_NAME]);
         assert_contains(
-            &irritations[5],
-            &[VEX_NAME, "test-05", FILE_NAME, AT_PATH_LABEL],
+            &irritations[7],
+            &[VEX_NAME, "test-07", FILE_NAME, AT_PATH_LABEL],
         );
-        assert_contains(&irritations[6], &[VEX_NAME, "test-06"]);
-        assert_contains(&irritations[7], &[VEX_NAME, "test-07"]);
-        assert_contains(&irritations[8], &[VEX_NAME, "test-08", AT_NODE_LABEL]);
-        assert_contains(&irritations[9], &[VEX_NAME, "test-09", AT_NODE_LABEL]);
-        assert_contains(
-            &irritations[10],
-            &[VEX_NAME, "test-10", SHOW_ALSO_L, SHOW_ALSO_R],
-        );
-        assert_contains(
-            &irritations[11],
-            &[VEX_NAME, "test-11", SHOW_ALSO_L, SHOW_ALSO_R],
-        );
+        assert_contains(&irritations[8], &[VEX_NAME, "test-08"]);
+        assert_contains(&irritations[9], &[VEX_NAME, "test-09"]);
+        assert_contains(&irritations[10], &[VEX_NAME, "test-10", AT_NODE_LABEL]);
+        assert_contains(&irritations[11], &[VEX_NAME, "test-11", AT_NODE_LABEL]);
         assert_contains(
             &irritations[12],
-            &[VEX_NAME, "test-12", AT_NODE_LABEL, SHOW_ALSO_L, SHOW_ALSO_R],
+            &[VEX_NAME, "test-12", SHOW_ALSO_L, SHOW_ALSO_R],
         );
         assert_contains(
             &irritations[13],
-            &[VEX_NAME, "test-13", AT_NODE_LABEL, SHOW_ALSO_L, SHOW_ALSO_R],
+            &[VEX_NAME, "test-13", SHOW_ALSO_L, SHOW_ALSO_R],
         );
         assert_contains(
             &irritations[14],
-            &[VEX_NAME, "test-14", SHOW_ALSO_L, SHOW_ALSO_R, INFO],
+            &[VEX_NAME, "test-14", AT_NODE_LABEL, SHOW_ALSO_L, SHOW_ALSO_R],
         );
         assert_contains(
             &irritations[15],
-            &[VEX_NAME, "test-15", SHOW_ALSO_L, SHOW_ALSO_R, INFO],
+            &[VEX_NAME, "test-15", AT_NODE_LABEL, SHOW_ALSO_L, SHOW_ALSO_R],
         );
         assert_contains(
             &irritations[16],
+            &[VEX_NAME, "test-16", SHOW_ALSO_L, SHOW_ALSO_R, INFO],
+        );
+        assert_contains(
+            &irritations[17],
+            &[VEX_NAME, "test-17", SHOW_ALSO_L, SHOW_ALSO_R, INFO],
+        );
+        assert_contains(
+            &irritations[18],
             &[
                 VEX_NAME,
-                "test-16",
+                "test-18",
                 AT_NODE_LABEL,
                 SHOW_ALSO_L,
                 SHOW_ALSO_R,
@@ -411,14 +416,26 @@ mod test {
             ],
         );
         assert_contains(
-            &irritations[17],
+            &irritations[19],
             &[
                 VEX_NAME,
-                "test-17",
+                "test-19",
                 AT_NODE_LABEL,
                 SHOW_ALSO_L,
                 SHOW_ALSO_R,
                 INFO,
+            ],
+        );
+        assert_contains(
+            &irritations[20],
+            &[
+                VEX_NAME,
+                "test-20",
+                AT_NODE_LABEL,
+                SHOW_ALSO_L,
+                SHOW_ALSO_R,
+                INFO,
+                "group-3",
             ],
         );
 
