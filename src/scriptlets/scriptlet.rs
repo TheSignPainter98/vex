@@ -401,7 +401,7 @@ impl InitingScriptlet {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use camino::Utf8PathBuf;
     use const_format::formatcp;
     use indoc::{formatdoc, indoc};

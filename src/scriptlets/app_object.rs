@@ -253,7 +253,7 @@ impl Display for AppObject {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use indoc::{formatdoc, indoc};
     use insta::assert_yaml_snapshot;
 

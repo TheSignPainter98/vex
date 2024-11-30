@@ -352,7 +352,7 @@ fn parse_overrides() {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use clap::CommandFactory;
 
     use super::*;

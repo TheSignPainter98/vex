@@ -203,7 +203,7 @@ pub(crate) fn run_tests(script_sources: &[impl ScriptSource]) -> Result<()> {
 
 #[allow(clippy::module_inception)]
 #[cfg(test)]
-mod test {
+mod tests {
     use indoc::formatdoc;
 
     use crate::vextest::VexTest;

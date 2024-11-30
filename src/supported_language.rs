@@ -115,7 +115,7 @@ impl Display for SupportedLanguage {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use std::ops::Range;
 
     use strum::IntoEnumIterator;

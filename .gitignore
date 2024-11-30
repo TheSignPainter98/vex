@@ -3,5 +3,5 @@
 /vex.toml
 /vexes/
 test_project/
-*.snap
+vex_[^_]*.snap
 *.snap.new

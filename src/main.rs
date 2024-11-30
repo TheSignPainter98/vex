@@ -245,7 +245,7 @@ fn init(init_args: InitCmd) -> Result<()> {
 }
 
 #[cfg(test)]
-mod test_ {
+mod tests {
     use indoc::indoc;
     use insta::assert_yaml_snapshot;
     use joinery::JoinableIterator;

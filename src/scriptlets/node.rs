@@ -537,7 +537,7 @@ impl Display for Location {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use indoc::{formatdoc, indoc};
 
     use crate::vextest::VexTest;

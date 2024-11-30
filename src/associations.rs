@@ -81,7 +81,7 @@ struct Association {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use camino::Utf8PathBuf;
 
     use crate::context::Context;
