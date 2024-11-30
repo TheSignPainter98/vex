@@ -201,7 +201,7 @@ impl<'v> Capture<'v> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
     use camino::Utf8Path;

@@ -467,7 +467,7 @@ impl<'v> AllocValue<'v> for Irritations<'v> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use indoc::{formatdoc, indoc};
 
     use crate::vextest::VexTest;

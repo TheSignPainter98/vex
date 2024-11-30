@@ -69,7 +69,7 @@ impl Default for QueryCache {
 struct CachedQuery(#[allocative(skip)] Arc<Query>);
 
 #[cfg(test)]
-mod test {
+mod tests {
     use std::ptr;
 
     use starlark::values::Heap;

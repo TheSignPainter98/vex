@@ -402,7 +402,7 @@ impl Deref for IgnoreData {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use insta::assert_yaml_snapshot;
     use regex::Regex;
     use toml_edit::Document;

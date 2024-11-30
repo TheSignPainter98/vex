@@ -62,7 +62,7 @@ impl<S: AsRef<str>> Display for RawFilePattern<S> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
     use indoc::{formatdoc, indoc};

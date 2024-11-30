@@ -57,7 +57,7 @@ impl<T: Eq + Hash> ExclusionSet<T> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use crate::result::Result;
 
     use super::*;

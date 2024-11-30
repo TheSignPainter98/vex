@@ -45,7 +45,7 @@ pub fn dump(cmd: DumpCmd) -> Result<()> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use std::{
         fs::{self, File},
         io::Write,

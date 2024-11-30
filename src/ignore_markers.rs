@@ -179,7 +179,7 @@ struct MarkerEnd {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use smallvec::smallvec;
 
     use crate::error::InvalidIDReason;

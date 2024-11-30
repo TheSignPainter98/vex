@@ -310,7 +310,7 @@ impl PartialEq for ParsedSourceFile {
 impl Eq for ParsedSourceFile {}
 
 #[cfg(test)]
-mod test {
+mod tests {
     use std::{fs::File, io::Write};
 
     use indoc::indoc;

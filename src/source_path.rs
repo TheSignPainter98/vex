@@ -265,7 +265,7 @@ impl<'v> UnpackValue<'v> for PrettyPath {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use indoc::{formatdoc, indoc};
     use lazy_static::lazy_static;
     use regex::Regex;
