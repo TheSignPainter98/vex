@@ -271,6 +271,10 @@ pub struct RunConfig {
     pub version: Version,
 
     #[serde(default)]
+    #[serde(rename = "use-language-servers")]
+    pub lsp_enabled: bool,
+
+    #[serde(default)]
     #[serde(rename = "directory")]
     pub vexes_dir: VexesDir,
 }
@@ -349,6 +353,7 @@ impl Default for LanguagesConfig {
                 SupportedLanguage::Python,
                 LanguageOptions {
                     file_associations: vec![RawFilePattern::new("*.star".into())],
+                    language_server: None,
                 },
             )]
             .into_iter()
@@ -366,10 +371,12 @@ impl Deref for LanguagesConfig {
 }
 
 #[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct LanguageOptions {
     #[serde(rename = "use-for", default)]
     file_associations: Vec<RawFilePattern<String>>,
+
+    language_server: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
@@ -576,6 +583,7 @@ mod tests {
         let manifest_content = indoc! {r#"
             [vex]
             version = "1"
+            use-language-servers = true
             directory = "some-dir/"
 
             [files]
@@ -592,10 +600,12 @@ mod tests {
 
             [languages.python]
             use-for = ["*.star", "*.py2"]
+            language-server = "custom-language-server"
         "#};
         let parsed_manifest: Manifest = toml_edit::de::from_str(manifest_content).unwrap();
 
         assert_eq!(parsed_manifest.run.version, Version::V1);
+        assert!(parsed_manifest.run.lsp_enabled);
         assert_eq!(parsed_manifest.run.vexes_dir.as_str(), "some-dir/");
         assert_eq!(parsed_manifest.files.ignores.into_inner().len(), 2);
         assert_eq!(parsed_manifest.files.allows.len(), 2);
@@ -608,10 +618,16 @@ mod tests {
             BTreeMap::from_iter([("group-id-1".into(), false), ("group-id-2".into(), true)])
         );
         assert_eq!(
-            parsed_manifest.languages.deref()[&SupportedLanguage::Python]
+            parsed_manifest.languages[&SupportedLanguage::Python]
                 .file_associations
                 .len(),
             2
+        );
+        assert_eq!(
+            parsed_manifest.languages[&SupportedLanguage::Python]
+                .language_server
+                .as_deref(),
+            Some("custom-language-server")
         );
     }
 }
