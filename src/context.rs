@@ -271,7 +271,7 @@ pub struct RunConfig {
     pub version: Version,
 
     #[serde(default)]
-    #[serde(rename = "use-language-servers")]
+    #[serde(rename = "enable-lsp")]
     pub lsp_enabled: bool,
 
     #[serde(default)]
@@ -353,7 +353,7 @@ impl Default for LanguagesConfig {
                 SupportedLanguage::Python,
                 LanguageOptions {
                     file_associations: vec![RawFilePattern::new("*.star".into())],
-                    language_server: None,
+                    lsp_server: None,
                 },
             )]
             .into_iter()
@@ -376,7 +376,7 @@ pub struct LanguageOptions {
     #[serde(rename = "use-for", default)]
     file_associations: Vec<RawFilePattern<String>>,
 
-    language_server: Option<String>,
+    lsp_server: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
@@ -583,7 +583,7 @@ mod tests {
         let manifest_content = indoc! {r#"
             [vex]
             version = "1"
-            use-language-servers = true
+            enable-lsp = true
             directory = "some-dir/"
 
             [files]
@@ -600,7 +600,7 @@ mod tests {
 
             [languages.python]
             use-for = ["*.star", "*.py2"]
-            language-server = "custom-language-server"
+            lsp-server = "custom-language-server"
         "#};
         let parsed_manifest: Manifest = toml_edit::de::from_str(manifest_content).unwrap();
 
@@ -625,7 +625,7 @@ mod tests {
         );
         assert_eq!(
             parsed_manifest.languages[&SupportedLanguage::Python]
-                .language_server
+                .lsp_server
                 .as_deref(),
             Some("custom-language-server")
         );
