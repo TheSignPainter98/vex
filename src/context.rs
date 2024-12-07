@@ -34,14 +34,14 @@ impl Context {
 
         let manifest: Manifest = toml_edit::de::from_str(&raw_data)?;
         if log_enabled!(log::Level::Warn) {
-            let suppress_warning = env::var("VEX_EXPERIMENTS").map_or(false, |v| !v.is_empty());
+            let suppress_warning = env::var("VEX_LSP").map_or(false, |v| !v.is_empty());
             let lsp_features_used = manifest.run.lsp_enabled
                 || manifest
                     .languages
                     .values()
                     .any(|language_options| language_options.lsp_server.is_some());
             if !suppress_warning && lsp_features_used {
-                warn!("LSP features requested; support is experimental. (Set VEX_EXPERIMENTS=1 to suppress this warning)");
+                warn!("LSP features requested but current support is experimental (Set VEX_LSP=1 to suppress this warning)");
             }
         }
 
