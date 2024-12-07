@@ -1,5 +1,6 @@
 use camino::{Utf8Path, Utf8PathBuf};
 use indoc::indoc;
+use log::log_enabled;
 use serde::{Deserialize as Deserialise, Serialize as Serialise};
 
 use std::collections::{BTreeMap, HashMap};
@@ -16,6 +17,7 @@ use crate::result::Result;
 use crate::source_path::PrettyPath;
 use crate::supported_language::SupportedLanguage;
 use crate::trigger::RawFilePattern;
+use crate::warn;
 
 #[derive(Debug)]
 pub struct Context {
@@ -29,10 +31,23 @@ impl Context {
     pub fn acquire() -> Result<Self> {
         let (project_root, raw_data) = Manifest::acquire_content()?;
         let project_root = PrettyPath::new(&project_root);
-        let data = toml_edit::de::from_str(&raw_data)?;
+
+        let manifest: Manifest = toml_edit::de::from_str(&raw_data)?;
+        if log_enabled!(log::Level::Warn) {
+            let suppress_warning = env::var("VEX_LSP").map_or(false, |v| !v.is_empty());
+            let lsp_features_used = manifest.run.lsp_enabled
+                || manifest
+                    .languages
+                    .values()
+                    .any(|language_options| language_options.lsp_server.is_some());
+            if !suppress_warning && lsp_features_used {
+                warn!("LSP features requested but current support is experimental (Set VEX_LSP=1 to suppress this warning)");
+            }
+        }
+
         Ok(Context {
             project_root,
-            manifest: data,
+            manifest,
         })
     }
 
@@ -271,6 +286,10 @@ pub struct RunConfig {
     pub version: Version,
 
     #[serde(default)]
+    #[serde(rename = "enable-lsp")]
+    pub lsp_enabled: bool,
+
+    #[serde(default)]
     #[serde(rename = "directory")]
     pub vexes_dir: VexesDir,
 }
@@ -349,6 +368,7 @@ impl Default for LanguagesConfig {
                 SupportedLanguage::Python,
                 LanguageOptions {
                     file_associations: vec![RawFilePattern::new("*.star".into())],
+                    lsp_server: None,
                 },
             )]
             .into_iter()
@@ -366,10 +386,12 @@ impl Deref for LanguagesConfig {
 }
 
 #[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct LanguageOptions {
     #[serde(rename = "use-for", default)]
     file_associations: Vec<RawFilePattern<String>>,
+
+    lsp_server: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
@@ -576,6 +598,7 @@ mod tests {
         let manifest_content = indoc! {r#"
             [vex]
             version = "1"
+            enable-lsp = true
             directory = "some-dir/"
 
             [files]
@@ -592,10 +615,12 @@ mod tests {
 
             [languages.python]
             use-for = ["*.star", "*.py2"]
+            lsp-server = "custom-language-server"
         "#};
         let parsed_manifest: Manifest = toml_edit::de::from_str(manifest_content).unwrap();
 
         assert_eq!(parsed_manifest.run.version, Version::V1);
+        assert!(parsed_manifest.run.lsp_enabled);
         assert_eq!(parsed_manifest.run.vexes_dir.as_str(), "some-dir/");
         assert_eq!(parsed_manifest.files.ignores.into_inner().len(), 2);
         assert_eq!(parsed_manifest.files.allows.len(), 2);
@@ -608,10 +633,16 @@ mod tests {
             BTreeMap::from_iter([("group-id-1".into(), false), ("group-id-2".into(), true)])
         );
         assert_eq!(
-            parsed_manifest.languages.deref()[&SupportedLanguage::Python]
+            parsed_manifest.languages[&SupportedLanguage::Python]
                 .file_associations
                 .len(),
             2
+        );
+        assert_eq!(
+            parsed_manifest.languages[&SupportedLanguage::Python]
+                .lsp_server
+                .as_deref(),
+            Some("custom-language-server")
         );
     }
 }
