@@ -1,5 +1,6 @@
 use camino::{Utf8Path, Utf8PathBuf};
 use indoc::indoc;
+use log::log_enabled;
 use serde::{Deserialize as Deserialise, Serialize as Serialise};
 
 use std::collections::{BTreeMap, HashMap};
@@ -16,6 +17,7 @@ use crate::result::Result;
 use crate::source_path::PrettyPath;
 use crate::supported_language::SupportedLanguage;
 use crate::trigger::RawFilePattern;
+use crate::warn;
 
 #[derive(Debug)]
 pub struct Context {
@@ -29,10 +31,23 @@ impl Context {
     pub fn acquire() -> Result<Self> {
         let (project_root, raw_data) = Manifest::acquire_content()?;
         let project_root = PrettyPath::new(&project_root);
-        let data = toml_edit::de::from_str(&raw_data)?;
+
+        let manifest: Manifest = toml_edit::de::from_str(&raw_data)?;
+        if log_enabled!(log::Level::Warn) {
+            let suppress_warning = env::var("VEX_EXPERIMENTS").map_or(false, |v| !v.is_empty());
+            let lsp_features_used = manifest.run.lsp_enabled
+                || manifest
+                    .languages
+                    .values()
+                    .any(|language_options| language_options.lsp_server.is_some());
+            if !suppress_warning && lsp_features_used {
+                warn!("LSP features requested; support is experimental. (Set VEX_EXPERIMENTS=1 to suppress this warning)");
+            }
+        }
+
         Ok(Context {
             project_root,
-            manifest: data,
+            manifest,
         })
     }
 
