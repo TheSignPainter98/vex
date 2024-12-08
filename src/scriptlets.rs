@@ -4,6 +4,7 @@ pub mod event;
 pub mod extra_data;
 pub mod handler_module;
 pub mod intents;
+mod lsp;
 pub mod main_annotation;
 mod node;
 mod observers;

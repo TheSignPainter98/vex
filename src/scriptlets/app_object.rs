@@ -8,7 +8,7 @@ use starlark::{
     eval::Evaluator,
     starlark_module,
     values::{
-        list::UnpackList, none::NoneType, NoSerialize, ProvidesStaticType, StarlarkValue,
+        list::UnpackList, none::NoneType, Heap, NoSerialize, ProvidesStaticType, StarlarkValue,
         StringValue, Value,
     },
 };
@@ -25,6 +25,7 @@ use crate::{
         event::EventKind,
         extra_data::{TempData, UnfrozenRetainedData},
         intents::UnfrozenIntent,
+        lsp::Lsp,
         main_annotation::MainAnnotation,
         observers::UnfrozenObserver,
         Node,
@@ -38,6 +39,7 @@ pub struct AppObject;
 
 impl AppObject {
     pub const NAME: &'static str = "vex";
+    const LSP_ATTR_NAME: &'static str = "lsp";
 
     #[allow(clippy::type_complexity)]
     #[starlark_module]
@@ -244,6 +246,21 @@ impl<'v> StarlarkValue<'v> for AppObject {
         static RES: MethodsStatic = MethodsStatic::new();
         RES.methods(AppObject::methods)
     }
+
+    fn dir_attr(&self) -> Vec<String> {
+        vec![Self::LSP_ATTR_NAME.to_owned()]
+    }
+
+    fn get_attr(&self, attr: &str, heap: &'v Heap) -> Option<Value<'v>> {
+        match attr {
+            Self::LSP_ATTR_NAME => Some(heap.alloc(Lsp)),
+            _ => None,
+        }
+    }
+
+    fn has_attr(&self, attr: &str, _heap: &'v Heap) -> bool {
+        attr == Self::LSP_ATTR_NAME
+    }
 }
 
 impl Display for AppObject {
@@ -258,6 +275,29 @@ mod tests {
     use insta::assert_yaml_snapshot;
 
     use crate::vextest::VexTest;
+
+    #[test]
+    fn attrs() {
+        VexTest::new("attrs")
+            .with_scriptlet(
+                "vexes/test.star",
+                formatdoc! {r#"
+                        load('{check_path}', 'check')
+                        expected_attrs = [
+                            'active',
+                            'lsp',
+                            'observe',
+                            'scan',
+                            'search',
+                            'warn'
+                        ]
+                        check['attrs'](vex, expected_attrs)
+                    "#,
+                    check_path = VexTest::CHECK_STARLARK_PATH,
+                },
+            )
+            .assert_irritation_free();
+    }
 
     #[test]
     fn warn_valid() {
