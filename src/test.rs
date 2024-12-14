@@ -33,13 +33,16 @@ use crate::{
 
 pub fn test() -> Result<()> {
     let ctx = Context::acquire()?;
-    run_tests(&source::sources_in_dir(&ctx.vex_dir())?)
+    let sources = source::sources_in_dir(&ctx.vex_dir())?;
+    let lsp_enabled = ctx.manifest.run.lsp_enabled;
+    run_tests(&sources, lsp_enabled)
 }
 
-pub(crate) fn run_tests(script_sources: &[impl ScriptSource]) -> Result<()> {
+pub(crate) fn run_tests(script_sources: &[impl ScriptSource], lsp_enabled: bool) -> Result<()> {
     let store = {
         let preinit_opts = PreinitOptions {
             verbosity: Verbosity::Quiet,
+            lsp_enabled,
         };
         let init_opts = InitOptions {
             verbosity: Verbosity::Quiet,
@@ -163,7 +166,10 @@ pub(crate) fn run_tests(script_sources: &[impl ScriptSource]) -> Result<()> {
         let sub_ctx = Context::new_with_manifest(&temp_dir_path, Manifest::default());
         let sub_store = {
             let verbosity = Verbosity::Quiet;
-            let preinit_opts = PreinitOptions { verbosity };
+            let preinit_opts = PreinitOptions {
+                verbosity,
+                lsp_enabled,
+            };
             let init_opts = InitOptions { verbosity };
             PreinitingStore::new(script_sources)?
                 .preinit(preinit_opts)?

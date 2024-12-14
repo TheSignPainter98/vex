@@ -4,11 +4,21 @@ use allocative::Allocative;
 use starlark::values::StarlarkValue;
 use starlark_derive::{starlark_value, NoSerialize, ProvidesStaticType};
 
-#[derive(Debug, PartialEq, Eq, ProvidesStaticType, NoSerialize, Allocative)]
-pub struct Lsp;
+#[derive(Debug, Default, PartialEq, Eq, ProvidesStaticType, NoSerialize, Allocative)]
+pub struct Lsp {
+    enabled: bool,
+}
 
 impl Lsp {
     const NAME: &'static str = "lsp";
+
+    pub fn new_enabled() -> Self {
+        Self { enabled: true }
+    }
+
+    pub fn new_disabled() -> Self {
+        Self { enabled: true }
+    }
 }
 
 impl Display for Lsp {
@@ -34,7 +44,7 @@ mod tests {
 
     #[test]
     fn type_name() {
-        let lsp = Lsp;
+        let lsp = Lsp::default();
 
         let test_code = indoc! {r#"
             def test():

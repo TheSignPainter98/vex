@@ -119,7 +119,11 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
     let verbosity = logger::verbosity();
 
     let store = {
-        let preinit_opts = PreinitOptions { verbosity };
+        let lsp_enabled = ctx.manifest.run.lsp_enabled;
+        let preinit_opts = PreinitOptions {
+            verbosity,
+            lsp_enabled,
+        };
         let init_opts = InitOptions { verbosity };
         PreinitingStore::new(&source::sources_in_dir(&ctx.vex_dir())?)?
             .preinit(preinit_opts)?
