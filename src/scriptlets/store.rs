@@ -208,6 +208,7 @@ impl PreinitingStore {
 #[derive(Debug, Default)]
 pub struct PreinitOptions {
     pub verbosity: Verbosity,
+    pub lsp_enabled: bool,
 }
 
 #[derive(Debug)]

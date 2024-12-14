@@ -23,6 +23,7 @@ use crate::{
         event::EventKind,
         extra_data::{RetainedData, TempData, UnfrozenRetainedData},
         handler_module::HandlerModule,
+        lsp::Lsp,
         print_handler::PrintHandler,
         store::{InitOptions, PreinitedModuleStore},
         Intent, ObserverData, PreinitOptions,
@@ -69,7 +70,10 @@ impl PreinitingScriptlet {
         frozen_heap: &FrozenHeap,
     ) -> Result<InitingScriptlet> {
         let Self { path, ast, loads } = self;
-        let PreinitOptions { verbosity } = opts;
+        let PreinitOptions {
+            verbosity,
+            lsp_enabled,
+        } = opts;
 
         let preinited_module = {
             let preinited_module = Module::new();
@@ -88,7 +92,12 @@ impl PreinitingScriptlet {
                 eval.set_loader(&loader);
                 eval.set_print_handler(&print_handler);
                 eval.extra = Some(&temp_data);
-                eval.eval_module(ast, &Self::globals())?;
+                eval.eval_module(
+                    ast,
+                    &Self::globals(GlobalOptions {
+                        lsp_enabled: *lsp_enabled,
+                    }),
+                )?;
             };
             preinited_module.freeze()?
         };
@@ -100,9 +109,18 @@ impl PreinitingScriptlet {
         })
     }
 
-    fn globals() -> Globals {
+    fn globals(opts: GlobalOptions) -> Globals {
+        let GlobalOptions { lsp_enabled } = opts;
+
         let mut builder = GlobalsBuilder::extended_by(&[LibraryExtension::Print]);
-        let app = AppObject::new();
+        let app = {
+            let lsp = if lsp_enabled {
+                Lsp::new_enabled()
+            } else {
+                Lsp::new_disabled()
+            };
+            AppObject::new(builder.alloc(lsp))
+        };
         builder.set(AppObject::NAME, builder.alloc(app));
         builder.build()
     }
@@ -330,6 +348,10 @@ impl LoadPath {
 
         Ok(Utf8PathBuf::from_iter(clean_path_components))
     }
+}
+
+struct GlobalOptions {
+    lsp_enabled: bool,
 }
 
 #[derive(Debug)]

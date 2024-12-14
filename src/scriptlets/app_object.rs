@@ -3,13 +3,14 @@ use std::{fmt::Display, sync::Arc};
 use allocative::Allocative;
 use camino::Utf8Path;
 use derive_new::new;
+use dupe::Dupe;
 use starlark::{
     environment::{Methods, MethodsBuilder, MethodsStatic},
     eval::Evaluator,
     starlark_module,
     values::{
-        list::UnpackList, none::NoneType, NoSerialize, ProvidesStaticType, StarlarkValue,
-        StringValue, Value,
+        list::UnpackList, none::NoneType, AllocFrozenValue, FrozenHeap, FrozenValue, Heap,
+        NoSerialize, ProvidesStaticType, StarlarkValue, StringValue, Value,
     },
 };
 use starlark_derive::starlark_value;
@@ -34,10 +35,13 @@ use crate::{
 };
 
 #[derive(Debug, PartialEq, Eq, new, ProvidesStaticType, NoSerialize, Allocative)]
-pub struct AppObject;
+pub struct AppObject {
+    lsp: FrozenValue,
+}
 
 impl AppObject {
     pub const NAME: &'static str = "vex";
+    const LSP_ATTR_NAME: &'static str = "lsp";
 
     #[allow(clippy::type_complexity)]
     #[starlark_module]
@@ -237,12 +241,32 @@ impl AppObject {
     }
 }
 
-starlark::starlark_simple_value!(AppObject);
 #[starlark_value(type = "Vex")]
 impl<'v> StarlarkValue<'v> for AppObject {
     fn get_methods() -> Option<&'static Methods> {
         static RES: MethodsStatic = MethodsStatic::new();
         RES.methods(AppObject::methods)
+    }
+
+    fn dir_attr(&self) -> Vec<String> {
+        vec![Self::LSP_ATTR_NAME.to_owned()]
+    }
+
+    fn get_attr(&self, attr: &str, _heap: &'v Heap) -> Option<Value<'v>> {
+        match attr {
+            Self::LSP_ATTR_NAME => Some(self.lsp.dupe().to_value()),
+            _ => None,
+        }
+    }
+
+    fn has_attr(&self, attr: &str, _heap: &'v Heap) -> bool {
+        attr == Self::LSP_ATTR_NAME
+    }
+}
+
+impl AllocFrozenValue for AppObject {
+    fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
+        heap.alloc_simple(self)
     }
 }
 
@@ -258,6 +282,29 @@ mod tests {
     use insta::assert_yaml_snapshot;
 
     use crate::vextest::VexTest;
+
+    #[test]
+    fn attrs() {
+        VexTest::new("attrs")
+            .with_scriptlet(
+                "vexes/test.star",
+                formatdoc! {r#"
+                        load('{check_path}', 'check')
+                        expected_attrs = [
+                            'active',
+                            'lsp',
+                            'observe',
+                            'scan',
+                            'search',
+                            'warn'
+                        ]
+                        check['attrs'](vex, expected_attrs)
+                    "#,
+                    check_path = VexTest::CHECK_STARLARK_PATH,
+                },
+            )
+            .assert_irritation_free();
+    }
 
     #[test]
     fn warn_valid() {

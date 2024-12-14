@@ -11,7 +11,7 @@ use regex::Regex;
 
 use crate::{
     cli::{MaxConcurrentFileLimit, MaxProblems},
-    context::Context,
+    context::{Context, Manifest},
     result::Result,
     scan,
     scriptlets::{
@@ -141,11 +141,15 @@ impl<'s> VexTest<'s> {
         let root_dir = tempfile::tempdir().unwrap();
         let root_path = Utf8PathBuf::try_from(root_dir.path().to_path_buf()).unwrap();
 
+        let manifest_content = self
+            .manifest_content
+            .as_deref()
+            .unwrap_or("[vex]\nversion = '1'");
+        let lsp_enabled = toml_edit::de::from_str::<Manifest>(manifest_content)?
+            .run
+            .lsp_enabled;
+
         if !self.bare {
-            let manifest_content = self
-                .manifest_content
-                .as_deref()
-                .unwrap_or("[vex]\nversion = '1'");
             File::create(root_path.join("vex.toml"))
                 .unwrap()
                 .write_all(manifest_content.as_bytes())
@@ -157,7 +161,7 @@ impl<'s> VexTest<'s> {
             fs::create_dir(ctx.vex_dir()).ok();
         }
         if self.fire_test_events {
-            crate::test::run_tests(&self.scriptlets)?;
+            crate::test::run_tests(&self.scriptlets, lsp_enabled)?;
             Ok(ProjectRunData::default())
         } else {
             for (path, content) in &self.source_files {
@@ -172,7 +176,10 @@ impl<'s> VexTest<'s> {
             let warning_filter = crate::try_make_warning_filter(&ctx.manifest)?;
 
             let verbosity = Verbosity::default();
-            let preinit_opts = PreinitOptions { verbosity };
+            let preinit_opts = PreinitOptions {
+                verbosity,
+                lsp_enabled,
+            };
             let init_opts = InitOptions { verbosity };
             let store = PreinitingStore::new(&self.scriptlets)?
                 .preinit(preinit_opts)?
