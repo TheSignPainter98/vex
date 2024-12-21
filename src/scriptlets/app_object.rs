@@ -107,12 +107,8 @@ impl AppObject {
                 ],
             )?;
 
-            let extra: &TempData<'_> = eval
-                .extra
-                .expect("internal error: Evaluator extra not set")
-                .downcast_ref()
-                .expect("internal erro: Evaluator extra has wrong type");
-            if !extra.lsp_enabled {
+            let temp_data = TempData::get_from(eval);
+            if !temp_data.lsp_enabled {
                 return Err(Error::LspDisabled.into());
             }
 
