@@ -54,6 +54,7 @@ pub fn scan_project(
     let file_queries_hint = store.file_queries_hint();
 
     let query_cache = QueryCache::with_capacity(project_queries_hint + file_queries_hint);
+    let lsp_enabled = ctx.manifest.run.lsp_enabled;
 
     let mut irritations = vec![];
     let frozen_heap = store.frozen_heap();
@@ -67,6 +68,7 @@ pub fn scan_project(
             query_cache: Some(&query_cache),
             warning_filter: Some(&warning_filter),
             ignore_markers: None,
+            lsp_enabled,
             print_handler: &PrintHandler::new(verbosity, event.kind().name()),
         };
         store.observers_for(event.kind()).observe(
@@ -108,6 +110,7 @@ pub fn scan_project(
             let opts = VexFileOptions {
                 store,
                 language,
+                lsp_enabled,
                 project_queries: &project_queries,
                 query_cache: &query_cache,
                 warning_filter: &warning_filter,
@@ -160,6 +163,7 @@ pub struct FileRunData {
 pub struct VexFileOptions<'a> {
     store: &'a VexingStore,
     language: SupportedLanguage,
+    lsp_enabled: bool,
     project_queries: &'a [(SupportedLanguage, Arc<Query>, Observer)],
     query_cache: &'a QueryCache,
     warning_filter: &'a WarningFilter,
@@ -170,6 +174,7 @@ fn scan_file(file: &SourceFile, opts: VexFileOptions<'_>) -> Result<FileRunData>
     let VexFileOptions {
         store,
         language,
+        lsp_enabled,
         project_queries,
         query_cache,
         warning_filter,
@@ -190,6 +195,7 @@ fn scan_file(file: &SourceFile, opts: VexFileOptions<'_>) -> Result<FileRunData>
             query_cache: Some(query_cache),
             warning_filter: Some(warning_filter),
             ignore_markers: None,
+            lsp_enabled,
             print_handler: &PrintHandler::new(verbosity, event.kind().name()),
         };
         store.observers_for(event.kind()).observe(
@@ -253,6 +259,7 @@ fn scan_file(file: &SourceFile, opts: VexFileOptions<'_>) -> Result<FileRunData>
                         query_cache: Some(query_cache),
                         warning_filter: Some(warning_filter),
                         ignore_markers: Some(&ignore_markers),
+                        lsp_enabled,
                         print_handler: &PrintHandler::new(verbosity, EventKind::Match.name()),
                     };
                     on_match.observe(&handler_module, event, observe_opts)?;

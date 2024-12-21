@@ -80,6 +80,7 @@ impl PreinitingScriptlet {
                     action: Action::Preiniting,
                     query_cache: None,
                     ignore_markers: None,
+                    lsp_enabled: false,
                     warning_filter: None,
                 };
                 let print_handler = PrintHandler::new(*verbosity, path.as_str());
@@ -357,6 +358,7 @@ impl InitingScriptlet {
                     action: Action::Initing,
                     query_cache: None,
                     ignore_markers: None,
+                    lsp_enabled: false,
                     warning_filter: None,
                 };
                 let print_handler = PrintHandler::new(*verbosity, path.as_str());

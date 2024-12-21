@@ -25,6 +25,7 @@ use crate::{
         event::EventKind,
         extra_data::{TempData, UnfrozenRetainedData},
         intents::UnfrozenIntent,
+        lsp::Lsp,
         main_annotation::MainAnnotation,
         observers::UnfrozenObserver,
         Node,
@@ -90,6 +91,35 @@ impl AppObject {
                 }
             });
             Ok(active)
+        }
+
+        fn lsp_for<'v>(
+            #[starlark(this)] _this: Value<'v>,
+            #[starlark(require=pos)] language: &'v str,
+            eval: &mut Evaluator<'v, '_>,
+        ) -> anyhow::Result<Lsp<'v>> {
+            AppObject::check_attr_available(
+                eval,
+                "vex.lsp_for",
+                &[
+                    Action::Vexing(EventKind::OpenProject),
+                    Action::Vexing(EventKind::OpenFile),
+                ],
+            )?;
+
+            let extra: &TempData<'_> = eval
+                .extra
+                .expect("internal error: Evaluator extra not set")
+                .downcast_ref()
+                .expect("internal erro: Evaluator extra has wrong type");
+            if !extra.lsp_enabled {
+                return Err(Error::LspDisabled.into());
+            }
+
+            let language = eval
+                .heap()
+                .alloc(language.parse::<SupportedLanguage>()?.to_string());
+            Ok(Lsp { language })
         }
 
         fn search<'v>(
@@ -258,6 +288,29 @@ mod tests {
     use insta::assert_yaml_snapshot;
 
     use crate::vextest::VexTest;
+
+    #[test]
+    fn attrs() {
+        VexTest::new("attrs")
+            .with_scriptlet(
+                "vexes/test.star",
+                formatdoc! {r#"
+                        load('{check_path}', 'check')
+                        expected_attrs = [
+                            'active',
+                            'lsp_for',
+                            'observe',
+                            'scan',
+                            'search',
+                            'warn'
+                        ]
+                        check['attrs'](vex, expected_attrs)
+                    "#,
+                    check_path = VexTest::CHECK_STARLARK_PATH,
+                },
+            )
+            .assert_irritation_free();
+    }
 
     #[test]
     fn warn_valid() {

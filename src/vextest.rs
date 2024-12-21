@@ -18,6 +18,7 @@ use crate::{
         source::{ScriptSource, TestSource},
         InitOptions, PreinitOptions, PreinitingStore,
     },
+    test::RunTestOptions,
     verbosity::Verbosity,
     ProjectRunData,
 };
@@ -157,7 +158,10 @@ impl<'s> VexTest<'s> {
             fs::create_dir(ctx.vex_dir()).ok();
         }
         if self.fire_test_events {
-            crate::test::run_tests(&self.scriptlets)?;
+            crate::test::run_tests(RunTestOptions {
+                lsp_enabled: ctx.manifest.run.lsp_enabled,
+                script_sources: &self.scriptlets,
+            })?;
             Ok(ProjectRunData::default())
         } else {
             for (path, content) in &self.source_files {
