@@ -108,5 +108,23 @@ mod tests {
                 "},
             )
             .assert_irritation_free();
+
+        VexTest::new("disabled")
+            .with_manifest(indoc! {r#"
+                [vex]
+                version = "1"
+                enable-lsp = false
+            "#})
+            .with_scriptlet(
+                "vexes/test.star",
+                indoc! {"
+                    def init():
+                        vex.observe('open_project', on_open_project)
+
+                    def on_open_project(event):
+                        vex.lsp_for('rust').language
+                "},
+            )
+            .returns_error("lsp disabled");
     }
 }
