@@ -132,6 +132,7 @@ pub struct ObserveOptions<'v> {
     pub action: Action,
     pub query_cache: Option<&'v QueryCache>,
     pub ignore_markers: Option<&'v IgnoreMarkers>,
+    pub lsp_enabled: bool,
     pub print_handler: &'v PrintHandler<'v>,
     pub warning_filter: Option<&'v WarningFilter>,
 }
@@ -147,6 +148,7 @@ impl Observable for Observer {
             action,
             query_cache,
             ignore_markers,
+            lsp_enabled,
             print_handler,
             warning_filter,
         } = opts;
@@ -154,6 +156,7 @@ impl Observable for Observer {
             action,
             query_cache,
             ignore_markers,
+            lsp_enabled,
             warning_filter,
         };
         let mut eval = Evaluator::new(handler_module);

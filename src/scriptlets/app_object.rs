@@ -8,7 +8,7 @@ use starlark::{
     eval::Evaluator,
     starlark_module,
     values::{
-        list::UnpackList, none::NoneType, Heap, NoSerialize, ProvidesStaticType, StarlarkValue,
+        list::UnpackList, none::NoneType, NoSerialize, ProvidesStaticType, StarlarkValue,
         StringValue, Value,
     },
 };
@@ -39,7 +39,6 @@ pub struct AppObject;
 
 impl AppObject {
     pub const NAME: &'static str = "vex";
-    const LSP_ATTR_NAME: &'static str = "lsp";
 
     #[allow(clippy::type_complexity)]
     #[starlark_module]
@@ -92,6 +91,35 @@ impl AppObject {
                 }
             });
             Ok(active)
+        }
+
+        fn lsp_for<'v>(
+            #[starlark(this)] _this: Value<'v>,
+            #[starlark(require=pos)] language: &'v str,
+            eval: &mut Evaluator<'v, '_>,
+        ) -> anyhow::Result<Lsp<'v>> {
+            AppObject::check_attr_available(
+                eval,
+                "vex.lsp_for",
+                &[
+                    Action::Vexing(EventKind::OpenProject),
+                    Action::Vexing(EventKind::OpenFile),
+                ],
+            )?;
+
+            let extra: &TempData<'_> = eval
+                .extra
+                .expect("internal error: Evaluator extra not set")
+                .downcast_ref()
+                .expect("internal erro: Evaluator extra has wrong type");
+            if !extra.lsp_enabled {
+                return Err(Error::LspDisabled.into());
+            }
+
+            let language = eval
+                .heap()
+                .alloc(language.parse::<SupportedLanguage>()?.to_string());
+            Ok(Lsp { language })
         }
 
         fn search<'v>(
@@ -246,21 +274,6 @@ impl<'v> StarlarkValue<'v> for AppObject {
         static RES: MethodsStatic = MethodsStatic::new();
         RES.methods(AppObject::methods)
     }
-
-    fn dir_attr(&self) -> Vec<String> {
-        vec![Self::LSP_ATTR_NAME.to_owned()]
-    }
-
-    fn get_attr(&self, attr: &str, heap: &'v Heap) -> Option<Value<'v>> {
-        match attr {
-            Self::LSP_ATTR_NAME => Some(heap.alloc(Lsp)),
-            _ => None,
-        }
-    }
-
-    fn has_attr(&self, attr: &str, _heap: &'v Heap) -> bool {
-        attr == Self::LSP_ATTR_NAME
-    }
 }
 
 impl Display for AppObject {
@@ -285,7 +298,7 @@ mod tests {
                         load('{check_path}', 'check')
                         expected_attrs = [
                             'active',
-                            'lsp',
+                            'lsp_for',
                             'observe',
                             'scan',
                             'search',

@@ -73,6 +73,9 @@ pub enum Error {
     #[error(transparent)]
     Language(#[from] tree_sitter::LanguageError),
 
+    #[error("lsp disabled")]
+    LspDisabled,
+
     #[error("cannot find manifest, try running `vex init` in the project’s root")]
     ManifestNotFound,
 

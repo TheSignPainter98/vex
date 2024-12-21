@@ -33,10 +33,23 @@ use crate::{
 
 pub fn test() -> Result<()> {
     let ctx = Context::acquire()?;
-    run_tests(&source::sources_in_dir(&ctx.vex_dir())?)
+    run_tests(RunTestOptions {
+        lsp_enabled: ctx.manifest.run.lsp_enabled,
+        script_sources: &source::sources_in_dir(&ctx.vex_dir())?,
+    })?;
+    Ok(())
 }
 
-pub(crate) fn run_tests(script_sources: &[impl ScriptSource]) -> Result<()> {
+pub(crate) struct RunTestOptions<'sources, S> {
+    pub(crate) lsp_enabled: bool,
+    pub(crate) script_sources: &'sources [S],
+}
+
+pub(crate) fn run_tests<S: ScriptSource>(run_test_opts: RunTestOptions<'_, S>) -> Result<()> {
+    let RunTestOptions {
+        lsp_enabled,
+        script_sources,
+    } = run_test_opts;
     let store = {
         let preinit_opts = PreinitOptions {
             verbosity: Verbosity::Quiet,
@@ -59,6 +72,7 @@ pub(crate) fn run_tests(script_sources: &[impl ScriptSource]) -> Result<()> {
             action: Action::Vexing(event.kind()),
             query_cache: Some(&query_cache),
             ignore_markers: None,
+            lsp_enabled,
             print_handler: &PrintHandler::new(logger::verbosity(), event.kind().name()),
             warning_filter: Some(&warning_filter),
         };
@@ -188,6 +202,7 @@ pub(crate) fn run_tests(script_sources: &[impl ScriptSource]) -> Result<()> {
             action: Action::Vexing(event.kind()),
             query_cache: Some(&query_cache),
             ignore_markers: None,
+            lsp_enabled,
             print_handler: &PrintHandler::new(logger::verbosity(), event.kind().name()),
             warning_filter: Some(&warning_filter),
         };
