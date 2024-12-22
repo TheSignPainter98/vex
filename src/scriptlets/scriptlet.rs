@@ -549,6 +549,7 @@ mod tests {
             Unavailable,
             "vex.observe('open_file', lambda x: x)",
         );
+        test_preiniting_availability("vex.lsp_for", Unavailable, "vex.lsp_for('rust')");
         test_preiniting_availability(
             "vex.search",
             Unavailable,
@@ -604,6 +605,7 @@ mod tests {
             Unavailable,
             "vex.observe('open_file', lambda x: x)",
         );
+        test_vexing_open_availability("vex.lsp_for", Available, "vex.lsp_for('rust')");
         test_vexing_open_availability(
             "vex.search",
             Available,
@@ -656,6 +658,7 @@ mod tests {
             Unavailable,
             "vex.observe('open_file', lambda x: x)",
         );
+        test_vexing_match_availability("vex.lsp_for", Available, "vex.lsp_for('rust')");
         test_vexing_match_availability(
             "vex.search",
             Unavailable,
