@@ -398,7 +398,7 @@ pub struct LanguageOptions {
 #[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
 #[serde(untagged)]
 pub enum LanguageServerCommand {
-    JustBinary(String),
+    JustName(String),
     WithArgs(Vec<String>),
 }
 
@@ -406,7 +406,7 @@ impl LanguageServerCommand {
     #[allow(unused)]
     pub fn parts(&self) -> impl Iterator<Item = &str> {
         let parts_slice = match self {
-            Self::JustBinary(cmd) => slice::from_ref(cmd),
+            Self::JustName(cmd) => slice::from_ref(cmd),
             Self::WithArgs(cmd) => cmd,
         };
         parts_slice.iter().map(String::as_str)
