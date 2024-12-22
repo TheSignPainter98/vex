@@ -397,6 +397,7 @@ pub struct LanguageOptions {
 
 #[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
 #[serde(untagged)]
+#[serde(expecting = "invalid type: expected string or sequence")]
 pub enum LanguageServerCommand {
     JustName(String),
     WithArgs(Vec<String>),
