@@ -39,7 +39,7 @@ impl Context {
                 || manifest
                     .languages
                     .values()
-                    .any(|language_options| language_options.lsp_server.is_some());
+                    .any(|language_options| language_options.language_server.is_some());
             if !suppress_warning && lsp_features_used {
                 warn!("LSP features requested but current support is experimental (Set VEX_LSP=1 to suppress this warning)");
             }
@@ -368,7 +368,7 @@ impl Default for LanguagesConfig {
                 SupportedLanguage::Python,
                 LanguageOptions {
                     file_associations: vec![RawFilePattern::new("*.star".into())],
-                    lsp_server: None,
+                    language_server: None,
                 },
             )]
             .into_iter()
@@ -391,7 +391,7 @@ pub struct LanguageOptions {
     #[serde(rename = "use-for", default)]
     file_associations: Vec<RawFilePattern<String>>,
 
-    lsp_server: Option<String>,
+    language_server: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
@@ -615,7 +615,7 @@ mod tests {
 
             [languages.python]
             use-for = ["*.star", "*.py2"]
-            lsp-server = "custom-language-server"
+            language-server = "custom-language-server"
         "#};
         let parsed_manifest: Manifest = toml_edit::de::from_str(manifest_content).unwrap();
 
@@ -640,7 +640,7 @@ mod tests {
         );
         assert_eq!(
             parsed_manifest.languages[&SupportedLanguage::Python]
-                .lsp_server
+                .language_server
                 .as_deref(),
             Some("custom-language-server")
         );
