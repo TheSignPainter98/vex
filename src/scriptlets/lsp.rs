@@ -122,9 +122,11 @@ mod tests {
                         vex.observe('open_project', on_open_project)
 
                     def on_open_project(event):
-                        vex.lsp_for('rust').language
+                        lsp = vex.lsp_for('rust')
+                        if lsp != None:
+                            fail('unavailable lsp is not None')
                 "},
             )
-            .returns_error("lsp disabled");
+            .assert_irritation_free();
     }
 }

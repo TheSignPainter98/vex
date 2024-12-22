@@ -97,25 +97,26 @@ impl AppObject {
             #[starlark(this)] _this: Value<'v>,
             #[starlark(require=pos)] language: &'v str,
             eval: &mut Evaluator<'v, '_>,
-        ) -> anyhow::Result<Lsp<'v>> {
+        ) -> anyhow::Result<Option<Lsp<'v>>> {
             AppObject::check_attr_available(
                 eval,
                 "vex.lsp_for",
                 &[
                     Action::Vexing(EventKind::OpenProject),
                     Action::Vexing(EventKind::OpenFile),
+                    Action::Vexing(EventKind::Match),
                 ],
             )?;
 
             let temp_data = TempData::get_from(eval);
             if !temp_data.lsp_enabled {
-                return Err(Error::LspDisabled.into());
+                return Ok(None);
             }
 
             let language = eval
                 .heap()
                 .alloc(language.parse::<SupportedLanguage>()?.to_string());
-            Ok(Lsp { language })
+            Ok(Some(Lsp { language }))
         }
 
         fn search<'v>(
