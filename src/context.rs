@@ -6,6 +6,7 @@ use serde::{Deserialize as Deserialise, Serialize as Serialise};
 use std::collections::{BTreeMap, HashMap};
 use std::io::{BufWriter, ErrorKind, Read, Write};
 use std::ops::Deref;
+use std::slice;
 use std::{
     env,
     fs::{self, File},
@@ -391,7 +392,25 @@ pub struct LanguageOptions {
     #[serde(rename = "use-for", default)]
     file_associations: Vec<RawFilePattern<String>>,
 
-    language_server: Option<String>,
+    language_server: Option<LanguageServerCommand>,
+}
+
+#[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
+#[serde(untagged)]
+pub enum LanguageServerCommand {
+    JustBinary(String),
+    WithArgs(Vec<String>),
+}
+
+impl LanguageServerCommand {
+    #[allow(unused)]
+    pub fn parts(&self) -> impl Iterator<Item = &str> {
+        let parts_slice = match self {
+            Self::JustBinary(cmd) => slice::from_ref(cmd),
+            Self::WithArgs(cmd) => cmd,
+        };
+        parts_slice.iter().map(String::as_str)
+    }
 }
 
 #[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
@@ -615,7 +634,7 @@ mod tests {
 
             [languages.python]
             use-for = ["*.star", "*.py2"]
-            language-server = "custom-language-server"
+            language-server = [ "custom-language-server", "with-arg" ]
         "#};
         let parsed_manifest: Manifest = toml_edit::de::from_str(manifest_content).unwrap();
 
@@ -641,8 +660,35 @@ mod tests {
         assert_eq!(
             parsed_manifest.languages[&SupportedLanguage::Python]
                 .language_server
-                .as_deref(),
-            Some("custom-language-server")
+                .as_ref()
+                .unwrap()
+                .parts()
+                .collect::<Vec<_>>(),
+            ["custom-language-server", "with-arg"],
+        );
+    }
+
+    #[test]
+    fn minimal_language_server() {
+        let manifest_content = indoc! {r#"
+            [vex]
+            version = "1"
+            enable-lsp = true
+
+            [languages.python]
+            use-for = ["*.star", "*.py2"]
+            language-server = "custom-language-server"
+        "#};
+        let parsed_manifest: Manifest = toml_edit::de::from_str(manifest_content).unwrap();
+
+        assert_eq!(
+            parsed_manifest.languages[&SupportedLanguage::Python]
+                .language_server
+                .as_ref()
+                .unwrap()
+                .parts()
+                .collect::<Vec<_>>(),
+            ["custom-language-server"],
         );
     }
 }
