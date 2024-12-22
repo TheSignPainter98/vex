@@ -104,6 +104,7 @@ pub struct TempData<'v> {
     pub action: Action,
     pub query_cache: Option<&'v QueryCache>,
     pub ignore_markers: Option<&'v IgnoreMarkers>,
+    pub lsp_enabled: bool,
     pub warning_filter: Option<&'v WarningFilter>,
 }
 
