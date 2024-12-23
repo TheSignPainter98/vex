@@ -338,14 +338,8 @@ pub struct FilesConfig {
     pub allows: Vec<RawFilePattern<String>>,
 }
 
-#[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
 pub struct ArgsForId(BTreeMap<String, ArgValue>);
-
-impl Default for ArgsForId {
-    fn default() -> Self {
-        Self(BTreeMap::default())
-    }
-}
 
 #[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
 #[serde(untagged)]
