@@ -116,7 +116,7 @@ pub fn scan_project(
                 project_queries: &project_queries,
                 query_cache: &query_cache,
                 warning_filter: &warning_filter,
-                script_args: &script_args,
+                script_args,
                 verbosity,
             };
             scan_file(file, opts)

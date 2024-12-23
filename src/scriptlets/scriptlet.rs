@@ -363,7 +363,7 @@ impl InitingScriptlet {
             {
                 let temp_data = TempData {
                     action: Action::Initing,
-                    script_args: &script_args,
+                    script_args,
                     query_cache: None,
                     ignore_markers: None,
                     lsp_enabled: false,
