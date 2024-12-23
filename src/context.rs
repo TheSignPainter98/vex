@@ -367,7 +367,7 @@ impl ScriptArgsForId {
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&str, &ScriptArgValue)> {
-        self.0.iter().map(|(key, value)| (&key[..], value))
+        self.0.iter().map(|(key, value)| (key.as_str(), value))
     }
 }
 
