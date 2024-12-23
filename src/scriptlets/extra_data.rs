@@ -8,6 +8,7 @@ use starlark::{
 use starlark_derive::{starlark_value, NoSerialize, Trace};
 
 use crate::{
+    context::Args,
     ignore_markers::IgnoreMarkers,
     scriptlets::{
         action::Action,
@@ -102,6 +103,7 @@ impl<'v> AllocValue<'v> for RetainedData {
 #[derive(Debug, ProvidesStaticType)]
 pub struct TempData<'v> {
     pub action: Action,
+    pub args: &'v Args,
     pub query_cache: Option<&'v QueryCache>,
     pub ignore_markers: Option<&'v IgnoreMarkers>,
     pub lsp_enabled: bool,

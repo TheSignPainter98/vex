@@ -2,6 +2,9 @@ use camino::{Utf8Path, Utf8PathBuf};
 use indoc::indoc;
 use log::log_enabled;
 use serde::{Deserialize as Deserialise, Serialize as Serialise};
+use starlark::values::dict::AllocDict;
+use starlark::values::list::AllocList;
+use starlark::values::{Heap, Value};
 
 use std::collections::{BTreeMap, HashMap};
 use std::io::{BufWriter, ErrorKind, Read, Write};
@@ -177,7 +180,7 @@ pub struct Manifest {
     pub files: FilesConfig,
 
     #[serde(default)]
-    pub args: BTreeMap<Id, ArgsForId>,
+    pub args: Args,
 
     #[serde(default)]
     pub lints: LintsConfig,
@@ -339,7 +342,33 @@ pub struct FilesConfig {
 }
 
 #[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
+pub struct Args(BTreeMap<Id, ArgsForId>);
+
+impl Args {
+    pub fn get(&self, key: &Id) -> Option<&ArgsForId> {
+        self.0.get(key)
+    }
+}
+
+impl Default for &Args {
+    fn default() -> Self {
+        static DEFAULT_ARGS: Args = Args(BTreeMap::new());
+        &DEFAULT_ARGS
+    }
+}
+
+#[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
 pub struct ArgsForId(BTreeMap<String, ArgValue>);
+
+impl ArgsForId {
+    pub fn get(&self, key: &str) -> Option<&ArgValue> {
+        self.0.get(key)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &ArgValue)> {
+        self.0.iter().map(|(key, value)| (&key[..], value))
+    }
+}
 
 #[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
 #[serde(untagged)]
@@ -351,6 +380,21 @@ pub enum ArgValue {
     String(String),
     Sequence(Vec<ArgValue>),
     Table(BTreeMap<String, ArgValue>),
+}
+
+impl ArgValue {
+    pub fn to_value_on<'v>(&self, heap: &'v Heap) -> Value<'v> {
+        match self {
+            Self::Bool(b) => Value::new_bool(*b),
+            Self::Int(i) => heap.alloc(*i),
+            Self::Float(f) => heap.alloc(*f),
+            Self::String(s) => heap.alloc(s.clone()),
+            Self::Sequence(s) => heap.alloc(AllocList(s.iter().map(|e| e.to_value_on(heap)))),
+            Self::Table(t) => {
+                heap.alloc(AllocDict(t.iter().map(|(k, v)| (k, v.to_value_on(heap)))))
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
@@ -672,8 +716,13 @@ mod tests {
         {
             let hello_id = Id::try_from("hello".to_owned()).unwrap();
             assert_eq!(
-                parsed_manifest.args[&hello_id].0["world"],
-                AV::Sequence(vec![
+                parsed_manifest
+                    .args
+                    .get(&hello_id)
+                    .unwrap()
+                    .get("world")
+                    .unwrap(),
+                &AV::Sequence(vec![
                     AV::Bool(true),
                     AV::Int(123),
                     AV::Float(123.4),

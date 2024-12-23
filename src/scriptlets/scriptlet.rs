@@ -69,7 +69,7 @@ impl PreinitingScriptlet {
         frozen_heap: &FrozenHeap,
     ) -> Result<InitingScriptlet> {
         let Self { path, ast, loads } = self;
-        let PreinitOptions { verbosity } = opts;
+        let PreinitOptions { args, verbosity } = opts;
 
         let preinited_module = {
             let preinited_module = Module::new();
@@ -78,6 +78,7 @@ impl PreinitingScriptlet {
             {
                 let temp_data = TempData {
                     action: Action::Preiniting,
+                    args,
                     query_cache: None,
                     ignore_markers: None,
                     lsp_enabled: false,
@@ -345,7 +346,7 @@ impl InitingScriptlet {
             path,
             preinited_module,
         } = self;
-        let InitOptions { verbosity } = opts;
+        let InitOptions { args, verbosity } = opts;
 
         let Some(init) = preinited_module.get_option("init")? else {
             return Ok(ObserverData::empty());
@@ -356,6 +357,7 @@ impl InitingScriptlet {
             {
                 let temp_data = TempData {
                     action: Action::Initing,
+                    args: &args,
                     query_cache: None,
                     ignore_markers: None,
                     lsp_enabled: false,
