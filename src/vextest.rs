@@ -154,14 +154,14 @@ impl<'s> VexTest<'s> {
         }
 
         let ctx = Context::acquire_in(&root_path).unwrap();
-        let args = &ctx.args;
+        let script_args = &ctx.script_args;
         if !self.bare {
             fs::create_dir(ctx.vex_dir()).ok();
         }
         if self.fire_test_events {
             crate::test::run_tests(RunTestOptions {
                 lsp_enabled: ctx.manifest.run.lsp_enabled,
-                args,
+                script_args,
                 script_sources: &self.scriptlets,
             })?;
             Ok(ProjectRunData::default())
@@ -178,8 +178,14 @@ impl<'s> VexTest<'s> {
             let warning_filter = crate::try_make_warning_filter(&ctx.manifest)?;
 
             let verbosity = Verbosity::default();
-            let preinit_opts = PreinitOptions { args, verbosity };
-            let init_opts = InitOptions { args, verbosity };
+            let preinit_opts = PreinitOptions {
+                script_args,
+                verbosity,
+            };
+            let init_opts = InitOptions {
+                script_args,
+                verbosity,
+            };
             let store = PreinitingStore::new(&self.scriptlets)?
                 .preinit(preinit_opts)?
                 .init(init_opts)?;

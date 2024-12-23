@@ -8,7 +8,7 @@ use starlark::{
 use starlark_derive::{starlark_value, NoSerialize, ProvidesStaticType, Trace};
 
 use crate::{
-    context::Args,
+    context::ScriptArgs,
     ignore_markers::IgnoreMarkers,
     result::Result,
     scriptlets::{
@@ -131,7 +131,7 @@ pub trait Observable {
 #[derive(Clone, Debug, Dupe)]
 pub struct ObserveOptions<'v> {
     pub action: Action,
-    pub args: &'v Args,
+    pub script_args: &'v ScriptArgs,
     pub query_cache: Option<&'v QueryCache>,
     pub ignore_markers: Option<&'v IgnoreMarkers>,
     pub lsp_enabled: bool,
@@ -148,7 +148,7 @@ impl Observable for Observer {
     ) -> Result<()> {
         let ObserveOptions {
             action,
-            args,
+            script_args,
             query_cache,
             ignore_markers,
             lsp_enabled,
@@ -157,7 +157,7 @@ impl Observable for Observer {
         } = opts;
         let temp_data = TempData {
             action,
-            args,
+            script_args,
             query_cache,
             ignore_markers,
             lsp_enabled,

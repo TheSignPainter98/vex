@@ -9,7 +9,7 @@ use log::{info, log_enabled};
 use starlark::values::FrozenHeap;
 
 use crate::{
-    context::Args,
+    context::ScriptArgs,
     error::Error,
     result::Result,
     scriptlets::{
@@ -208,7 +208,7 @@ impl PreinitingStore {
 
 #[derive(Debug, Default)]
 pub struct PreinitOptions<'args> {
-    pub args: &'args Args,
+    pub script_args: &'args ScriptArgs,
     pub verbosity: Verbosity,
 }
 
@@ -267,7 +267,7 @@ impl InitingStore {
 
 #[derive(Debug, Default)]
 pub struct InitOptions<'args> {
-    pub args: &'args Args,
+    pub script_args: &'args ScriptArgs,
     pub verbosity: Verbosity,
 }
 

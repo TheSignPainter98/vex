@@ -12,7 +12,7 @@ use starlark::values::FrozenHeap;
 use crate::{
     associations::Associations,
     cli::{MaxConcurrentFileLimit, MaxProblems},
-    context::{Args, Context, Manifest},
+    context::{Context, Manifest, ScriptArgs},
     error::{Error, IOAction},
     logger,
     result::Result,
@@ -35,7 +35,7 @@ pub fn test() -> Result<()> {
     let ctx = Context::acquire()?;
     run_tests(RunTestOptions {
         lsp_enabled: ctx.manifest.run.lsp_enabled,
-        args: &ctx.args,
+        script_args: &ctx.script_args,
         script_sources: &source::sources_in_dir(&ctx.vex_dir())?,
     })?;
     Ok(())
@@ -43,23 +43,23 @@ pub fn test() -> Result<()> {
 
 pub(crate) struct RunTestOptions<'a, S> {
     pub(crate) lsp_enabled: bool,
-    pub(crate) args: &'a Args,
+    pub(crate) script_args: &'a ScriptArgs,
     pub(crate) script_sources: &'a [S],
 }
 
 pub(crate) fn run_tests<S: ScriptSource>(run_test_opts: RunTestOptions<'_, S>) -> Result<()> {
     let RunTestOptions {
         lsp_enabled,
-        args,
+        script_args,
         script_sources,
     } = run_test_opts;
     let store = {
         let preinit_opts = PreinitOptions {
-            args,
+            script_args,
             verbosity: Verbosity::Quiet,
         };
         let init_opts = InitOptions {
-            args,
+            script_args,
             verbosity: Verbosity::Quiet,
         };
         PreinitingStore::new(script_sources)?
@@ -75,7 +75,7 @@ pub(crate) fn run_tests<S: ScriptSource>(run_test_opts: RunTestOptions<'_, S>) -
         let warning_filter = WarningFilter::all();
         let observe_opts = ObserveOptions {
             action: Action::Vexing(event.kind()),
-            args,
+            script_args,
             query_cache: Some(&query_cache),
             ignore_markers: None,
             lsp_enabled,
@@ -183,8 +183,14 @@ pub(crate) fn run_tests<S: ScriptSource>(run_test_opts: RunTestOptions<'_, S>) -
         let sub_ctx = Context::new_with_manifest(&temp_dir_path, Manifest::default());
         let sub_store = {
             let verbosity = Verbosity::Quiet;
-            let preinit_opts = PreinitOptions { args, verbosity };
-            let init_opts = InitOptions { args, verbosity };
+            let preinit_opts = PreinitOptions {
+                script_args,
+                verbosity,
+            };
+            let init_opts = InitOptions {
+                script_args,
+                verbosity,
+            };
             PreinitingStore::new(script_sources)?
                 .preinit(preinit_opts)?
                 .init(init_opts)?
@@ -206,7 +212,7 @@ pub(crate) fn run_tests<S: ScriptSource>(run_test_opts: RunTestOptions<'_, S>) -
         let warning_filter = WarningFilter::all();
         let observer_opts = ObserveOptions {
             action: Action::Vexing(event.kind()),
-            args,
+            script_args,
             query_cache: Some(&query_cache),
             ignore_markers: None,
             lsp_enabled,

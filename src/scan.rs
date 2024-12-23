@@ -14,7 +14,7 @@ use tree_sitter::QueryCursor;
 
 use crate::{
     cli::{MaxConcurrentFileLimit, MaxProblems},
-    context::{Args, Context},
+    context::{Context, ScriptArgs},
     irritation::Irritation,
     query::Query,
     result::Result,
@@ -53,7 +53,7 @@ pub fn scan_project(
     let project_queries_hint = store.project_queries_hint();
     let file_queries_hint = store.file_queries_hint();
 
-    let args = &ctx.args;
+    let script_args = &ctx.script_args;
     let query_cache = QueryCache::with_capacity(project_queries_hint + file_queries_hint);
     let lsp_enabled = ctx.manifest.run.lsp_enabled;
 
@@ -66,7 +66,7 @@ pub fn scan_project(
         let handler_module = HandlerModule::new();
         let observe_opts = ObserveOptions {
             action: Action::Vexing(event.kind()),
-            args,
+            script_args,
             query_cache: Some(&query_cache),
             warning_filter: Some(&warning_filter),
             ignore_markers: None,
@@ -116,7 +116,7 @@ pub fn scan_project(
                 project_queries: &project_queries,
                 query_cache: &query_cache,
                 warning_filter: &warning_filter,
-                args: &args,
+                script_args: &script_args,
                 verbosity,
             };
             scan_file(file, opts)
@@ -170,7 +170,7 @@ pub struct VexFileOptions<'a> {
     project_queries: &'a [(SupportedLanguage, Arc<Query>, Observer)],
     query_cache: &'a QueryCache,
     warning_filter: &'a WarningFilter,
-    args: &'a Args,
+    script_args: &'a ScriptArgs,
     verbosity: Verbosity,
 }
 
@@ -182,7 +182,7 @@ fn scan_file(file: &SourceFile, opts: VexFileOptions<'_>) -> Result<FileRunData>
         project_queries,
         query_cache,
         warning_filter,
-        args,
+        script_args,
         verbosity,
     } = opts;
 
@@ -197,7 +197,7 @@ fn scan_file(file: &SourceFile, opts: VexFileOptions<'_>) -> Result<FileRunData>
         let handler_module = HandlerModule::new();
         let observe_opts = ObserveOptions {
             action: Action::Vexing(event.kind()),
-            args,
+            script_args,
             query_cache: Some(query_cache),
             warning_filter: Some(warning_filter),
             ignore_markers: None,
@@ -262,7 +262,7 @@ fn scan_file(file: &SourceFile, opts: VexFileOptions<'_>) -> Result<FileRunData>
                     };
                     let observe_opts = ObserveOptions {
                         action: Action::Vexing(EventKind::Match),
-                        args,
+                        script_args,
                         query_cache: Some(query_cache),
                         warning_filter: Some(warning_filter),
                         ignore_markers: Some(&ignore_markers),

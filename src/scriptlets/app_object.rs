@@ -111,17 +111,19 @@ impl AppObject {
             let id = Id::try_from(id.to_owned())?;
 
             let temp_data = TempData::get_from(eval);
-            let args = temp_data.args;
+            let script_args = temp_data.script_args;
 
             let heap = eval.heap();
-            let args_for_id = match args.get(&id) {
+            let script_args_for_id = match script_args.get(&id) {
                 Some(a) => a,
                 None => return Ok(heap.alloc(AllocDict::<[(Value<'_>, Value<'_>); 0]>([]))),
             };
-            let args_dict = heap.alloc(AllocDict(
-                args_for_id.iter().map(|(k, v)| (k, v.to_value_on(heap))),
+            let ret = heap.alloc(AllocDict(
+                script_args_for_id
+                    .iter()
+                    .map(|(k, v)| (k, v.to_value_on(heap))),
             ));
-            Ok(args_dict)
+            Ok(ret)
         }
 
         fn lsp_for<'v>(

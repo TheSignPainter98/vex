@@ -179,8 +179,9 @@ pub struct Manifest {
     #[serde(default)]
     pub files: FilesConfig,
 
+    #[serde(rename = "args")]
     #[serde(default)]
-    pub args: Args,
+    pub script_args: ScriptArgs,
 
     #[serde(default)]
     pub lints: LintsConfig,
@@ -342,30 +343,30 @@ pub struct FilesConfig {
 }
 
 #[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
-pub struct Args(BTreeMap<Id, ArgsForId>);
+pub struct ScriptArgs(BTreeMap<Id, ScriptArgsForId>);
 
-impl Args {
-    pub fn get(&self, key: &Id) -> Option<&ArgsForId> {
+impl ScriptArgs {
+    pub fn get(&self, key: &Id) -> Option<&ScriptArgsForId> {
         self.0.get(key)
     }
 }
 
-impl Default for &Args {
+impl Default for &ScriptArgs {
     fn default() -> Self {
-        static DEFAULT_ARGS: Args = Args(BTreeMap::new());
+        static DEFAULT_ARGS: ScriptArgs = ScriptArgs(BTreeMap::new());
         &DEFAULT_ARGS
     }
 }
 
 #[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
-pub struct ArgsForId(BTreeMap<String, ArgValue>);
+pub struct ScriptArgsForId(BTreeMap<String, ScriptArgValue>);
 
-impl ArgsForId {
-    pub fn get(&self, key: &str) -> Option<&ArgValue> {
+impl ScriptArgsForId {
+    pub fn get(&self, key: &str) -> Option<&ScriptArgValue> {
         self.0.get(key)
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&str, &ArgValue)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &ScriptArgValue)> {
         self.0.iter().map(|(key, value)| (&key[..], value))
     }
 }
@@ -373,16 +374,16 @@ impl ArgsForId {
 #[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
 #[serde(untagged)]
 #[serde(expecting = "invalid type: expecting a bool, int, float, string, sequence or table")]
-pub enum ArgValue {
+pub enum ScriptArgValue {
     Bool(bool),
     Int(i64),
     Float(f64),
     String(String),
-    Sequence(Vec<ArgValue>),
-    Table(BTreeMap<String, ArgValue>),
+    Sequence(Vec<ScriptArgValue>),
+    Table(BTreeMap<String, ScriptArgValue>),
 }
 
-impl ArgValue {
+impl ScriptArgValue {
     pub fn to_value_on<'v>(&self, heap: &'v Heap) -> Value<'v> {
         match self {
             Self::Bool(b) => Value::new_bool(*b),
@@ -679,7 +680,7 @@ mod tests {
 
     #[test]
     fn maximal_manifest() {
-        use ArgValue as AV;
+        use ScriptArgValue as SAV;
 
         let manifest_content = indoc! {r#"
             [vex]
@@ -717,19 +718,19 @@ mod tests {
             let hello_id = Id::try_from("hello".to_owned()).unwrap();
             assert_eq!(
                 parsed_manifest
-                    .args
+                    .script_args
                     .get(&hello_id)
                     .unwrap()
                     .get("world")
                     .unwrap(),
-                &AV::Sequence(vec![
-                    AV::Bool(true),
-                    AV::Int(123),
-                    AV::Float(123.4),
-                    AV::String("foo".into()),
-                    AV::Table(BTreeMap::from_iter([(
+                &SAV::Sequence(vec![
+                    SAV::Bool(true),
+                    SAV::Int(123),
+                    SAV::Float(123.4),
+                    SAV::String("foo".into()),
+                    SAV::Table(BTreeMap::from_iter([(
                         "bar".to_owned(),
-                        AV::Sequence(vec![AV::String("baz".into())]),
+                        SAV::Sequence(vec![SAV::String("baz".into())]),
                     )])),
                 ])
             );
