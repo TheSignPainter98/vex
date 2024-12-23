@@ -102,6 +102,7 @@ impl TryFrom<String> for Id {
             reason,
         };
 
+        // NOTE: these should be the same as the min and max values for ScriptArgKey.
         const MIN_ID_LEN: usize = 3;
         const MAX_ID_LEN: usize = 25;
         if raw_id.len() < MIN_ID_LEN {
