@@ -900,6 +900,26 @@ mod tests {
     }
 
     #[test]
+    fn manifest_script_arg_key_sanitisation() {
+        const EXPECTED_ERR: &str = "too few characters";
+
+        let err = {
+            let raw_manifest = formatdoc! {r#"
+                [vex]
+                version = "1"
+
+                [args]
+                too-short.v = 1
+            "#};
+            toml_edit::de::from_str::<Manifest>(&raw_manifest).unwrap_err()
+        };
+        assert!(
+            err.to_string().contains(EXPECTED_ERR),
+            "incorrect error: should contain {EXPECTED_ERR} but got {err}"
+        );
+    }
+
+    #[test]
     fn args_must_be_namespaced() {
         const EXPECTED_ERR: &str = "invalid type";
 
