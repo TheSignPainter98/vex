@@ -117,10 +117,17 @@ fn list(list_args: ListCmd) -> Result<()> {
 fn check(cmd_args: CheckCmd) -> Result<()> {
     let ctx = Context::acquire()?;
     let verbosity = logger::verbosity();
+    let script_args = &ctx.script_args;
 
     let store = {
-        let preinit_opts = PreinitOptions { verbosity };
-        let init_opts = InitOptions { verbosity };
+        let preinit_opts = PreinitOptions {
+            script_args,
+            verbosity,
+        };
+        let init_opts = InitOptions {
+            script_args,
+            verbosity,
+        };
         PreinitingStore::new(&source::sources_in_dir(&ctx.vex_dir())?)?
             .preinit(preinit_opts)?
             .init(init_opts)?

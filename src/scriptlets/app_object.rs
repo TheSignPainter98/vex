@@ -8,15 +8,15 @@ use starlark::{
     eval::Evaluator,
     starlark_module,
     values::{
-        list::UnpackList, none::NoneType, NoSerialize, ProvidesStaticType, StarlarkValue,
-        StringValue, Value,
+        dict::AllocDict, list::UnpackList, none::NoneType, NoSerialize, ProvidesStaticType,
+        StarlarkValue, StringValue, Value,
     },
 };
 use starlark_derive::starlark_value;
 
 use crate::{
     error::Error,
-    id::{GroupId, LintId},
+    id::{GroupId, Id, LintId},
     irritation::IrritationRenderer,
     query::Query,
     result::Result,
@@ -91,6 +91,39 @@ impl AppObject {
                 }
             });
             Ok(active)
+        }
+
+        fn args_for<'v>(
+            #[starlark(this)] _this: Value<'v>,
+            #[starlark(require=pos)] id: &'v str,
+            eval: &mut Evaluator<'v, '_>,
+        ) -> anyhow::Result<Value<'v>> {
+            AppObject::check_attr_available(
+                eval,
+                "vex.args_for",
+                &[
+                    Action::Vexing(EventKind::OpenProject),
+                    Action::Vexing(EventKind::OpenFile),
+                    Action::Vexing(EventKind::Match),
+                ],
+            )?;
+
+            let id = Id::try_from(id.to_owned())?;
+
+            let temp_data = TempData::get_from(eval);
+            let script_args = temp_data.script_args;
+
+            let heap = eval.heap();
+            let script_args_for_id = match script_args.get(&id) {
+                Some(a) => a,
+                None => return Ok(heap.alloc(AllocDict::<[(Value<'_>, Value<'_>); 0]>([]))),
+            };
+            let ret = heap.alloc(AllocDict(
+                script_args_for_id
+                    .iter()
+                    .map(|(k, v)| (k, v.to_value_on(heap))),
+            ));
+            Ok(ret)
         }
 
         fn lsp_for<'v>(
@@ -295,6 +328,7 @@ mod tests {
                         load('{check_path}', 'check')
                         expected_attrs = [
                             'active',
+                            'args_for',
                             'lsp_for',
                             'observe',
                             'scan',
@@ -646,5 +680,61 @@ mod tests {
             });
 
         assert_yaml_snapshot!(irritations);
+    }
+
+    #[test]
+    fn args_for() {
+        const ID: &str = "some-id";
+        VexTest::new("empty")
+            .with_manifest(indoc! {r#"
+                [vex]
+                version = "1"
+            "#})
+            .with_scriptlet(
+                "vexes/test.star",
+                formatdoc! {
+                    r"
+                        load('{check_path}', 'check')
+
+                        def init():
+                            vex.observe('open_project', on_open_project)
+
+                        def on_open_project(event):
+                            args = vex.args_for('{ID}')
+                            check['eq'](len(args), 0)
+
+                    ",
+                    check_path = VexTest::CHECK_STARLARK_PATH,
+                },
+            )
+            .assert_irritation_free();
+        VexTest::new("specified")
+            .with_manifest(formatdoc! {r#"
+                [vex]
+                version = "1"
+
+                [args]
+                {ID}.some-key = [true, {{x = [123]}}]
+            "#})
+            .with_scriptlet(
+                "vexes/test.star",
+                formatdoc! {
+                    r"
+                        load('{check_path}', 'check')
+
+                        def init():
+                            vex.observe('open_project', on_open_project)
+
+                        def on_open_project(event):
+                            args = vex.args_for('{ID}')
+                            check['eq'](len(args), 1)
+                            check['true']('some-key' in args)
+                            check['eq'](args['some-key'], [True, {{'x': [123]}}])
+
+                    ",
+                    check_path = VexTest::CHECK_STARLARK_PATH,
+                },
+            )
+            .assert_irritation_free();
     }
 }

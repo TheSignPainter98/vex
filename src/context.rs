@@ -2,6 +2,9 @@ use camino::{Utf8Path, Utf8PathBuf};
 use indoc::indoc;
 use log::log_enabled;
 use serde::{Deserialize as Deserialise, Serialize as Serialise};
+use starlark::values::dict::AllocDict;
+use starlark::values::list::AllocList;
+use starlark::values::{Heap, Value};
 
 use std::collections::{BTreeMap, HashMap};
 use std::io::{BufWriter, ErrorKind, Read, Write};
@@ -176,8 +179,9 @@ pub struct Manifest {
     #[serde(default)]
     pub files: FilesConfig,
 
+    #[serde(rename = "args")]
     #[serde(default)]
-    pub args: BTreeMap<Id, ArgsForId>,
+    pub script_args: ScriptArgs,
 
     #[serde(default)]
     pub lints: LintsConfig,
@@ -339,18 +343,59 @@ pub struct FilesConfig {
 }
 
 #[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
-pub struct ArgsForId(BTreeMap<String, ArgValue>);
+pub struct ScriptArgs(BTreeMap<Id, ScriptArgsForId>);
+
+impl ScriptArgs {
+    pub fn get(&self, key: &Id) -> Option<&ScriptArgsForId> {
+        self.0.get(key)
+    }
+}
+
+impl Default for &ScriptArgs {
+    fn default() -> Self {
+        static DEFAULT_ARGS: ScriptArgs = ScriptArgs(BTreeMap::new());
+        &DEFAULT_ARGS
+    }
+}
+
+#[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
+pub struct ScriptArgsForId(BTreeMap<String, ScriptArgValue>);
+
+impl ScriptArgsForId {
+    pub fn get(&self, key: &str) -> Option<&ScriptArgValue> {
+        self.0.get(key)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &ScriptArgValue)> {
+        self.0.iter().map(|(key, value)| (key.as_str(), value))
+    }
+}
 
 #[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
 #[serde(untagged)]
 #[serde(expecting = "invalid type: expecting a bool, int, float, string, sequence or table")]
-pub enum ArgValue {
+pub enum ScriptArgValue {
     Bool(bool),
     Int(i64),
     Float(f64),
     String(String),
-    Sequence(Vec<ArgValue>),
-    Table(BTreeMap<String, ArgValue>),
+    Sequence(Vec<ScriptArgValue>),
+    Table(BTreeMap<String, ScriptArgValue>),
+}
+
+impl ScriptArgValue {
+    pub fn to_value_on<'v>(&self, heap: &'v Heap) -> Value<'v> {
+        match self {
+            Self::Bool(b) => Value::new_bool(*b),
+            Self::Int(i) => heap.alloc(*i),
+            Self::Float(f) => heap.alloc(*f),
+            Self::String(s) => heap.alloc(s.clone()),
+            Self::Sequence(s) => heap.alloc(AllocList(s.iter().map(|e| e.to_value_on(heap)))),
+            Self::Table(t) => {
+                heap.alloc(AllocDict(t.iter().map(|(k, v)| (k, v.to_value_on(heap)))))
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
@@ -635,7 +680,7 @@ mod tests {
 
     #[test]
     fn maximal_manifest() {
-        use ArgValue as AV;
+        use ScriptArgValue as SAV;
 
         let manifest_content = indoc! {r#"
             [vex]
@@ -672,15 +717,20 @@ mod tests {
         {
             let hello_id = Id::try_from("hello".to_owned()).unwrap();
             assert_eq!(
-                parsed_manifest.args[&hello_id].0["world"],
-                AV::Sequence(vec![
-                    AV::Bool(true),
-                    AV::Int(123),
-                    AV::Float(123.4),
-                    AV::String("foo".into()),
-                    AV::Table(BTreeMap::from_iter([(
+                parsed_manifest
+                    .script_args
+                    .get(&hello_id)
+                    .unwrap()
+                    .get("world")
+                    .unwrap(),
+                &SAV::Sequence(vec![
+                    SAV::Bool(true),
+                    SAV::Int(123),
+                    SAV::Float(123.4),
+                    SAV::String("foo".into()),
+                    SAV::Table(BTreeMap::from_iter([(
                         "bar".to_owned(),
-                        AV::Sequence(vec![AV::String("baz".into())]),
+                        SAV::Sequence(vec![SAV::String("baz".into())]),
                     )])),
                 ])
             );

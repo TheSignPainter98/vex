@@ -330,8 +330,8 @@ mod tests {
         let container = Container(BTreeMap::from_iter([(KEY.to_owned(), id.clone())]));
         let serialised = toml_edit::ser::to_string(&container).unwrap();
 
-        let parsed_container: Container = toml_edit::de::from_str(&serialised).unwrap();
-        assert_eq!(id, parsed_container.0[KEY]);
+        let Container(parsed_map) = toml_edit::de::from_str(&serialised).unwrap();
+        assert_eq!(id, parsed_map[KEY]);
 
         #[derive(Serialize, Deserialize)]
         struct Container(BTreeMap<String, Id>);

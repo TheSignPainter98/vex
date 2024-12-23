@@ -9,6 +9,7 @@ use log::{info, log_enabled};
 use starlark::values::FrozenHeap;
 
 use crate::{
+    context::ScriptArgs,
     error::Error,
     result::Result,
     scriptlets::{
@@ -46,7 +47,7 @@ impl PreinitingStore {
         Ok(Self { store })
     }
 
-    pub fn preinit(mut self, opts: PreinitOptions) -> Result<InitingStore> {
+    pub fn preinit(mut self, opts: PreinitOptions<'_>) -> Result<InitingStore> {
         self.store.sort_by(|sc1, sc2| sc1.path.cmp(&sc2.path));
         self.topographic_sort()?;
         let Self { store } = self;
@@ -206,7 +207,8 @@ impl PreinitingStore {
 }
 
 #[derive(Debug, Default)]
-pub struct PreinitOptions {
+pub struct PreinitOptions<'args> {
+    pub script_args: &'args ScriptArgs,
     pub verbosity: Verbosity,
 }
 
@@ -242,7 +244,7 @@ pub struct InitingStore {
 }
 
 impl InitingStore {
-    pub fn init(self, opts: InitOptions) -> Result<VexingStore> {
+    pub fn init(self, opts: InitOptions<'_>) -> Result<VexingStore> {
         let Self { store, frozen_heap } = self;
         let num_scripts = store.len();
 
@@ -264,7 +266,8 @@ impl InitingStore {
 }
 
 #[derive(Debug, Default)]
-pub struct InitOptions {
+pub struct InitOptions<'args> {
+    pub script_args: &'args ScriptArgs,
     pub verbosity: Verbosity,
 }
 
