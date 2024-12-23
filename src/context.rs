@@ -400,7 +400,7 @@ pub struct LanguageOptions {
 #[serde(expecting = "invalid type: expected string or sequence")]
 pub enum LanguageServerCommand {
     JustName(String),
-    WithArgs(Vec<String>),
+    NameWithArgs(Vec<String>),
 }
 
 impl LanguageServerCommand {
@@ -408,7 +408,7 @@ impl LanguageServerCommand {
     pub fn parts(&self) -> impl Iterator<Item = &str> {
         let parts_slice = match self {
             Self::JustName(cmd) => slice::from_ref(cmd),
-            Self::WithArgs(cmd) => cmd,
+            Self::NameWithArgs(cmd) => cmd,
         };
         parts_slice.iter().map(String::as_str)
     }
