@@ -1,22 +1,26 @@
 use camino::{Utf8Path, Utf8PathBuf};
 use indoc::indoc;
+use lazy_static::lazy_static;
 use log::log_enabled;
-use serde::{Deserialize as Deserialise, Serialize as Serialise};
+use regex::Regex;
+use serde::de::Visitor;
+use serde::{Deserialize, Serialize};
 use starlark::values::dict::AllocDict;
 use starlark::values::list::AllocList;
 use starlark::values::{Heap, Value};
 
+use std::borrow::Borrow;
 use std::collections::{BTreeMap, HashMap};
 use std::io::{BufWriter, ErrorKind, Read, Write};
 use std::ops::Deref;
-use std::slice;
 use std::{
     env,
     fs::{self, File},
 };
+use std::{fmt, slice};
 
 use crate::associations::Associations;
-use crate::error::{Error, IOAction};
+use crate::error::{Error, IOAction, InvalidIDReason};
 use crate::id::Id;
 use crate::result::Result;
 use crate::source_path::PrettyPath;
@@ -170,7 +174,7 @@ impl Deref for Context {
     }
 }
 
-#[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Manifest {
     #[serde(rename = "vex")]
@@ -289,7 +293,7 @@ impl Manifest {
     }
 }
 
-#[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct RunConfig {
     pub version: Version,
@@ -303,7 +307,7 @@ pub struct RunConfig {
     pub vexes_dir: VexesDir,
 }
 
-#[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub enum Version {
     #[default]
     #[serde(rename = "1")]
@@ -317,7 +321,7 @@ impl Version {
     }
 }
 
-#[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct VexesDir(Utf8PathBuf);
 
 impl VexesDir {
@@ -332,7 +336,7 @@ impl Default for VexesDir {
     }
 }
 
-#[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct FilesConfig {
     #[serde(default, rename = "ignore")]
@@ -342,12 +346,14 @@ pub struct FilesConfig {
     pub allows: Vec<RawFilePattern<String>>,
 }
 
-#[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub struct ScriptArgs(BTreeMap<Id, ScriptArgsForId>);
 
-impl ScriptArgs {
-    pub fn get(&self, key: &Id) -> Option<&ScriptArgsForId> {
-        self.0.get(key)
+impl Deref for ScriptArgs {
+    type Target = BTreeMap<Id, ScriptArgsForId>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
@@ -358,20 +364,116 @@ impl Default for &ScriptArgs {
     }
 }
 
-#[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
-pub struct ScriptArgsForId(BTreeMap<String, ScriptArgValue>);
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+pub struct ScriptArgsForId(BTreeMap<ScriptArgKey, ScriptArgValue>);
 
-impl ScriptArgsForId {
-    pub fn get(&self, key: &str) -> Option<&ScriptArgValue> {
-        self.0.get(key)
-    }
+impl Deref for ScriptArgsForId {
+    type Target = BTreeMap<ScriptArgKey, ScriptArgValue>;
 
-    pub fn iter(&self) -> impl Iterator<Item = (&str, &ScriptArgValue)> {
-        self.0.iter().map(|(key, value)| (key.as_str(), value))
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
-#[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize)]
+pub struct ScriptArgKey(String);
+
+impl ScriptArgKey {
+    pub fn to_value_on<'v>(&self, heap: &'v Heap) -> Value<'v> {
+        heap.alloc(&self.0)
+    }
+}
+
+impl Borrow<str> for ScriptArgKey {
+    fn borrow(&self) -> &str {
+        &self.0
+    }
+}
+
+impl TryFrom<String> for ScriptArgKey {
+    type Error = Error;
+
+    fn try_from(raw_key: String) -> Result<Self> {
+        let invalid_key = |reason| Error::InvalidScriptArgKey {
+            raw_key: raw_key.clone(),
+            reason,
+        };
+
+        // NOTE: these should be the same as the min and max values for Id.
+        const MIN_KEY_LEN: usize = 3;
+        const MAX_KEY_LEN: usize = 25;
+        if raw_key.len() < MIN_KEY_LEN {
+            return Err(invalid_key(InvalidIDReason::TooShort {
+                len: raw_key.len(),
+                min_len: MIN_KEY_LEN,
+            }));
+        }
+        if raw_key.len() > MAX_KEY_LEN {
+            return Err(invalid_key(InvalidIDReason::TooLong {
+                len: raw_key.len(),
+                max_len: MAX_KEY_LEN,
+            }));
+        }
+
+        lazy_static! {
+            static ref VALID_KEY_ID: Regex = Regex::new("^[a-z][a-z0-9-]*[a-z0-9]$").unwrap();
+        }
+        if !VALID_KEY_ID.is_match(&raw_key) {
+            return Err(invalid_key(InvalidIDReason::IllegalChar));
+        }
+
+        if let Some(index) = raw_key.find("--") {
+            return Err(invalid_key(InvalidIDReason::UglySubstring {
+                found: "--".to_owned(),
+                index,
+            }));
+        }
+
+        Ok(Self(raw_key))
+    }
+}
+
+impl<'de> Deserialize<'de> for ScriptArgKey {
+    fn deserialize<D>(deserializer: D) -> std::prelude::v1::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_string(ScriptArgKeyVisitor)
+    }
+}
+
+struct ScriptArgKeyVisitor;
+
+impl<'de> Visitor<'de> for ScriptArgKeyVisitor {
+    type Value = ScriptArgKey;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("a string")
+    }
+
+    fn visit_str<E>(self, v: &str) -> std::prelude::v1::Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        self.visit_borrowed_str(v)
+    }
+
+    fn visit_borrowed_str<E>(self, v: &'de str) -> std::prelude::v1::Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        self.visit_string(v.to_owned())
+    }
+
+    fn visit_string<E>(self, v: String) -> std::prelude::v1::Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        ScriptArgKey::try_from(v).map_err(E::custom)
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(untagged)]
 #[serde(expecting = "invalid type: expecting a bool, int, float, string, sequence or table")]
 pub enum ScriptArgValue {
@@ -398,14 +500,14 @@ impl ScriptArgValue {
     }
 }
 
-#[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct LintsConfig {
     #[serde(rename = "active")]
     pub active_lints_config: BTreeMap<String, bool>,
 }
 
-#[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct GroupsConfig {
     #[serde(rename = "active")]
@@ -423,7 +525,7 @@ impl Default for GroupsConfig {
     }
 }
 
-#[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct LanguagesConfig(HashMap<SupportedLanguage, LanguageOptions>);
 
 impl Default for LanguagesConfig {
@@ -450,7 +552,7 @@ impl Deref for LanguagesConfig {
     }
 }
 
-#[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct LanguageOptions {
     #[serde(rename = "use-for", default)]
@@ -459,7 +561,7 @@ pub struct LanguageOptions {
     language_server: Option<LanguageServerCommand>,
 }
 
-#[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(untagged)]
 #[serde(expecting = "invalid type: expected string or sequence")]
 pub enum LanguageServerCommand {
@@ -478,7 +580,7 @@ impl LanguageServerCommand {
     }
 }
 
-#[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct IgnoreData(Vec<RawFilePattern<String>>);
 
 impl IgnoreData {
@@ -780,6 +882,40 @@ mod tests {
                 .parts()
                 .collect::<Vec<_>>(),
             ["custom-language-server"],
+        );
+    }
+
+    #[test]
+    fn script_arg_key_sanitisation() {
+        ScriptArgKey::try_from("xyz0-9yxz".to_owned()).unwrap();
+
+        ScriptArgKey::try_from("xy".to_owned()).unwrap_err();
+        ScriptArgKey::try_from("CAPITALS".to_owned()).unwrap_err();
+        ScriptArgKey::try_from("under_score".to_owned()).unwrap_err();
+        ScriptArgKey::try_from("sm:le".to_owned()).unwrap_err();
+        ScriptArgKey::try_from("-starts-with-dash".to_owned()).unwrap_err();
+        ScriptArgKey::try_from("ends-with-dash-".to_owned()).unwrap_err();
+        ScriptArgKey::try_from("1-starts-with-num".to_owned()).unwrap_err();
+        ScriptArgKey::try_from("double--dash".to_owned()).unwrap_err();
+    }
+
+    #[test]
+    fn manifest_script_arg_key_sanitisation() {
+        const EXPECTED_ERR: &str = "too few characters";
+
+        let err = {
+            let raw_manifest = formatdoc! {r#"
+                [vex]
+                version = "1"
+
+                [args]
+                too-short.v = 1
+            "#};
+            toml_edit::de::from_str::<Manifest>(&raw_manifest).unwrap_err()
+        };
+        assert!(
+            err.to_string().contains(EXPECTED_ERR),
+            "incorrect error: should contain {EXPECTED_ERR} but got {err}"
         );
     }
 

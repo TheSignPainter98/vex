@@ -41,9 +41,15 @@ pub enum Error {
     #[error(transparent)]
     FromPathBuf(#[from] camino::FromPathBufError),
 
-    #[error("invalid vex ID '{raw_id}': {reason}")]
+    #[error("invalid ID '{raw_id}': {reason}")]
     InvalidID {
         raw_id: String,
+        reason: InvalidIDReason,
+    },
+
+    #[error("invalid key '{raw_key}': {reason}")]
+    InvalidScriptArgKey {
+        raw_key: String,
         reason: InvalidIDReason,
     },
 

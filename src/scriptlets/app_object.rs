@@ -121,7 +121,7 @@ impl AppObject {
             let ret = heap.alloc(AllocDict(
                 script_args_for_id
                     .iter()
-                    .map(|(k, v)| (k, v.to_value_on(heap))),
+                    .map(|(k, v)| (k.to_value_on(heap), v.to_value_on(heap))),
             ));
             Ok(ret)
         }

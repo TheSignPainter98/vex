@@ -98,10 +98,11 @@ impl TryFrom<String> for Id {
 
     fn try_from(raw_id: String) -> Result<Self> {
         let invalid_id = |reason| Error::InvalidID {
-            raw_id: raw_id.to_string(),
+            raw_id: raw_id.clone(),
             reason,
         };
 
+        // NOTE: these should be the same as the min and max values for ScriptArgKey.
         const MIN_ID_LEN: usize = 3;
         const MAX_ID_LEN: usize = 25;
         if raw_id.len() < MIN_ID_LEN {
@@ -139,7 +140,7 @@ impl TryFrom<String> for Id {
         for ugly_substring in ["::", "--", ":-", "-:"] {
             if let Some(index) = raw_id.find(ugly_substring) {
                 return Err(invalid_id(InvalidIDReason::UglySubstring {
-                    found: ugly_substring.to_string(),
+                    found: ugly_substring.to_owned(),
                     index,
                 }));
             }
@@ -210,7 +211,7 @@ impl<'de> Visitor<'de> for IdVisitor {
     where
         E: de::Error,
     {
-        self.visit_string(v.to_owned())
+        self.visit_borrowed_str(v)
     }
 
     fn visit_borrowed_str<E>(self, v: &'de str) -> std::result::Result<Self::Value, E>
@@ -224,8 +225,7 @@ impl<'de> Visitor<'de> for IdVisitor {
     where
         E: de::Error,
     {
-        let id = Id::try_from(v).map_err(E::custom)?;
-        Ok(id)
+        Id::try_from(v).map_err(E::custom)
     }
 }
 
