@@ -1,14 +1,17 @@
 use std::{
     cmp::Ordering,
     collections::hash_map::DefaultHasher,
-    fmt::Display,
+    fmt::{self, Display},
     hash::{Hash, Hasher},
 };
 
 use allocative::Allocative;
 use lazy_static::lazy_static;
 use regex::Regex;
-use serde::Serialize;
+use serde::{
+    de::{self, Visitor},
+    Deserialize, Deserializer, Serialize, Serializer,
+};
 
 use crate::{
     error::{Error, InvalidIDReason},
@@ -39,7 +42,7 @@ impl AsRef<Id> for LintId {
 }
 
 impl Display for LintId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.as_str().fmt(f)
     }
 }
@@ -73,8 +76,8 @@ impl Display for GroupId {
     }
 }
 
-#[derive(Debug, Clone, Allocative, Eq, PartialEq, Serialize)]
-struct Id {
+#[derive(Debug, Clone, Allocative, Eq, PartialEq)]
+pub struct Id {
     hash: u64,
     name: String,
 }
@@ -176,8 +179,60 @@ impl Display for Id {
     }
 }
 
+impl Serialize for Id {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.name)
+    }
+}
+
+impl<'de> Deserialize<'de> for Id {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_string(IdVisitor)
+    }
+}
+
+struct IdVisitor;
+
+impl<'de> Visitor<'de> for IdVisitor {
+    type Value = Id;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("a string")
+    }
+
+    fn visit_str<E>(self, v: &str) -> std::result::Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        self.visit_string(v.to_owned())
+    }
+
+    fn visit_borrowed_str<E>(self, v: &'de str) -> std::result::Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        self.visit_string(v.to_owned())
+    }
+
+    fn visit_string<E>(self, v: String) -> std::result::Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        let id = Id::try_from(v).map_err(E::custom)?;
+        Ok(id)
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use super::*;
 
     #[test]
@@ -265,5 +320,20 @@ mod tests {
             InvalidIDReason::UglySubstring { found, .. } => found == "::",
             _ => false,
         });
+    }
+
+    #[test]
+    fn serde_roundtrip() {
+        let id = Id::try_from("hello-world".to_owned()).unwrap();
+        const KEY: &str = "key";
+
+        let container = Container(BTreeMap::from_iter([(KEY.to_owned(), id.clone())]));
+        let serialised = toml_edit::ser::to_string(&container).unwrap();
+
+        let parsed_container: Container = toml_edit::de::from_str(&serialised).unwrap();
+        assert_eq!(id, parsed_container.0[KEY]);
+
+        #[derive(Serialize, Deserialize)]
+        struct Container(BTreeMap<String, Id>);
     }
 }
