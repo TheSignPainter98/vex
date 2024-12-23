@@ -14,6 +14,7 @@ use std::{
 
 use crate::associations::Associations;
 use crate::error::{Error, IOAction};
+use crate::id::Id;
 use crate::result::Result;
 use crate::source_path::PrettyPath;
 use crate::supported_language::SupportedLanguage;
@@ -176,6 +177,9 @@ pub struct Manifest {
     pub files: FilesConfig,
 
     #[serde(default)]
+    pub args: BTreeMap<Id, ArgsForId>,
+
+    #[serde(default)]
     pub lints: LintsConfig,
 
     #[serde(default)]
@@ -335,6 +339,21 @@ pub struct FilesConfig {
 }
 
 #[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
+pub struct ArgsForId(BTreeMap<String, ArgValue>);
+
+#[derive(Clone, Debug, Deserialise, Serialise, PartialEq)]
+#[serde(untagged)]
+#[serde(expecting = "invalid type: expecting a bool, int, float, string, sequence or table")]
+pub enum ArgValue {
+    Bool(bool),
+    Int(i64),
+    Float(f64),
+    String(String),
+    Sequence(Vec<ArgValue>),
+    Table(BTreeMap<String, ArgValue>),
+}
+
+#[derive(Clone, Debug, Default, Deserialise, Serialise, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct LintsConfig {
     #[serde(rename = "active")]
@@ -445,6 +464,7 @@ impl Deref for IgnoreData {
 
 #[cfg(test)]
 mod tests {
+    use indoc::formatdoc;
     use insta::assert_yaml_snapshot;
     use regex::Regex;
     use toml_edit::Document;
@@ -615,6 +635,8 @@ mod tests {
 
     #[test]
     fn maximal_manifest() {
+        use ArgValue as AV;
+
         let manifest_content = indoc! {r#"
             [vex]
             version = "1"
@@ -624,6 +646,9 @@ mod tests {
             [files]
             ignore = ["vexes/", "target/"]
             allow = ["vexes/check-me.star", "target/check-me.rs"]
+
+            [args]
+            hello.world = [true, 123, 123.4, "foo", {bar = ["baz"]}]
 
             [lints.active]
             lint-id-1 = false
@@ -644,6 +669,22 @@ mod tests {
         assert_eq!(parsed_manifest.run.vexes_dir.as_str(), "some-dir/");
         assert_eq!(parsed_manifest.files.ignores.into_inner().len(), 2);
         assert_eq!(parsed_manifest.files.allows.len(), 2);
+        {
+            let hello_id = Id::try_from("hello".to_owned()).unwrap();
+            assert_eq!(
+                parsed_manifest.args[&hello_id].0["world"],
+                AV::Sequence(vec![
+                    AV::Bool(true),
+                    AV::Int(123),
+                    AV::Float(123.4),
+                    AV::String("foo".into()),
+                    AV::Table(BTreeMap::from_iter([(
+                        "bar".to_owned(),
+                        AV::Sequence(vec![AV::String("baz".into())]),
+                    )])),
+                ])
+            );
+        }
         assert_eq!(
             parsed_manifest.lints.active_lints_config,
             BTreeMap::from_iter([("lint-id-1".into(), false), ("lint-id-2".into(), true)])
@@ -689,6 +730,26 @@ mod tests {
                 .parts()
                 .collect::<Vec<_>>(),
             ["custom-language-server"],
+        );
+    }
+
+    #[test]
+    fn args_must_be_namespaced() {
+        const EXPECTED_ERR: &str = "invalid type";
+
+        let err = {
+            let raw_manifest = formatdoc! {r#"
+                [vex]
+                version = "1"
+
+                [args]
+                unnamespaced-arg = true
+            "#};
+            toml_edit::de::from_str::<Manifest>(&raw_manifest).unwrap_err()
+        };
+        assert!(
+            err.to_string().contains(EXPECTED_ERR),
+            "incorrect error: should contain {EXPECTED_ERR} but got {err}"
         );
     }
 }
