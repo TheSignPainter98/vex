@@ -677,7 +677,6 @@ mod tests {
             enable-lsp = true
 
             [languages.python]
-            use-for = ["*.star", "*.py2"]
             language-server = "custom-language-server"
         "#};
         let parsed_manifest: Manifest = toml_edit::de::from_str(manifest_content).unwrap();
