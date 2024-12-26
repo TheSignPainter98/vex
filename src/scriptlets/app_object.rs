@@ -8,8 +8,8 @@ use starlark::{
     eval::Evaluator,
     starlark_module,
     values::{
-        dict::AllocDict, list::UnpackList, none::NoneType, NoSerialize, ProvidesStaticType,
-        StarlarkValue, StringValue, Value,
+        list::UnpackList, none::NoneType, NoSerialize, ProvidesStaticType, StarlarkValue,
+        StringValue, Value,
     },
 };
 use starlark_derive::starlark_value;
@@ -98,7 +98,7 @@ impl AppObject {
             #[starlark(this)] _this: Value<'v>,
             #[starlark(require=pos)] id: &'v str,
             eval: &mut Evaluator<'v, '_>,
-        ) -> anyhow::Result<Value<'v>> {
+        ) -> anyhow::Result<Option<Value<'v>>> {
             AppObject::check_attr_available(
                 eval,
                 "vex.args_for",
@@ -112,14 +112,7 @@ impl AppObject {
             let id = Id::try_from(id.to_owned())?;
 
             let temp_data = TempData::get_from(eval);
-            Ok(temp_data
-                .script_args
-                .get(&id)
-                .map(|v| v.to_value())
-                .unwrap_or_else(|| {
-                    eval.heap()
-                        .alloc(AllocDict::<[(Value<'_>, Value<'_>); 0]>([]))
-                }))
+            Ok(temp_data.script_args.get(&id).map(|v| v.to_value()))
         }
 
         fn lsp_for<'v>(
@@ -697,8 +690,7 @@ mod tests {
 
                         def on_open_project(event):
                             args = vex.args_for('{ID}')
-                            check['eq'](len(args), 0)
-
+                            check['eq'](args, None)
                     ",
                     check_path = VexTest::CHECK_STARLARK_PATH,
                 },
