@@ -106,6 +106,8 @@ impl AppObject {
                     Action::Vexing(EventKind::OpenProject),
                     Action::Vexing(EventKind::OpenFile),
                     Action::Vexing(EventKind::Match),
+                    Action::Vexing(EventKind::PreTestRun),
+                    Action::Vexing(EventKind::PostTestRun),
                 ],
             )?;
 

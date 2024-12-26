@@ -632,4 +632,59 @@ mod tests {
             )
             .assert_irritation_free()
     }
+
+    #[test]
+    fn args() {
+        const ID: &str = "some-id";
+        const KEY: &str = "some-key";
+        const VALUE: &str = "some-value";
+        VexTest::new("with-args")
+            .with_test_events(true)
+            .with_manifest(formatdoc! {r#"
+                [vex]
+                version = "1"
+
+                [args]
+                {ID}.{KEY} = "{VALUE}"
+            "#})
+            .with_scriptlet(
+                "vexes/test.star",
+                formatdoc! {
+                    r#"
+                        load('{check_path}', 'check')
+
+                        def init():
+                            vex.observe('open_project', on_open_project)
+                            vex.observe('open_file', on_open_file)
+                            vex.observe('pre_test_run', on_pre_test_run)
+                            vex.observe('post_test_run', on_post_test_run)
+
+                        def on_open_project(event):
+                            test_args()
+
+                            vex.search('rust', '(source_file)', on_match)
+
+                        def on_open_file(event):
+                            test_args()
+
+                        def on_match(event):
+                            test_args()
+
+                        def on_pre_test_run(event):
+                            test_args()
+
+                            vex.scan('test_file.rs', 'rust', 'struct Placeholder;')
+
+                        def on_post_test_run(event):
+                            test_args()
+
+                        def test_args():
+                            args = vex.args_for('{ID}');
+                            check['eq'](args['{KEY}'], '{VALUE}')
+                    "#,
+                    check_path = VexTest::CHECK_STARLARK_PATH,
+                },
+            )
+            .assert_irritation_free();
+    }
 }
