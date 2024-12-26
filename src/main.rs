@@ -36,6 +36,8 @@ use camino::Utf8PathBuf;
 use indoc::{formatdoc, printdoc};
 use log::{debug, info, log_enabled};
 use rayon::ThreadPoolBuilder;
+use scriptlets::ScriptArgsValueMap;
+use starlark::values::FrozenHeap;
 use strum::IntoEnumIterator;
 
 use crate::{
@@ -117,15 +119,17 @@ fn list(list_args: ListCmd) -> Result<()> {
 fn check(cmd_args: CheckCmd) -> Result<()> {
     let ctx = Context::acquire()?;
     let verbosity = logger::verbosity();
-    let script_args = &ctx.script_args;
+
+    let script_args_heap = FrozenHeap::new();
+    let script_args = ScriptArgsValueMap::with_args(&ctx.script_args, &script_args_heap);
 
     let store = {
         let preinit_opts = PreinitOptions {
-            script_args,
+            script_args: &script_args,
             verbosity,
         };
         let init_opts = InitOptions {
-            script_args,
+            script_args: &script_args,
             verbosity,
         };
         PreinitingStore::new(&source::sources_in_dir(&ctx.vex_dir())?)?
@@ -150,6 +154,7 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
         warning_filter,
         cmd_args.max_problems,
         cmd_args.max_concurrent_files,
+        &script_args,
         verbosity,
     )?;
     irritations

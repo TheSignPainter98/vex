@@ -14,7 +14,7 @@ use tree_sitter::QueryCursor;
 
 use crate::{
     cli::{MaxConcurrentFileLimit, MaxProblems},
-    context::{Context, ScriptArgs},
+    context::Context,
     irritation::Irritation,
     query::Query,
     result::Result,
@@ -25,7 +25,7 @@ use crate::{
         intents::Intent,
         query_cache::QueryCache,
         query_captures::QueryCaptures,
-        Observable, ObserveOptions, Observer, PrintHandler, VexingStore,
+        Observable, ObserveOptions, Observer, PrintHandler, ScriptArgsValueMap, VexingStore,
     },
     source_file::{self, SourceFile},
     supported_language::SupportedLanguage,
@@ -46,6 +46,7 @@ pub fn scan_project(
     warning_filter: WarningFilter,
     max_problems: MaxProblems,
     max_concurrent_files: MaxConcurrentFileLimit,
+    script_args: &ScriptArgsValueMap,
     verbosity: Verbosity,
 ) -> Result<ProjectRunData> {
     let files = source_file::sources_in_dir(ctx, max_concurrent_files)?;
@@ -53,7 +54,6 @@ pub fn scan_project(
     let project_queries_hint = store.project_queries_hint();
     let file_queries_hint = store.file_queries_hint();
 
-    let script_args = &ctx.script_args;
     let query_cache = QueryCache::with_capacity(project_queries_hint + file_queries_hint);
     let lsp_enabled = ctx.manifest.run.lsp_enabled;
 
@@ -170,7 +170,7 @@ pub struct VexFileOptions<'a> {
     project_queries: &'a [(SupportedLanguage, Arc<Query>, Observer)],
     query_cache: &'a QueryCache,
     warning_filter: &'a WarningFilter,
-    script_args: &'a ScriptArgs,
+    script_args: &'a ScriptArgsValueMap,
     verbosity: Verbosity,
 }
 

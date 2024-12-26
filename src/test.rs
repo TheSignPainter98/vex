@@ -12,7 +12,7 @@ use starlark::values::FrozenHeap;
 use crate::{
     associations::Associations,
     cli::{MaxConcurrentFileLimit, MaxProblems},
-    context::{Context, Manifest, ScriptArgs},
+    context::{Context, Manifest},
     error::{Error, IOAction},
     logger,
     result::Result,
@@ -24,7 +24,7 @@ use crate::{
         query_cache::QueryCache,
         source::{self, ScriptSource},
         InitOptions, Intent, Observable, ObserveOptions, PreinitOptions, PreinitingStore,
-        PrintHandler,
+        PrintHandler, ScriptArgsValueMap,
     },
     source_path::{PrettyPath, SourcePath},
     verbosity::Verbosity,
@@ -33,9 +33,11 @@ use crate::{
 
 pub fn test() -> Result<()> {
     let ctx = Context::acquire()?;
+    let script_args_heap = FrozenHeap::new();
+    let script_args = ScriptArgsValueMap::with_args(&ctx.script_args, &script_args_heap);
     run_tests(RunTestOptions {
         lsp_enabled: ctx.manifest.run.lsp_enabled,
-        script_args: &ctx.script_args,
+        script_args: &script_args,
         script_sources: &source::sources_in_dir(&ctx.vex_dir())?,
     })?;
     Ok(())
@@ -43,7 +45,7 @@ pub fn test() -> Result<()> {
 
 pub(crate) struct RunTestOptions<'a, S> {
     pub(crate) lsp_enabled: bool,
-    pub(crate) script_args: &'a ScriptArgs,
+    pub(crate) script_args: &'a ScriptArgsValueMap,
     pub(crate) script_sources: &'a [S],
 }
 
@@ -201,6 +203,7 @@ pub(crate) fn run_tests<S: ScriptSource>(run_test_opts: RunTestOptions<'_, S>) -
             WarningFilter::all(),
             MaxProblems::Unlimited,
             MaxConcurrentFileLimit::new(1),
+            script_args,
             Verbosity::Quiet,
         )?
     };

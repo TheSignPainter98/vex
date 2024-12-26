@@ -8,6 +8,7 @@ use std::{
 use camino::{Utf8Component, Utf8PathBuf};
 use indoc::indoc;
 use regex::Regex;
+use starlark::values::FrozenHeap;
 
 use crate::{
     cli::{MaxConcurrentFileLimit, MaxProblems},
@@ -16,7 +17,7 @@ use crate::{
     scan,
     scriptlets::{
         source::{ScriptSource, TestSource},
-        InitOptions, PreinitOptions, PreinitingStore,
+        InitOptions, PreinitOptions, PreinitingStore, ScriptArgsValueMap,
     },
     test::RunTestOptions,
     verbosity::Verbosity,
@@ -154,14 +155,15 @@ impl<'s> VexTest<'s> {
         }
 
         let ctx = Context::acquire_in(&root_path).unwrap();
-        let script_args = &ctx.script_args;
+        let script_args_heap = FrozenHeap::new();
+        let script_args = ScriptArgsValueMap::with_args(&ctx.script_args, &script_args_heap);
         if !self.bare {
             fs::create_dir(ctx.vex_dir()).ok();
         }
         if self.fire_test_events {
             crate::test::run_tests(RunTestOptions {
                 lsp_enabled: ctx.manifest.run.lsp_enabled,
-                script_args,
+                script_args: &script_args,
                 script_sources: &self.scriptlets,
             })?;
             Ok(ProjectRunData::default())
@@ -179,11 +181,11 @@ impl<'s> VexTest<'s> {
 
             let verbosity = Verbosity::default();
             let preinit_opts = PreinitOptions {
-                script_args,
+                script_args: &script_args,
                 verbosity,
             };
             let init_opts = InitOptions {
-                script_args,
+                script_args: &script_args,
                 verbosity,
             };
             let store = PreinitingStore::new(&self.scriptlets)?
@@ -195,6 +197,7 @@ impl<'s> VexTest<'s> {
                 warning_filter,
                 self.max_problems,
                 MaxConcurrentFileLimit::new(1),
+                &script_args,
                 verbosity,
             )
         }

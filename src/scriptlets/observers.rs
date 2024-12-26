@@ -8,12 +8,11 @@ use starlark::{
 use starlark_derive::{starlark_value, NoSerialize, ProvidesStaticType, Trace};
 
 use crate::{
-    context::ScriptArgs,
     ignore_markers::IgnoreMarkers,
     result::Result,
     scriptlets::{
         action::Action, event::EventKind, extra_data::TempData, handler_module::HandlerModule,
-        print_handler::PrintHandler, query_cache::QueryCache,
+        print_handler::PrintHandler, query_cache::QueryCache, ScriptArgsValueMap,
     },
     warning_filter::WarningFilter,
 };
@@ -131,7 +130,7 @@ pub trait Observable {
 #[derive(Clone, Debug, Dupe)]
 pub struct ObserveOptions<'v> {
     pub action: Action,
-    pub script_args: &'v ScriptArgs,
+    pub script_args: &'v ScriptArgsValueMap,
     pub query_cache: Option<&'v QueryCache>,
     pub ignore_markers: Option<&'v IgnoreMarkers>,
     pub lsp_enabled: bool,

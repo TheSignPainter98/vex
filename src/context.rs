@@ -5,9 +5,6 @@ use log::log_enabled;
 use regex::Regex;
 use serde::de::Visitor;
 use serde::{Deserialize, Serialize};
-use starlark::values::dict::AllocDict;
-use starlark::values::list::AllocList;
-use starlark::values::{Heap, Value};
 
 use std::borrow::Borrow;
 use std::collections::{BTreeMap, HashMap};
@@ -357,13 +354,6 @@ impl Deref for ScriptArgs {
     }
 }
 
-impl Default for &ScriptArgs {
-    fn default() -> Self {
-        static DEFAULT_ARGS: ScriptArgs = ScriptArgs(BTreeMap::new());
-        &DEFAULT_ARGS
-    }
-}
-
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct ScriptArgsForId(BTreeMap<ScriptArgKey, ScriptArgValue>);
 
@@ -378,14 +368,16 @@ impl Deref for ScriptArgsForId {
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize)]
 pub struct ScriptArgKey(String);
 
-impl ScriptArgKey {
-    pub fn to_value_on<'v>(&self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc(&self.0)
+impl Borrow<str> for ScriptArgKey {
+    fn borrow(&self) -> &str {
+        &self.0
     }
 }
 
-impl Borrow<str> for ScriptArgKey {
-    fn borrow(&self) -> &str {
+impl Deref for ScriptArgKey {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
@@ -483,21 +475,6 @@ pub enum ScriptArgValue {
     String(String),
     Sequence(Vec<ScriptArgValue>),
     Table(BTreeMap<String, ScriptArgValue>),
-}
-
-impl ScriptArgValue {
-    pub fn to_value_on<'v>(&self, heap: &'v Heap) -> Value<'v> {
-        match self {
-            Self::Bool(b) => Value::new_bool(*b),
-            Self::Int(i) => heap.alloc(*i),
-            Self::Float(f) => heap.alloc(*f),
-            Self::String(s) => heap.alloc(s.clone()),
-            Self::Sequence(s) => heap.alloc(AllocList(s.iter().map(|e| e.to_value_on(heap)))),
-            Self::Table(t) => {
-                heap.alloc(AllocDict(t.iter().map(|(k, v)| (k, v.to_value_on(heap)))))
-            }
-        }
-    }
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
@@ -619,7 +596,7 @@ mod tests {
     use crate::{
         cli::{MaxConcurrentFileLimit, MaxProblems},
         scan::{self, ProjectRunData},
-        scriptlets::{source, InitOptions, PreinitOptions, PreinitingStore},
+        scriptlets::{source, InitOptions, PreinitOptions, PreinitingStore, ScriptArgsValueMap},
         verbosity::Verbosity,
         warning_filter::WarningFilter,
     };
@@ -676,11 +653,19 @@ mod tests {
 
         Context::init(tempdir_path.clone(), false).unwrap();
         let ctx = Context::acquire_in(&tempdir_path).unwrap();
+        let preinit_options = PreinitOptions {
+            script_args: &ScriptArgsValueMap::new(),
+            verbosity: Verbosity::default(),
+        };
+        let init_options = InitOptions {
+            script_args: &ScriptArgsValueMap::new(),
+            verbosity: Verbosity::default(),
+        };
         PreinitingStore::new(&source::sources_in_dir(&ctx.vex_dir())?)
             .unwrap()
-            .preinit(PreinitOptions::default())
+            .preinit(preinit_options)
             .unwrap()
-            .init(InitOptions::default())
+            .init(init_options)
             .unwrap();
 
         // Already inited, no-force
@@ -695,11 +680,19 @@ mod tests {
         // Already inited, force
         Context::init(&tempdir_path, true).unwrap();
         let ctx = Context::acquire_in(&tempdir_path).unwrap();
+        let preinit_options = PreinitOptions {
+            script_args: &ScriptArgsValueMap::new(),
+            verbosity: Verbosity::default(),
+        };
+        let init_options = InitOptions {
+            script_args: &ScriptArgsValueMap::new(),
+            verbosity: Verbosity::default(),
+        };
         PreinitingStore::new(&source::sources_in_dir(&ctx.vex_dir())?)
             .unwrap()
-            .preinit(PreinitOptions::default())
+            .preinit(preinit_options)
             .unwrap()
-            .init(InitOptions::default())
+            .init(init_options)
             .unwrap();
 
         Ok(())
@@ -727,15 +720,24 @@ mod tests {
 
         Context::init(&tempdir_path, false)?;
         let ctx = Context::acquire_in(&tempdir_path)?;
+        let preinit_options = PreinitOptions {
+            script_args: &ScriptArgsValueMap::new(),
+            verbosity: Verbosity::default(),
+        };
+        let init_options = InitOptions {
+            script_args: &ScriptArgsValueMap::new(),
+            verbosity: Verbosity::default(),
+        };
         let store = PreinitingStore::new(&source::sources_in_dir(&ctx.vex_dir())?)?
-            .preinit(PreinitOptions::default())?
-            .init(InitOptions::default())?;
+            .preinit(preinit_options)?
+            .init(init_options)?;
         let ProjectRunData { irritations, .. } = scan::scan_project(
             &ctx,
             &store,
             WarningFilter::all(),
             MaxProblems::Unlimited,
             MaxConcurrentFileLimit::new(1),
+            &ScriptArgsValueMap::new(),
             Verbosity::default(),
         )?;
         assert_yaml_snapshot!(irritations
