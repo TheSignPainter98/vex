@@ -10,9 +10,9 @@ use starlark_derive::{starlark_value, NoSerialize, ProvidesStaticType, Trace};
 use crate::source_path::PrettyPath;
 use crate::{
     irritation::Irritation,
+    language::Language,
     query::Query,
     scriptlets::{event::EventKind, observers::UnfrozenObserver, Observer},
-    supported_language::SupportedLanguage,
 };
 
 #[derive(Debug, Display, ProvidesStaticType, NoSerialize, Allocative, Trace)]
@@ -73,7 +73,7 @@ impl<'v> Freeze for UnfrozenIntents<'v> {
 #[derive(Debug, Trace, Allocative)]
 pub enum UnfrozenIntent<'v> {
     Find {
-        language: SupportedLanguage,
+        language: Language,
         #[allocative(skip)]
         query: Arc<Query>,
         on_match: UnfrozenObserver<'v>,
@@ -85,7 +85,7 @@ pub enum UnfrozenIntent<'v> {
     Warn(Box<Irritation>),
     ScanFile {
         file_name: PrettyPath,
-        language: SupportedLanguage,
+        language: Language,
         content: String,
     },
 }
@@ -171,7 +171,7 @@ impl<'v> StarlarkValue<'v> for Intents {}
 #[derive(Debug, Clone, Allocative)]
 pub enum Intent {
     Find {
-        language: SupportedLanguage,
+        language: Language,
         #[allocative(skip)]
         query: Arc<Query>,
         on_match: Observer,
@@ -183,7 +183,7 @@ pub enum Intent {
     Warn(Box<Irritation>),
     ScanFile {
         file_name: PrettyPath,
-        language: SupportedLanguage,
+        language: Language,
         content: String,
     },
 }

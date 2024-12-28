@@ -12,6 +12,7 @@ mod error;
 mod id;
 mod ignore_markers;
 mod irritation;
+mod language;
 mod logger;
 mod plural;
 mod query;
@@ -21,7 +22,6 @@ mod scriptlets;
 mod source_file;
 mod source_path;
 mod suggestion;
-mod supported_language;
 mod test;
 mod trigger;
 mod verbosity;
@@ -45,12 +45,12 @@ use crate::{
     context::{Context, Manifest, EXAMPLE_VEX_FILE},
     error::{Error, IOAction},
     id::{GroupId, LintId},
+    language::Language,
     plural::Plural,
     result::Result,
     scan::ProjectRunData,
     scriptlets::{source, InitOptions, PreinitOptions, PreinitingStore},
     source_path::PrettyPath,
-    supported_language::SupportedLanguage,
     verbosity::Verbosity,
     warning_filter::{ExclusionSet, WarningFilter},
 };
@@ -111,7 +111,7 @@ fn print_banner() {
 
 fn list(list_args: ListCmd) -> Result<()> {
     match list_args.what {
-        ToList::Languages => SupportedLanguage::iter().for_each(|lang| println!("{}", lang)),
+        ToList::Languages => Language::iter().for_each(|lang| println!("{}", lang)),
     }
     Ok(())
 }

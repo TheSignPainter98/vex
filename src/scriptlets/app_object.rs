@@ -18,6 +18,7 @@ use crate::{
     error::Error,
     id::{GroupId, Id, LintId},
     irritation::IrritationRenderer,
+    language::Language,
     query::Query,
     result::Result,
     scriptlets::{
@@ -31,7 +32,6 @@ use crate::{
         Node,
     },
     source_path::PrettyPath,
-    supported_language::SupportedLanguage,
 };
 
 #[derive(Debug, PartialEq, Eq, new, ProvidesStaticType, NoSerialize, Allocative)]
@@ -137,9 +137,7 @@ impl AppObject {
                 return Ok(None);
             }
 
-            let language = eval
-                .heap()
-                .alloc(language.parse::<SupportedLanguage>()?.to_string());
+            let language = eval.heap().alloc(language.parse::<Language>()?.to_string());
             Ok(Some(Lsp { language }))
         }
 
@@ -160,13 +158,13 @@ impl AppObject {
             )?;
 
             let ret_data = UnfrozenRetainedData::get_from(eval.module());
-            let language = language.parse::<SupportedLanguage>()?;
+            let language = language.parse::<Language>()?;
             let query = {
                 let temp_data = TempData::get_from(eval);
                 if let Some(query_cache) = temp_data.query_cache {
-                    query_cache.get_or_create(language, query)?
+                    query_cache.get_or_create(&language, query)?
                 } else {
-                    Arc::new(Query::new(language, &query)?)
+                    Arc::new(Query::new(&language, &query)?)
                 }
             };
             let on_match = UnfrozenObserver::new(on_match);

@@ -210,8 +210,8 @@ mod tests {
     use tree_sitter::{Parser, Query, QueryCursor};
 
     use crate::{
-        source_file::ParsedSourceFile, source_path::SourcePath,
-        supported_language::SupportedLanguage, vextest::VexTest,
+        language::Language, source_file::ParsedSourceFile, source_path::SourcePath,
+        vextest::VexTest,
     };
 
     #[test]
@@ -596,7 +596,7 @@ mod tests {
             }
         "#};
         let src_file =
-            ParsedSourceFile::new_with_content(src_path, content, SupportedLanguage::Rust).unwrap();
+            ParsedSourceFile::new_with_content(src_path, content, Language::Rust).unwrap();
 
         let language = tree_sitter_rust::language();
         let query_source = indoc! {r"
@@ -683,7 +683,7 @@ mod tests {
             }
         "#};
         let src_file =
-            ParsedSourceFile::new_with_content(src_path, content, SupportedLanguage::Rust).unwrap();
+            ParsedSourceFile::new_with_content(src_path, content, Language::Rust).unwrap();
 
         let language = tree_sitter_rust::language();
         let query_source = indoc! {r"
@@ -750,7 +750,7 @@ mod tests {
             }
         "#};
         let src_file =
-            ParsedSourceFile::new_with_content(src_path, content, SupportedLanguage::Rust).unwrap();
+            ParsedSourceFile::new_with_content(src_path, content, Language::Rust).unwrap();
 
         let language = tree_sitter_rust::language();
         let query_source = indoc! {r"

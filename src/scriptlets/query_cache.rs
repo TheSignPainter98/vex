@@ -10,11 +10,11 @@ use starlark::{
     values::{StringValue, Trace},
 };
 
-use crate::{query::Query, result::Result, supported_language::SupportedLanguage};
+use crate::{language::Language, query::Query, result::Result};
 
 #[derive(Debug, Allocative)]
 pub struct QueryCache {
-    cache: RwLock<HashMap<(SupportedLanguage, StarlarkHashValue), CachedQuery>>,
+    cache: RwLock<HashMap<(Language, StarlarkHashValue), CachedQuery>>,
 }
 
 impl QueryCache {
@@ -32,7 +32,7 @@ impl QueryCache {
 
     pub fn get_or_create(
         &self,
-        language: SupportedLanguage,
+        language: &Language,
         raw_query: StringValue<'_>,
     ) -> Result<Arc<Query>> {
         let query_hash = raw_query.get_hashed().hash(); // This hash value is only 32 bits long.
@@ -41,7 +41,7 @@ impl QueryCache {
             .cache
             .read()
             .expect("internal error: cache lock poisoned")
-            .get(&(language, query_hash))
+            .get(&(language.dupe(), query_hash))
         {
             return Ok(cached_query.0.dupe());
         }
@@ -50,7 +50,7 @@ impl QueryCache {
         self.cache
             .write()
             .expect("internal error: cache lock poisoned")
-            .insert((language, query_hash), CachedQuery(query.dupe()));
+            .insert((language.dupe(), query_hash), CachedQuery(query.dupe()));
         Ok(query)
     }
 }
@@ -79,27 +79,30 @@ mod tests {
     #[test]
     fn reparse_avoided() {
         let heap = Heap::new();
-        let query_pair_1 = (
-            SupportedLanguage::Rust,
-            heap.alloc_str("(source_file) @file"),
-        );
-        let query_pair_2 = (
-            SupportedLanguage::Rust,
-            heap.alloc_str("(binary_expression) @bin"),
-        );
+        let query_pair_1 = (Language::Rust, heap.alloc_str("(source_file) @file"));
+        let query_pair_2 = (Language::Rust, heap.alloc_str("(binary_expression) @bin"));
         let cache = QueryCache::with_capacity(2);
 
-        let parsed_query_pair_1_ptr =
-            Arc::as_ptr(&cache.get_or_create(query_pair_1.0, query_pair_1.1).unwrap());
-        let parsed_query_pair_1_again_ptr =
-            Arc::as_ptr(&cache.get_or_create(query_pair_1.0, query_pair_1.1).unwrap());
+        let parsed_query_pair_1_ptr = Arc::as_ptr(
+            &cache
+                .get_or_create(&query_pair_1.0, query_pair_1.1)
+                .unwrap(),
+        );
+        let parsed_query_pair_1_again_ptr = Arc::as_ptr(
+            &cache
+                .get_or_create(&query_pair_1.0, query_pair_1.1)
+                .unwrap(),
+        );
         assert!(
             ptr::eq(parsed_query_pair_1_ptr, parsed_query_pair_1_again_ptr),
             "duplication not avoided"
         );
 
-        let parsed_query_pair_2_ptr =
-            Arc::as_ptr(&cache.get_or_create(query_pair_2.0, query_pair_2.1).unwrap());
+        let parsed_query_pair_2_ptr = Arc::as_ptr(
+            &cache
+                .get_or_create(&query_pair_2.0, query_pair_2.1)
+                .unwrap(),
+        );
         assert!(
             !ptr::eq(parsed_query_pair_1_ptr, parsed_query_pair_2_ptr),
             "returned same query"
@@ -110,14 +113,20 @@ mod tests {
     fn same_query_different_language() {
         let heap = Heap::new();
         let query = heap.alloc_str("(source_file) @foo");
-        let query_pair_1 = (SupportedLanguage::Rust, query);
-        let query_pair_2 = (SupportedLanguage::Go, query);
+        let query_pair_1 = (Language::Rust, query);
+        let query_pair_2 = (Language::Go, query);
         let cache = QueryCache::with_capacity(2);
 
-        let parsed_query_pair_1_ptr =
-            Arc::as_ptr(&cache.get_or_create(query_pair_1.0, query_pair_1.1).unwrap());
-        let parsed_query_pair_2_ptr =
-            Arc::as_ptr(&cache.get_or_create(query_pair_2.0, query_pair_2.1).unwrap());
+        let parsed_query_pair_1_ptr = Arc::as_ptr(
+            &cache
+                .get_or_create(&query_pair_1.0, query_pair_1.1)
+                .unwrap(),
+        );
+        let parsed_query_pair_2_ptr = Arc::as_ptr(
+            &cache
+                .get_or_create(&query_pair_2.0, query_pair_2.1)
+                .unwrap(),
+        );
         assert!(!ptr::eq(parsed_query_pair_1_ptr, parsed_query_pair_2_ptr));
     }
 }

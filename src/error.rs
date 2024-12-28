@@ -5,10 +5,10 @@ use joinery::JoinableIterator;
 use strum::IntoEnumIterator;
 
 use crate::{
+    language::Language,
     query::Query,
     scriptlets::{action::Action, event::EventKind, LoadPath, Location},
     source_path::PrettyPath,
-    supported_language::SupportedLanguage,
 };
 
 // TODO(kcza): box this!
@@ -25,8 +25,8 @@ pub enum Error {
     #[error("cannot discern language of {path} as multiple patterns match (could be {language} or {other_language})")]
     AmbiguousLanguage {
         path: PrettyPath,
-        language: SupportedLanguage,
-        other_language: SupportedLanguage,
+        language: Language,
+        other_language: Language,
     },
 
     #[error(transparent)]
@@ -146,13 +146,10 @@ pub enum Error {
         suggestion: Option<&'static str>,
     },
 
-    #[error("unsupported language '{0}'")]
-    UnsupportedLanguage(String),
-
     #[error("{path}:{location}: cannot parse {language}")]
     UnparseableAsLanguage {
         path: PrettyPath,
-        language: SupportedLanguage,
+        language: Language,
         location: Location,
     },
 

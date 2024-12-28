@@ -2,7 +2,7 @@ use std::{fs, ops::Range};
 
 use allocative::Allocative;
 use camino::{Utf8Path, Utf8PathBuf};
-use dupe::Dupe;
+use dupe::{Dupe, OptionDupedExt};
 use log::{info, log_enabled};
 use tree_sitter::{Node as TSNode, Parser, QueryCursor, Tree};
 use walkdir::WalkDir;
@@ -12,10 +12,10 @@ use crate::{
     context::{Context, Manifest},
     error::{Error, IOAction},
     ignore_markers::{IgnoreMarkers, LintIdFilter},
+    language::Language,
     result::{RecoverableResult, Result},
     scriptlets::{Location, Node},
     source_path::SourcePath,
-    supported_language::SupportedLanguage,
     trigger::FilePattern,
 };
 
@@ -101,7 +101,7 @@ pub fn sources_in_dir(
         .map(|entry_path| SourcePath::new(&entry_path, &ctx.project_root))
         .map(|source_path| {
             let language = associations.get_language(&source_path)?;
-            Ok(SourceFile::new(source_path, language))
+            Ok(SourceFile::new(source_path, language.duped()))
         })
         .collect()
 }
@@ -109,11 +109,11 @@ pub fn sources_in_dir(
 #[derive(Debug)]
 pub struct SourceFile {
     path: SourcePath,
-    language: Option<SupportedLanguage>,
+    language: Option<Language>,
 }
 
 impl SourceFile {
-    pub fn new(path: SourcePath, language: Option<SupportedLanguage>) -> Self {
+    pub fn new(path: SourcePath, language: Option<Language>) -> Self {
         let path = path.dupe();
         Self { path, language }
     }
@@ -122,8 +122,8 @@ impl SourceFile {
         &self.path
     }
 
-    pub fn language(&self) -> Option<SupportedLanguage> {
-        self.language
+    pub fn language(&self) -> Option<&Language> {
+        self.language.as_ref()
     }
 
     pub fn parse(&self) -> Result<ParsedSourceFile> {
@@ -136,10 +136,10 @@ impl SourceFile {
                 action: IOAction::Read,
                 cause,
             })?;
-        let Some(language) = self.language else {
+        let Some(language) = &self.language else {
             return Err(Error::NoKnownLanguage(self.path.pretty_path.dupe()));
         };
-        ParsedSourceFile::new_with_content(self.path.dupe(), content, language)
+        ParsedSourceFile::new_with_content(self.path.dupe(), content, language.dupe())
     }
 }
 
@@ -147,7 +147,7 @@ impl SourceFile {
 pub struct ParsedSourceFile {
     pub path: SourcePath,
     pub content: String,
-    pub language: SupportedLanguage,
+    pub language: Language,
     #[allocative(skip)]
     pub tree: Tree,
 }
@@ -156,7 +156,7 @@ impl ParsedSourceFile {
     pub fn new_with_content(
         path: SourcePath,
         content: impl Into<String>,
-        language: SupportedLanguage,
+        language: Language,
     ) -> Result<Self> {
         let content = content.into();
 
@@ -303,7 +303,8 @@ impl ParsedSourceFile {
 
 impl PartialEq for ParsedSourceFile {
     fn eq(&self, other: &Self) -> bool {
-        (&self.path, &self.content, self.language) == (&other.path, &other.content, other.language)
+        (&self.path, &self.content, &self.language)
+            == (&other.path, &other.content, &other.language)
     }
 }
 
@@ -373,7 +374,7 @@ mod tests {
                     let x = 10;
                 }
             "#},
-            SupportedLanguage::Rust,
+            Language::Rust,
         )
         .unwrap();
         let ignore_markers = source_file.ignore_markers().unwrap();
@@ -400,7 +401,7 @@ mod tests {
                     let x = 10;
                 }
             "#},
-            SupportedLanguage::Rust,
+            Language::Rust,
         )
         .unwrap();
         let ignore_markers = source_file.ignore_markers().unwrap();
@@ -425,7 +426,7 @@ mod tests {
                     let x = 10;
                 }
             "#},
-            SupportedLanguage::Rust,
+            Language::Rust,
         )
         .unwrap();
         let ignore_markers = source_file.ignore_markers().unwrap();
@@ -450,7 +451,7 @@ mod tests {
                     let x = 10;
                 }
             "#},
-            SupportedLanguage::Rust,
+            Language::Rust,
         )
         .unwrap();
         let ignore_markers = source_file.ignore_markers().unwrap();

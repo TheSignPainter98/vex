@@ -1,6 +1,7 @@
 use std::env;
 
 use camino::Utf8PathBuf;
+use dupe::{Dupe, OptionDupedExt};
 
 use crate::{
     associations::Associations,
@@ -27,9 +28,10 @@ pub fn dump(cmd: DumpCmd) -> Result<()> {
             .map(|ctx| ctx.associations())
             .transpose()?
             .unwrap_or_else(Associations::base)
-            .get_language(&src_path)?,
+            .get_language(&src_path)?
+            .duped(),
     };
-    let src_file = SourceFile::new(src_path, language).parse()?;
+    let src_file = SourceFile::new(src_path, language.dupe()).parse()?;
 
     let capacity_estimate = 20 * src_file.tree.root_node().descendant_count();
     let mut buf = String::with_capacity(capacity_estimate);
@@ -57,8 +59,7 @@ mod tests {
     use tempfile::TempDir;
 
     use crate::{
-        cli::Args, source_file::ParsedSourceFile, source_path::PrettyPath,
-        supported_language::SupportedLanguage,
+        cli::Args, language::Language, source_file::ParsedSourceFile, source_path::PrettyPath,
     };
 
     use super::*;
@@ -181,7 +182,7 @@ mod tests {
         let test_file = ParsedSourceFile::new_with_content(
             SourcePath::new_in("test.rs".into(), "".into()),
             "const X: usize = 1 + 2;",
-            SupportedLanguage::Rust,
+            Language::Rust,
         )
         .unwrap();
 

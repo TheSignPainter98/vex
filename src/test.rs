@@ -134,7 +134,7 @@ pub(crate) fn run_tests<S: ScriptSource>(run_test_opts: RunTestOptions<'_, S>) -
                 "file {path} has no language associated with it by default"
             )));
         };
-        if *language != associated_language {
+        if language != associated_language {
             return Err(Error::InvalidTest(format!(
                 "file {path} declared as {language} but default language association is {associated_language}"
             )));

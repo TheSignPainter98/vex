@@ -16,6 +16,7 @@ use crate::{
     cli::{MaxConcurrentFileLimit, MaxProblems},
     context::Context,
     irritation::Irritation,
+    language::Language,
     query::Query,
     result::Result,
     scriptlets::{
@@ -28,7 +29,6 @@ use crate::{
         Observable, ObserveOptions, Observer, PrintHandler, ScriptArgsValueMap, VexingStore,
     },
     source_file::{self, SourceFile},
-    supported_language::SupportedLanguage,
     verbosity::Verbosity,
     warning_filter::WarningFilter,
 };
@@ -165,9 +165,9 @@ pub struct FileRunData {
 
 pub struct VexFileOptions<'a> {
     store: &'a VexingStore,
-    language: SupportedLanguage,
+    language: &'a Language,
     lsp_enabled: bool,
-    project_queries: &'a [(SupportedLanguage, Arc<Query>, Observer)],
+    project_queries: &'a [(Language, Arc<Query>, Observer)],
     query_cache: &'a QueryCache,
     warning_filter: &'a WarningFilter,
     script_args: &'a ScriptArgsValueMap,
@@ -230,7 +230,7 @@ fn scan_file(file: &SourceFile, opts: VexFileOptions<'_>) -> Result<FileRunData>
     if project_queries
         .iter()
         .chain(file_queries.iter())
-        .all(|(l, _, _)| *l != language)
+        .all(|(l, _, _)| l != language)
     {
         // The user did not request a scan of this type of file.
         return Ok(FileRunData {
@@ -244,7 +244,7 @@ fn scan_file(file: &SourceFile, opts: VexFileOptions<'_>) -> Result<FileRunData>
     project_queries
         .iter()
         .chain(file_queries.iter())
-        .filter(|(l, _, _)| *l == language)
+        .filter(|(l, _, _)| l == language)
         .try_for_each(|(_, query, on_match)| {
             QueryCursor::new()
                 .matches(

@@ -9,7 +9,7 @@ use clap::{
     ArgAction, Parser, Subcommand, ValueEnum,
 };
 
-use crate::{supported_language::SupportedLanguage, Result};
+use crate::{language::Language, Result};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -297,7 +297,7 @@ pub struct DumpCmd {
 
     /// Override language detection
     #[arg(long = "as", value_name = "language")]
-    pub language: Option<SupportedLanguage>,
+    pub language: Option<Language>,
 }
 
 #[derive(Debug, Default, PartialEq, Eq, Parser)]
@@ -486,7 +486,7 @@ mod tests {
         fn language() {
             let args = Args::try_parse_from(["vex", "dump", "asdf.foo", "--as", "rust"]).unwrap();
             let dump_cmd = args.into_command().into_dump_cmd().unwrap();
-            assert_eq!(SupportedLanguage::Rust, dump_cmd.language.unwrap());
+            assert_eq!(Language::Rust, dump_cmd.language.unwrap());
         }
     }
 

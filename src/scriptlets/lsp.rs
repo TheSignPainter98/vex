@@ -54,14 +54,14 @@ mod tests {
         syntax::{AstModule, Dialect},
     };
 
-    use crate::{supported_language::SupportedLanguage, vextest::VexTest};
+    use crate::{language::Language, vextest::VexTest};
 
     use super::*;
 
     #[test]
     fn properties() {
         let module = Module::new();
-        let language = module.heap().alloc(SupportedLanguage::Rust.to_string());
+        let language = module.heap().alloc(Language::Rust.to_string());
         let lsp = Lsp { language };
         module.set("lsp", module.heap().alloc(lsp));
 

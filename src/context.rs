@@ -1,4 +1,5 @@
 use camino::{Utf8Path, Utf8PathBuf};
+use dupe::Dupe;
 use indoc::indoc;
 use lazy_static::lazy_static;
 use log::log_enabled;
@@ -19,9 +20,9 @@ use std::{fmt, slice};
 use crate::associations::Associations;
 use crate::error::{Error, IOAction, InvalidIDReason};
 use crate::id::Id;
+use crate::language::Language;
 use crate::result::Result;
 use crate::source_path::PrettyPath;
-use crate::supported_language::SupportedLanguage;
 use crate::trigger::RawFilePattern;
 use crate::warn;
 
@@ -149,7 +150,7 @@ impl Context {
                     .cloned()
                     .map(|pattern| pattern.compile())
                     .collect::<Result<Vec<_>>>();
-                (patterns, *language)
+                (patterns, language.dupe())
             })
             .try_for_each(|(patterns, language)| {
                 ret.insert(patterns?, language);
@@ -503,13 +504,13 @@ impl Default for GroupsConfig {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
-pub struct LanguagesConfig(HashMap<SupportedLanguage, LanguageOptions>);
+pub struct LanguagesConfig(HashMap<Language, LanguageOptions>);
 
 impl Default for LanguagesConfig {
     fn default() -> Self {
         Self(
             [(
-                SupportedLanguage::Python,
+                Language::Python,
                 LanguageOptions {
                     file_associations: vec![RawFilePattern::new("*.star".into())],
                     language_server: None,
@@ -522,7 +523,7 @@ impl Default for LanguagesConfig {
 }
 
 impl Deref for LanguagesConfig {
-    type Target = HashMap<SupportedLanguage, LanguageOptions>;
+    type Target = HashMap<Language, LanguageOptions>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -848,13 +849,13 @@ mod tests {
             BTreeMap::from_iter([("group-id-1".into(), false), ("group-id-2".into(), true)])
         );
         assert_eq!(
-            parsed_manifest.languages[&SupportedLanguage::Python]
+            parsed_manifest.languages[&Language::Python]
                 .file_associations
                 .len(),
             2
         );
         assert_eq!(
-            parsed_manifest.languages[&SupportedLanguage::Python]
+            parsed_manifest.languages[&Language::Python]
                 .language_server
                 .as_ref()
                 .unwrap()
@@ -877,7 +878,7 @@ mod tests {
         let parsed_manifest: Manifest = toml_edit::de::from_str(manifest_content).unwrap();
 
         assert_eq!(
-            parsed_manifest.languages[&SupportedLanguage::Python]
+            parsed_manifest.languages[&Language::Python]
                 .language_server
                 .as_ref()
                 .unwrap()
