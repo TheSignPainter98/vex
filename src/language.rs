@@ -11,24 +11,12 @@ use dupe::Dupe;
 use indoc::indoc;
 use lazy_static::lazy_static;
 use serde::{Deserialize as Deserialise, Serialize as Serialise};
-use strum::{EnumIter, IntoEnumIterator};
 use tree_sitter::{Language as TSLanguage, Query};
 
 use crate::{error::Error, result::Result};
 
 #[derive(
-    Clone,
-    Debug,
-    Dupe,
-    EnumIter,
-    Allocative,
-    PartialOrd,
-    Ord,
-    PartialEq,
-    Eq,
-    Hash,
-    Deserialise,
-    Serialise,
+    Clone, Debug, Dupe, Allocative, PartialOrd, Ord, PartialEq, Eq, Hash, Deserialise, Serialise,
 )]
 #[serde(rename_all = "kebab-case")]
 pub enum Language {
@@ -124,15 +112,19 @@ impl Display for Language {
 mod tests {
     use std::ops::Range;
 
-    use strum::IntoEnumIterator;
-
     use crate::{source_file::ParsedSourceFile, source_path::SourcePath};
 
     use super::*;
 
     #[test]
     fn str_conversion_roundtrip() -> anyhow::Result<()> {
-        for lang in Language::iter() {
+        let languages = [
+            Language::Go,
+            Language::Python,
+            Language::Rust,
+            Language::External("lua".into()),
+        ];
+        for lang in languages {
             assert_eq!(lang, lang.name().parse()?);
         }
         Ok(())

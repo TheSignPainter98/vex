@@ -78,9 +78,6 @@ pub enum Command {
     /// Create new vex project with this directory as the root
     Init(InitCmd),
 
-    /// Print lists of things vex knows about
-    List(ListCmd),
-
     /// Test available lints
     Test,
 }
@@ -107,18 +104,6 @@ impl Command {
             _ => None,
         }
     }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Parser)]
-pub struct ListCmd {
-    /// What to print
-    #[arg(value_name = "what")]
-    pub what: ToList,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, ValueEnum)]
-pub enum ToList {
-    Languages,
 }
 
 #[derive(Debug, Default, PartialEq, Eq, Parser)]
@@ -405,22 +390,6 @@ mod tests {
     fn verbosity_conflict() {
         const CMD: &str = "check";
         assert!(Args::try_parse_from(["vex", "-v", "-q", CMD]).is_err());
-    }
-
-    mod list {
-        use super::*;
-
-        #[test]
-        fn languages() {
-            assert_eq!(
-                Args::try_parse_from(["vex", "list", "languages"])
-                    .unwrap()
-                    .into_command(),
-                Command::List(ListCmd {
-                    what: ToList::Languages
-                }),
-            );
-        }
     }
 
     mod check {

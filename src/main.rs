@@ -38,14 +38,12 @@ use log::{debug, info, log_enabled};
 use rayon::ThreadPoolBuilder;
 use scriptlets::ScriptArgsValueMap;
 use starlark::values::FrozenHeap;
-use strum::IntoEnumIterator;
 
 use crate::{
-    cli::{Args, CheckCmd, Command, InitCmd, ListCmd, ToList},
+    cli::{Args, CheckCmd, Command, InitCmd},
     context::{Context, Manifest, EXAMPLE_VEX_FILE},
     error::{Error, IOAction},
     id::{GroupId, LintId},
-    language::Language,
     plural::Plural,
     result::Result,
     scan::ProjectRunData,
@@ -83,7 +81,6 @@ fn run() -> Result<ExitCode> {
     match args.command {
         Command::Check(cmd_args) => check(cmd_args),
         Command::Dump(dump_args) => dump::dump(dump_args),
-        Command::List(list_args) => list(list_args),
         Command::Init(init_args) => init(init_args),
         Command::Test => test::test(),
     }?;
@@ -107,13 +104,6 @@ fn print_banner() {
 
         "#
     };
-}
-
-fn list(list_args: ListCmd) -> Result<()> {
-    match list_args.what {
-        ToList::Languages => Language::iter().for_each(|lang| println!("{}", lang)),
-    }
-    Ok(())
 }
 
 fn check(cmd_args: CheckCmd) -> Result<()> {
