@@ -8,11 +8,12 @@ use starlark::{
 use starlark_derive::{starlark_value, NoSerialize, ProvidesStaticType, Trace};
 
 use crate::{
+    context::Context,
     ignore_markers::IgnoreMarkers,
     result::Result,
     scriptlets::{
         action::Action, event::EventKind, extra_data::TempData, handler_module::HandlerModule,
-        print_handler::PrintHandler, query_cache::QueryCache, ScriptArgsValueMap,
+        print_handler::PrintHandler, ScriptArgsValueMap,
     },
     warning_filter::WarningFilter,
 };
@@ -121,6 +122,7 @@ pub struct Observer {
 pub trait Observable {
     fn observe<'v>(
         &self,
+        ctx: &Context,
         handler_module: &'v HandlerModule,
         event: Value<'v>,
         opts: ObserveOptions<'_>,
@@ -131,7 +133,6 @@ pub trait Observable {
 pub struct ObserveOptions<'v> {
     pub action: Action,
     pub script_args: &'v ScriptArgsValueMap,
-    pub query_cache: Option<&'v QueryCache>,
     pub ignore_markers: Option<&'v IgnoreMarkers>,
     pub lsp_enabled: bool,
     pub print_handler: &'v PrintHandler<'v>,
@@ -141,6 +142,7 @@ pub struct ObserveOptions<'v> {
 impl Observable for Observer {
     fn observe<'v>(
         &self,
+        ctx: &Context,
         handler_module: &'v HandlerModule,
         event: Value<'v>,
         opts: ObserveOptions<'_>,
@@ -148,16 +150,15 @@ impl Observable for Observer {
         let ObserveOptions {
             action,
             script_args,
-            query_cache,
             ignore_markers,
             lsp_enabled,
             print_handler,
             warning_filter,
         } = opts;
         let temp_data = TempData {
+            ctx,
             action,
             script_args,
-            query_cache,
             ignore_markers,
             lsp_enabled,
             warning_filter,
@@ -177,11 +178,13 @@ impl Observable for Observer {
 impl Observable for &[Observer] {
     fn observe<'v>(
         &self,
+        ctx: &Context,
         handler_module: &'v HandlerModule,
         event: Value<'v>,
         opts: ObserveOptions<'_>,
     ) -> Result<()> {
-        self.iter()
-            .try_for_each(|observer| observer.observe(handler_module, event.dupe(), opts.dupe()))
+        self.iter().try_for_each(|observer| {
+            observer.observe(ctx, handler_module, event.dupe(), opts.dupe())
+        })
     }
 }

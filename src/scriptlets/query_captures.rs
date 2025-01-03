@@ -210,7 +210,10 @@ mod tests {
     use tree_sitter::{Parser, Query, QueryCursor};
 
     use crate::{
-        language::Language, source_file::ParsedSourceFile, source_path::SourcePath,
+        context::{Context, Manifest},
+        language::Language,
+        source_file::ParsedSourceFile,
+        source_path::SourcePath,
         vextest::VexTest,
     };
 
@@ -586,6 +589,7 @@ mod tests {
 
     #[test]
     fn quantifiers() {
+        let ctx = Context::new_with_manifest("test-path".into(), Manifest::default());
         let src_path = SourcePath::new_in(Utf8Path::new("main.rs"), Utf8Path::new("./"));
         let content = indoc! {r#"
             fn main() {
@@ -595,8 +599,12 @@ mod tests {
                 func(x);
             }
         "#};
-        let src_file =
-            ParsedSourceFile::new_with_content(src_path, content, Language::Rust).unwrap();
+        let src_file = ParsedSourceFile::new_with_content(
+            src_path,
+            content,
+            ctx.language_data(&Language::Rust).unwrap().unwrap().dupe(),
+        )
+        .unwrap();
 
         let language = tree_sitter_rust::language();
         let query_source = indoc! {r"
@@ -674,6 +682,7 @@ mod tests {
 
     #[test]
     fn duplicate_pattern_names() {
+        let ctx = Context::new_with_manifest("test-path".into(), Manifest::default());
         let src_path = SourcePath::new_in(Utf8Path::new("main.rs"), Utf8Path::new("./"));
         let content = indoc! {r#"
             fn main() {
@@ -682,8 +691,12 @@ mod tests {
                 let x = 1;
             }
         "#};
-        let src_file =
-            ParsedSourceFile::new_with_content(src_path, content, Language::Rust).unwrap();
+        let src_file = ParsedSourceFile::new_with_content(
+            src_path,
+            content,
+            ctx.language_data(&Language::Rust).unwrap().unwrap().dupe(),
+        )
+        .unwrap();
 
         let language = tree_sitter_rust::language();
         let query_source = indoc! {r"
@@ -739,6 +752,7 @@ mod tests {
 
     #[test]
     fn duplicate_capture_names() {
+        let ctx = Context::new_with_manifest("test-path".into(), Manifest::default());
         let src_path = SourcePath::new_in(Utf8Path::new("main.rs"), Utf8Path::new("./"));
         let content = indoc! {r#"
             fn main() {
@@ -749,8 +763,12 @@ mod tests {
                 z();
             }
         "#};
-        let src_file =
-            ParsedSourceFile::new_with_content(src_path, content, Language::Rust).unwrap();
+        let src_file = ParsedSourceFile::new_with_content(
+            src_path,
+            content,
+            ctx.language_data(&Language::Rust).unwrap().unwrap().dupe(),
+        )
+        .unwrap();
 
         let language = tree_sitter_rust::language();
         let query_source = indoc! {r"

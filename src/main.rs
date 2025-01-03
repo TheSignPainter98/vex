@@ -4,6 +4,7 @@
 #[macro_use]
 extern crate pretty_assertions;
 
+mod arena_map;
 mod associations;
 mod cli;
 mod context;
@@ -123,8 +124,8 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
             verbosity,
         };
         PreinitingStore::new(&source::sources_in_dir(&ctx.vex_dir())?)?
-            .preinit(preinit_opts)?
-            .init(init_opts)?
+            .preinit(&ctx, preinit_opts)?
+            .init(&ctx, init_opts)?
     };
 
     // Configure global `rayon` thread pool.

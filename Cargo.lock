@@ -1701,6 +1701,7 @@ dependencies = [
  "allocative",
  "annotate-snippets 0.10.2",
  "anyhow",
+ "bumpalo",
  "camino",
  "clap",
  "const_format",

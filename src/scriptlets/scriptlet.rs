@@ -15,6 +15,7 @@ use starlark::{
 };
 
 use crate::{
+    context::Context,
     error::{Error, InvalidLoadReason},
     result::Result,
     scriptlets::{
@@ -64,6 +65,7 @@ impl PreinitingScriptlet {
 
     pub fn preinit(
         self,
+        ctx: &Context,
         opts: &PreinitOptions,
         partial_store: &PreinitedModuleStore,
         frozen_heap: &FrozenHeap,
@@ -80,9 +82,9 @@ impl PreinitingScriptlet {
 
             {
                 let temp_data = TempData {
+                    ctx,
                     action: Action::Preiniting,
                     script_args,
-                    query_cache: None,
                     ignore_markers: None,
                     lsp_enabled: false,
                     warning_filter: None,
@@ -344,7 +346,12 @@ pub struct InitingScriptlet {
 }
 
 impl InitingScriptlet {
-    pub fn init(self, opts: &InitOptions, frozen_heap: &FrozenHeap) -> Result<ObserverData> {
+    pub fn init(
+        self,
+        ctx: &Context,
+        opts: &InitOptions,
+        frozen_heap: &FrozenHeap,
+    ) -> Result<ObserverData> {
         let Self {
             path,
             preinited_module,
@@ -362,9 +369,9 @@ impl InitingScriptlet {
             let module = HandlerModule::new();
             {
                 let temp_data = TempData {
+                    ctx,
                     action: Action::Initing,
                     script_args,
-                    query_cache: None,
                     ignore_markers: None,
                     lsp_enabled: false,
                     warning_filter: None,

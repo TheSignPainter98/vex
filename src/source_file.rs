@@ -9,7 +9,7 @@ use walkdir::WalkDir;
 
 use crate::{
     cli::MaxConcurrentFileLimit,
-    context::{Context, Manifest},
+    context::{Context, LanguageData, Manifest},
     error::{Error, IOAction},
     ignore_markers::{IgnoreMarkers, LintIdFilter},
     language::Language,
@@ -126,20 +126,30 @@ impl SourceFile {
         self.language.as_ref()
     }
 
-    pub fn parse(&self) -> Result<ParsedSourceFile> {
+    pub fn parse(&self, ctx: &Context) -> Result<ParsedSourceFile> {
         if log_enabled!(log::Level::Info) {
             info!("parsing {}", self.path);
         }
+        let language = self
+            .language
+            .as_ref()
+            .ok_or_else(|| Error::NoKnownLanguage(self.path.pretty_path.dupe()))?;
         let content =
             fs::read_to_string(self.path.abs_path.as_str()).map_err(|cause| Error::IO {
                 path: self.path.pretty_path.dupe(),
                 action: IOAction::Read,
                 cause,
             })?;
-        let Some(language) = &self.language else {
-            return Err(Error::NoKnownLanguage(self.path.pretty_path.dupe()));
+
+        let language_data = match ctx.language_data(language)? {
+            Some(language_data) => language_data,
+            None => {
+                return Err(Error::UnknownLanguage {
+                    language: language.dupe(),
+                })
+            }
         };
-        ParsedSourceFile::new_with_content(self.path.dupe(), content, language.dupe())
+        ParsedSourceFile::new_with_content(self.path.dupe(), content, language_data.dupe())
     }
 }
 
@@ -147,7 +157,8 @@ impl SourceFile {
 pub struct ParsedSourceFile {
     pub path: SourcePath,
     pub content: String,
-    pub language: Language,
+    #[allocative(skip)]
+    pub language_data: LanguageData,
     #[allocative(skip)]
     pub tree: Tree,
 }
@@ -156,13 +167,13 @@ impl ParsedSourceFile {
     pub fn new_with_content(
         path: SourcePath,
         content: impl Into<String>,
-        language: Language,
+        language_data: LanguageData,
     ) -> Result<Self> {
         let content = content.into();
 
         let tree = {
             let mut parser = Parser::new();
-            parser.set_language(language.ts_language())?;
+            parser.set_language(language_data.ts_language())?;
             let tree = parser
                 .parse(&content, None)
                 .expect("unexpected parser failure");
@@ -189,24 +200,24 @@ impl ParsedSourceFile {
             if let Some(node) = find_error_node(tree.root_node()) {
                 return Err(Error::UnparseableAsLanguage {
                     path: path.pretty_path.dupe(),
-                    language,
+                    language: language_data.language().dupe(),
                     location: Location::of(&node),
                 });
             }
             tree
         };
-        Ok(ParsedSourceFile {
+        Ok(Self {
             path,
             content,
             tree,
-            language,
+            language_data,
         })
     }
 
     pub fn ignore_markers(&self) -> Result<IgnoreMarkers> {
         let mut builder = IgnoreMarkers::builder();
 
-        let ignore_query = self.language.ignore_query();
+        let ignore_query = self.language_data.ignore_query();
         let marker_index = ignore_query
             .capture_index_for_name("marker")
             .expect("internal error: ignore query contains no 'marker' capture")
@@ -303,8 +314,8 @@ impl ParsedSourceFile {
 
 impl PartialEq for ParsedSourceFile {
     fn eq(&self, other: &Self) -> bool {
-        (&self.path, &self.content, &self.language)
-            == (&other.path, &other.content, &other.language)
+        (&self.path, &self.content, &self.language_data.language())
+            == (&other.path, &other.content, &other.language_data.language())
     }
 }
 
@@ -366,6 +377,7 @@ mod tests {
 
     #[test]
     fn general_ignore_markers() {
+        let ctx = Context::new_with_manifest("test-path".into(), Manifest::default());
         let source_file = ParsedSourceFile::new_with_content(
             SourcePath::new_in("src/main.rs".into(), "".into()),
             indoc! {r#"
@@ -374,7 +386,7 @@ mod tests {
                     let x = 10;
                 }
             "#},
-            Language::Rust,
+            ctx.language_data(&Language::Rust).unwrap().unwrap().dupe(),
         )
         .unwrap();
         let ignore_markers = source_file.ignore_markers().unwrap();
@@ -390,6 +402,8 @@ mod tests {
 
     #[test]
     fn specific_ignore_markers() {
+        let ctx = Context::new_with_manifest("test-path".into(), Manifest::default());
+
         let id1 = LintId::try_from("some-lint".to_string()).unwrap();
         let id2 = LintId::try_from("some-other-lint".to_string()).unwrap();
         let id3 = LintId::try_from("some-different-lint".to_string()).unwrap();
@@ -401,7 +415,7 @@ mod tests {
                     let x = 10;
                 }
             "#},
-            Language::Rust,
+            ctx.language_data(&Language::Rust).unwrap().unwrap().dupe(),
         )
         .unwrap();
         let ignore_markers = source_file.ignore_markers().unwrap();
@@ -418,6 +432,8 @@ mod tests {
 
     #[test]
     fn invalid_ignore_markers() {
+        let ctx = Context::new_with_manifest("test-path".into(), Manifest::default());
+
         let source_file = ParsedSourceFile::new_with_content(
             SourcePath::new_in("src/main.rs".into(), "".into()),
             indoc! {r#"
@@ -426,7 +442,7 @@ mod tests {
                     let x = 10;
                 }
             "#},
-            Language::Rust,
+            ctx.language_data(&Language::Rust).unwrap().unwrap().dupe(),
         )
         .unwrap();
         let ignore_markers = source_file.ignore_markers().unwrap();
@@ -443,6 +459,8 @@ mod tests {
 
     #[test]
     fn missing_ignore_markers() {
+        let ctx = Context::new_with_manifest("test-path".into(), Manifest::default());
+
         let source_file = ParsedSourceFile::new_with_content(
             SourcePath::new_in("src/main.rs".into(), "".into()),
             indoc! {r#"
@@ -451,7 +469,7 @@ mod tests {
                     let x = 10;
                 }
             "#},
-            Language::Rust,
+            ctx.language_data(&Language::Rust).unwrap().unwrap().dupe(),
         )
         .unwrap();
         let ignore_markers = source_file.ignore_markers().unwrap();

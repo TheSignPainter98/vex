@@ -9,6 +9,7 @@ use log::{info, log_enabled};
 use starlark::values::FrozenHeap;
 
 use crate::{
+    context::Context,
     error::Error,
     result::Result,
     scriptlets::{
@@ -46,7 +47,7 @@ impl PreinitingStore {
         Ok(Self { store })
     }
 
-    pub fn preinit(mut self, opts: PreinitOptions<'_>) -> Result<InitingStore> {
+    pub fn preinit(mut self, ctx: &Context, opts: PreinitOptions<'_>) -> Result<InitingStore> {
         self.store.sort_by(|sc1, sc2| sc1.path.cmp(&sc2.path));
         self.topographic_sort()?;
         let Self { store } = self;
@@ -54,7 +55,8 @@ impl PreinitingStore {
         let frozen_heap = FrozenHeap::new();
         let mut partial_store = PreinitedModuleStore::new();
         for scriptlet in store.into_iter() {
-            let preinited_scriptlet = scriptlet.preinit(&opts, &partial_store, &frozen_heap)?;
+            let preinited_scriptlet =
+                scriptlet.preinit(ctx, &opts, &partial_store, &frozen_heap)?;
             partial_store.add(preinited_scriptlet);
         }
 
@@ -243,14 +245,14 @@ pub struct InitingStore {
 }
 
 impl InitingStore {
-    pub fn init(self, opts: InitOptions<'_>) -> Result<VexingStore> {
+    pub fn init(self, ctx: &Context, opts: InitOptions<'_>) -> Result<VexingStore> {
         let Self { store, frozen_heap } = self;
         let num_scripts = store.len();
 
         let observer_data = store.into_iter().try_fold(
             ObserverData::with_capacity(4 * num_scripts),
             |mut data, scriptlet| {
-                data.extend(scriptlet.init(&opts, &frozen_heap)?);
+                data.extend(scriptlet.init(ctx, &opts, &frozen_heap)?);
                 Result::Ok(data)
             },
         )?;

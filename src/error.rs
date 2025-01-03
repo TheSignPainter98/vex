@@ -22,7 +22,7 @@ pub enum Error {
     )]
     AlreadyInited { found_root: PrettyPath },
 
-    #[error("cannot discern language of {path} as multiple patterns match (could be {language} or {other_language})")]
+    #[error("cannot discern language of {path}: multiple patterns match (could be {language} or {other_language})")]
     AmbiguousLanguage {
         path: PrettyPath,
         language: Language,
@@ -134,6 +134,9 @@ pub enum Error {
         name: String,
         suggestion: Option<&'static str>,
     },
+
+    #[error("cannot parse {language} files: no tree-sitter parser loaded")]
+    UnknownLanguage { language: Language },
 
     #[error(
         "unknown operator '{operator_name}' in '#{operator}'{}, expected one of {}",

@@ -8,11 +8,11 @@ use starlark::{
 use starlark_derive::{starlark_value, NoSerialize, Trace};
 
 use crate::{
+    context::Context,
     ignore_markers::IgnoreMarkers,
     scriptlets::{
         action::Action,
         intents::{UnfrozenIntent, UnfrozenIntents},
-        query_cache::QueryCache,
         Intents, ScriptArgsValueMap,
     },
     warning_filter::WarningFilter,
@@ -101,9 +101,9 @@ impl<'v> AllocValue<'v> for RetainedData {
 
 #[derive(Debug, ProvidesStaticType)]
 pub struct TempData<'v> {
+    pub ctx: &'v Context,
     pub action: Action,
     pub script_args: &'v ScriptArgsValueMap,
-    pub query_cache: Option<&'v QueryCache>,
     pub ignore_markers: Option<&'v IgnoreMarkers>,
     pub lsp_enabled: bool,
     pub warning_filter: Option<&'v WarningFilter>,

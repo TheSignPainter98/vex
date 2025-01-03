@@ -1,17 +1,8 @@
-use std::{
-    collections::BTreeMap,
-    fmt::Display,
-    iter,
-    str::FromStr,
-    sync::{Arc, OnceLock},
-};
+use std::{fmt::Display, str::FromStr, sync::Arc};
 
 use allocative::Allocative;
 use dupe::Dupe;
-use indoc::indoc;
-use lazy_static::lazy_static;
 use serde::{Deserialize as Deserialise, Serialize as Serialise};
-use tree_sitter::{Language as TSLanguage, Query};
 
 use crate::{error::Error, result::Result};
 
@@ -34,57 +25,6 @@ impl Language {
             Self::Rust => "rust",
             Self::External(l) => l,
         }
-    }
-
-    pub fn ts_language(&self) -> &TSLanguage {
-        lazy_static! {
-            static ref LANGUAGES: BTreeMap<Language, OnceLock<TSLanguage>> = Language::iter()
-                .zip(iter::repeat_with(OnceLock::new))
-                .collect();
-        };
-
-        LANGUAGES[self].get_or_init(|| match self {
-            Self::Go => tree_sitter_go::language(),
-            Self::Python => tree_sitter_python::language(),
-            Self::Rust => tree_sitter_rust::language(),
-            Self::External(_) => todo!(),
-        })
-    }
-
-    pub fn ignore_query(&self) -> &Query {
-        lazy_static! {
-            static ref IGNORE_QUERIES: BTreeMap<Language, OnceLock<Query>> = Language::iter()
-                .zip(iter::repeat_with(OnceLock::new))
-                .collect();
-        }
-
-        IGNORE_QUERIES[self].get_or_init(|| {
-            let raw = match self {
-                Self::Go => indoc! {r#"
-                    (
-                        (comment) @marker (#match? @marker "^/[/*] *vex:ignore")
-                        .
-                        (_)? @ignore
-                    )
-                "#},
-                Self::Python => indoc! {r#"
-                    (
-                        (comment) @marker (#match? @marker "^# *vex:ignore")
-                        .
-                        (_)? @ignore
-                    )
-                "#},
-                Self::Rust => indoc! {r#"
-                    (
-                        (line_comment) @marker (#match? @marker "^// *vex:ignore")
-                        .
-                        (_)? @ignore
-                    )
-                "#},
-                Self::External(_) => todo!(),
-            };
-            Query::new(self.ts_language(), raw).expect("internal error: ignore query invalid")
-        })
     }
 }
 
@@ -112,7 +52,13 @@ impl Display for Language {
 mod tests {
     use std::ops::Range;
 
-    use crate::{source_file::ParsedSourceFile, source_path::SourcePath};
+    use indoc::indoc;
+
+    use crate::{
+        context::{Context, Manifest},
+        source_file::ParsedSourceFile,
+        source_path::SourcePath,
+    };
 
     use super::*;
 
@@ -201,10 +147,11 @@ mod tests {
             fn ignores_ranges(self, ranges: &[Range<usize>]) {
                 self.setup();
 
+                let ctx = Context::new_with_manifest("test-path".into(), Manifest::default());
                 let source_file = ParsedSourceFile::new_with_content(
                     SourcePath::new_in("test.file".into(), "".into()),
                     self.source.unwrap(),
-                    self.language,
+                    ctx.language_data(&self.language).unwrap().unwrap().dupe(),
                 )
                 .unwrap();
                 let ignore_markers = source_file.ignore_markers().unwrap();

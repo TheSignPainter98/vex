@@ -161,11 +161,14 @@ impl<'s> VexTest<'s> {
             fs::create_dir(ctx.vex_dir()).ok();
         }
         if self.fire_test_events {
-            crate::test::run_tests(RunTestOptions {
-                lsp_enabled: ctx.manifest.run.lsp_enabled,
-                script_args: &script_args,
-                script_sources: &self.scriptlets,
-            })?;
+            crate::test::run_tests(
+                &ctx,
+                RunTestOptions {
+                    lsp_enabled: ctx.manifest.run.lsp_enabled,
+                    script_args: &script_args,
+                    script_sources: &self.scriptlets,
+                },
+            )?;
             Ok(ProjectRunData::default())
         } else {
             for (path, content) in &self.source_files {
@@ -189,8 +192,8 @@ impl<'s> VexTest<'s> {
                 verbosity,
             };
             let store = PreinitingStore::new(&self.scriptlets)?
-                .preinit(preinit_opts)?
-                .init(init_opts)?;
+                .preinit(&ctx, preinit_opts)?
+                .init(&ctx, init_opts)?;
             scan::scan_project(
                 &ctx,
                 &store,

@@ -1,8 +1,9 @@
-use std::{fmt::Display, sync::Arc};
+use std::fmt::Display;
 
 use allocative::Allocative;
 use camino::Utf8Path;
 use derive_new::new;
+use dupe::Dupe;
 use starlark::{
     environment::{Methods, MethodsBuilder, MethodsStatic},
     eval::Evaluator,
@@ -19,7 +20,6 @@ use crate::{
     id::{GroupId, Id, LintId},
     irritation::IrritationRenderer,
     language::Language,
-    query::Query,
     result::Result,
     scriptlets::{
         action::Action,
@@ -161,11 +161,12 @@ impl AppObject {
             let language = language.parse::<Language>()?;
             let query = {
                 let temp_data = TempData::get_from(eval);
-                if let Some(query_cache) = temp_data.query_cache {
-                    query_cache.get_or_create(&language, query)?
-                } else {
-                    Arc::new(Query::new(&language, &query)?)
-                }
+                let ctx = temp_data.ctx;
+                ctx.language_data(&language)?
+                    .ok_or_else(|| Error::UnknownLanguage {
+                        language: language.dupe(),
+                    })?
+                    .get_or_create_query(&query)?
             };
             let on_match = UnfrozenObserver::new(on_match);
             ret_data.declare_intent(UnfrozenIntent::Find {

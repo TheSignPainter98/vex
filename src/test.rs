@@ -21,7 +21,6 @@ use crate::{
         action::Action,
         event::{PostTestRunEvent, PreTestRunEvent},
         handler_module::HandlerModule,
-        query_cache::QueryCache,
         source::{self, ScriptSource},
         InitOptions, Intent, Observable, ObserveOptions, PreinitOptions, PreinitingStore,
         PrintHandler, ScriptArgsValueMap,
@@ -35,11 +34,14 @@ pub fn test() -> Result<()> {
     let ctx = Context::acquire()?;
     let script_args_heap = FrozenHeap::new();
     let script_args = ScriptArgsValueMap::with_args(&ctx.script_args, &script_args_heap);
-    run_tests(RunTestOptions {
-        lsp_enabled: ctx.manifest.run.lsp_enabled,
-        script_args: &script_args,
-        script_sources: &source::sources_in_dir(&ctx.vex_dir())?,
-    })?;
+    run_tests(
+        &ctx,
+        RunTestOptions {
+            lsp_enabled: ctx.manifest.run.lsp_enabled,
+            script_args: &script_args,
+            script_sources: &source::sources_in_dir(&ctx.vex_dir())?,
+        },
+    )?;
     Ok(())
 }
 
@@ -49,7 +51,10 @@ pub(crate) struct RunTestOptions<'a, S> {
     pub(crate) script_sources: &'a [S],
 }
 
-pub(crate) fn run_tests<S: ScriptSource>(run_test_opts: RunTestOptions<'_, S>) -> Result<()> {
+pub(crate) fn run_tests<S: ScriptSource>(
+    ctx: &Context,
+    run_test_opts: RunTestOptions<'_, S>,
+) -> Result<()> {
     let RunTestOptions {
         lsp_enabled,
         script_args,
@@ -65,11 +70,10 @@ pub(crate) fn run_tests<S: ScriptSource>(run_test_opts: RunTestOptions<'_, S>) -
             verbosity: Verbosity::Quiet,
         };
         PreinitingStore::new(script_sources)?
-            .preinit(preinit_opts)?
-            .init(init_opts)?
+            .preinit(ctx, preinit_opts)?
+            .init(ctx, init_opts)?
     };
 
-    let query_cache = QueryCache::new();
     let files_to_scan = {
         let frozen_heap = FrozenHeap::new();
         let event = PreTestRunEvent;
@@ -78,13 +82,13 @@ pub(crate) fn run_tests<S: ScriptSource>(run_test_opts: RunTestOptions<'_, S>) -
         let observe_opts = ObserveOptions {
             action: Action::Vexing(event.kind()),
             script_args,
-            query_cache: Some(&query_cache),
             ignore_markers: None,
             lsp_enabled,
             print_handler: &PrintHandler::new(logger::verbosity(), event.kind().name()),
             warning_filter: Some(&warning_filter),
         };
         store.observers_for(event.kind()).observe(
+            ctx,
             &handler_module,
             handler_module.heap().alloc(event),
             observe_opts,
@@ -194,8 +198,8 @@ pub(crate) fn run_tests<S: ScriptSource>(run_test_opts: RunTestOptions<'_, S>) -
                 verbosity,
             };
             PreinitingStore::new(script_sources)?
-                .preinit(preinit_opts)?
-                .init(init_opts)?
+                .preinit(ctx, preinit_opts)?
+                .init(ctx, init_opts)?
         };
         scan::scan_project(
             &sub_ctx,
@@ -216,13 +220,13 @@ pub(crate) fn run_tests<S: ScriptSource>(run_test_opts: RunTestOptions<'_, S>) -
         let observer_opts = ObserveOptions {
             action: Action::Vexing(event.kind()),
             script_args,
-            query_cache: Some(&query_cache),
             ignore_markers: None,
             lsp_enabled,
             print_handler: &PrintHandler::new(logger::verbosity(), event.kind().name()),
             warning_filter: Some(&warning_filter),
         };
         store.observers_for(event.kind()).observe(
+            ctx,
             &handler_module,
             handler_module.heap().alloc(event),
             observer_opts,

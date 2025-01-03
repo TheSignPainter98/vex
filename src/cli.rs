@@ -6,7 +6,7 @@ use clap::{
         styling::{AnsiColor, Effects},
         StringValueParser, Styles, TypedValueParser,
     },
-    ArgAction, Parser, Subcommand, ValueEnum,
+    ArgAction, Parser, Subcommand,
 };
 
 use crate::{language::Language, Result};

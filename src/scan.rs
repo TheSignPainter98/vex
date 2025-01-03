@@ -15,6 +15,7 @@ use tree_sitter::QueryCursor;
 use crate::{
     cli::{MaxConcurrentFileLimit, MaxProblems},
     context::Context,
+    error::Error,
     irritation::Irritation,
     language::Language,
     query::Query,
@@ -24,7 +25,6 @@ use crate::{
         event::{EventKind, MatchEvent, OpenFileEvent, OpenProjectEvent},
         handler_module::HandlerModule,
         intents::Intent,
-        query_cache::QueryCache,
         query_captures::QueryCaptures,
         Observable, ObserveOptions, Observer, PrintHandler, ScriptArgsValueMap, VexingStore,
     },
@@ -51,29 +51,25 @@ pub fn scan_project(
 ) -> Result<ProjectRunData> {
     let files = source_file::sources_in_dir(ctx, max_concurrent_files)?;
 
-    let project_queries_hint = store.project_queries_hint();
-    let file_queries_hint = store.file_queries_hint();
-
-    let query_cache = QueryCache::with_capacity(project_queries_hint + file_queries_hint);
     let lsp_enabled = ctx.manifest.run.lsp_enabled;
 
     let mut irritations = vec![];
     let frozen_heap = store.frozen_heap();
     let project_queries = {
-        let mut project_queries = Vec::with_capacity(project_queries_hint);
+        let mut project_queries = Vec::with_capacity(store.project_queries_hint());
 
         let event = OpenProjectEvent::new(ctx.project_root.dupe());
         let handler_module = HandlerModule::new();
         let observe_opts = ObserveOptions {
             action: Action::Vexing(event.kind()),
             script_args,
-            query_cache: Some(&query_cache),
             warning_filter: Some(&warning_filter),
             ignore_markers: None,
             lsp_enabled,
             print_handler: &PrintHandler::new(verbosity, event.kind().name()),
         };
         store.observers_for(event.kind()).observe(
+            ctx,
             &handler_module,
             handler_module.heap().alloc(event),
             observe_opts,
@@ -114,12 +110,11 @@ pub fn scan_project(
                 language,
                 lsp_enabled,
                 project_queries: &project_queries,
-                query_cache: &query_cache,
                 warning_filter: &warning_filter,
                 script_args,
                 verbosity,
             };
-            scan_file(file, opts)
+            scan_file(ctx, file, opts)
         })
         .take_any_while(|file_scan_result| {
             let run = match file_scan_result {
@@ -168,19 +163,17 @@ pub struct VexFileOptions<'a> {
     language: &'a Language,
     lsp_enabled: bool,
     project_queries: &'a [(Language, Arc<Query>, Observer)],
-    query_cache: &'a QueryCache,
     warning_filter: &'a WarningFilter,
     script_args: &'a ScriptArgsValueMap,
     verbosity: Verbosity,
 }
 
-fn scan_file(file: &SourceFile, opts: VexFileOptions<'_>) -> Result<FileRunData> {
+fn scan_file(ctx: &Context, file: &SourceFile, opts: VexFileOptions<'_>) -> Result<FileRunData> {
     let VexFileOptions {
         store,
         language,
         lsp_enabled,
         project_queries,
-        query_cache,
         warning_filter,
         script_args,
         verbosity,
@@ -198,13 +191,13 @@ fn scan_file(file: &SourceFile, opts: VexFileOptions<'_>) -> Result<FileRunData>
         let observe_opts = ObserveOptions {
             action: Action::Vexing(event.kind()),
             script_args,
-            query_cache: Some(query_cache),
             warning_filter: Some(warning_filter),
             ignore_markers: None,
             lsp_enabled,
             print_handler: &PrintHandler::new(verbosity, event.kind().name()),
         };
         store.observers_for(event.kind()).observe(
+            ctx,
             &handler_module,
             handler_module.heap().alloc(event),
             observe_opts,
@@ -239,7 +232,16 @@ fn scan_file(file: &SourceFile, opts: VexFileOptions<'_>) -> Result<FileRunData>
         });
     }
 
-    let parsed_file = file.parse()?;
+    let parsed_file = match file.parse(ctx) {
+        Ok(parsed_file) => parsed_file,
+        Err(Error::UnknownLanguage { .. }) => {
+            return Ok(FileRunData {
+                irritations,
+                num_bytes_scanned: 0,
+            });
+        }
+        Err(err) => return Err(err),
+    };
     let ignore_markers = parsed_file.ignore_markers()?;
     project_queries
         .iter()
@@ -263,13 +265,12 @@ fn scan_file(file: &SourceFile, opts: VexFileOptions<'_>) -> Result<FileRunData>
                     let observe_opts = ObserveOptions {
                         action: Action::Vexing(EventKind::Match),
                         script_args,
-                        query_cache: Some(query_cache),
                         warning_filter: Some(warning_filter),
                         ignore_markers: Some(&ignore_markers),
                         lsp_enabled,
                         print_handler: &PrintHandler::new(verbosity, EventKind::Match.name()),
                     };
-                    on_match.observe(&handler_module, event, observe_opts)?;
+                    on_match.observe(ctx, &handler_module, event, observe_opts)?;
                     handler_module
                         .into_intents_on(&frozen_heap)?
                         .into_iter()
