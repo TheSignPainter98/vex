@@ -430,6 +430,8 @@ mod tests {
     mod dump {
         use super::*;
 
+        use std::sync::Arc;
+
         #[test]
         fn requires_path() {
             Args::try_parse_from(["vex", "dump"]).unwrap_err();
@@ -452,10 +454,21 @@ mod tests {
         }
 
         #[test]
-        fn language() {
+        fn builtin_language() {
             let args = Args::try_parse_from(["vex", "dump", "asdf.foo", "--as", "rust"]).unwrap();
             let dump_cmd = args.into_command().into_dump_cmd().unwrap();
             assert_eq!(Language::Rust, dump_cmd.language.unwrap());
+        }
+
+        #[test]
+        fn external_language() {
+            let args = Args::try_parse_from(["vex", "dump", "asdf.foo", "--as", "custom-language"])
+                .unwrap();
+            let dump_cmd = args.into_command().into_dump_cmd().unwrap();
+            assert_eq!(
+                Language::External(Arc::from("custom-language")),
+                dump_cmd.language.unwrap()
+            );
         }
     }
 
