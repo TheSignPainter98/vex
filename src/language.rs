@@ -14,6 +14,7 @@ pub enum Language {
     Go,
     Python,
     Rust,
+    #[serde(untagged)]
     External(Arc<str>),
 }
 
