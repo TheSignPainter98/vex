@@ -137,4 +137,15 @@ mod tests {
         );
         assert_eq!(arena_map.get("new").unwrap(), &"value")
     }
+
+    #[test]
+    fn high_load() {
+        let arena_map: ArenaMap<i32, i32> = ArenaMap::new();
+        for i in 1..(Arena::<i32>::CHUNK_SIZE as i32) * 25 {
+            arena_map.get_or_init(&i, || Ok(-i)).unwrap();
+        }
+        for i in 1..(Arena::<i32>::CHUNK_SIZE as i32) * 25 {
+            assert_eq!(arena_map.get(i).copied(), Some(-i));
+        }
+    }
 }
