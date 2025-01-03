@@ -317,7 +317,7 @@ mod tests {
 
     use crate::id::LintId;
 
-    use super::{sources_in_dir, *};
+    use super::*;
 
     #[test]
     fn directory_walking() {
