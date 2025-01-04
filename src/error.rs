@@ -85,7 +85,7 @@ pub enum Error {
     #[error("cannot discern language of {0}")]
     NoParserForFile(PrettyPath),
 
-    #[error("cannot parse {0}: no tree-sitter parser loaded")]
+    #[error("cannot parse {0}: parser not provided")]
     NoParserForLanguage(Language),
 
     #[error("cannot find module '{0}'")]

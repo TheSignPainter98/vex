@@ -623,7 +623,7 @@ impl LanguageData {
             Language::Go => tree_sitter_go::language(),
             Language::Python => tree_sitter_python::language(),
             Language::Rust => tree_sitter_rust::language(),
-            Language::External(_) => todo!(),
+            Language::External(_) => return Ok(None),
         };
         let ignore_query = {
             let raw_ignore_query = match &language {
