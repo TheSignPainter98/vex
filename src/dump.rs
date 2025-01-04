@@ -43,7 +43,7 @@ pub fn dump(cmd: DumpCmd) -> Result<()> {
             .transpose()?
             .unwrap_or_else(Associations::base)
             .get_language(&src_path)?
-            .ok_or_else(|| Error::NoKnownLanguage(src_path.pretty_path.dupe()))?
+            .ok_or_else(|| Error::NoParserForFile(src_path.pretty_path.dupe()))?
             .dupe(),
     };
     let src_file = SourceFile::new(src_path, Some(language.dupe())).parse(&ctx)?;

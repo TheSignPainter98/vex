@@ -157,17 +157,19 @@ impl AppObject {
                 ],
             )?;
 
+            let temp_data = TempData::get_from(eval);
+            let ctx = temp_data.ctx;
             let ret_data = UnfrozenRetainedData::get_from(eval.module());
+
             let language = language.parse::<Language>()?;
-            let query = {
-                let temp_data = TempData::get_from(eval);
-                let ctx = temp_data.ctx;
-                ctx.language_data(&language)?
-                    .ok_or_else(|| Error::UnknownLanguage {
-                        language: language.dupe(),
-                    })?
-                    .get_or_create_query(&query)?
-            };
+            if ctx.language_data(&language)?.is_none() {
+                return Err(Error::NoParserForLanguage(language).into());
+            }
+
+            let query = ctx
+                .language_data(&language)?
+                .ok_or_else(|| Error::NoParserForLanguage(language.dupe()))?
+                .get_or_create_query(&query)?;
             let on_match = UnfrozenObserver::new(on_match);
             ret_data.declare_intent(UnfrozenIntent::Find {
                 language,

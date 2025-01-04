@@ -133,7 +133,7 @@ impl SourceFile {
         let language = self
             .language
             .as_ref()
-            .ok_or_else(|| Error::NoKnownLanguage(self.path.pretty_path.dupe()))?;
+            .ok_or_else(|| Error::NoParserForFile(self.path.pretty_path.dupe()))?;
         let content =
             fs::read_to_string(self.path.abs_path.as_str()).map_err(|cause| Error::IO {
                 path: self.path.pretty_path.dupe(),
@@ -143,11 +143,7 @@ impl SourceFile {
 
         let language_data = match ctx.language_data(language)? {
             Some(language_data) => language_data,
-            None => {
-                return Err(Error::UnknownLanguage {
-                    language: language.dupe(),
-                })
-            }
+            None => return Err(Error::NoParserForLanguage(language.dupe())),
         };
         ParsedSourceFile::new_with_content(self.path.dupe(), content, language_data.dupe())
     }

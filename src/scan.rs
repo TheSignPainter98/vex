@@ -234,7 +234,7 @@ fn scan_file(ctx: &Context, file: &SourceFile, opts: VexFileOptions<'_>) -> Resu
 
     let parsed_file = match file.parse(ctx) {
         Ok(parsed_file) => parsed_file,
-        Err(Error::UnknownLanguage { .. }) => {
+        Err(Error::NoParserForFile(_) | Error::NoParserForLanguage(_)) => {
             return Ok(FileRunData {
                 irritations,
                 num_bytes_scanned: 0,

@@ -83,7 +83,10 @@ pub enum Error {
     ManifestNotFound,
 
     #[error("cannot discern language of {0}")]
-    NoKnownLanguage(PrettyPath),
+    NoParserForFile(PrettyPath),
+
+    #[error("cannot parse {0}: no tree-sitter parser loaded")]
+    NoParserForLanguage(Language),
 
     #[error("cannot find module '{0}'")]
     NoSuchModule(PrettyPath),
@@ -134,9 +137,6 @@ pub enum Error {
         name: String,
         suggestion: Option<&'static str>,
     },
-
-    #[error("cannot parse {language} files: no tree-sitter parser loaded")]
-    UnknownLanguage { language: Language },
 
     #[error(
         "unknown operator '{operator_name}' in '#{operator}'{}, expected one of {}",
