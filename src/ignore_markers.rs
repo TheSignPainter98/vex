@@ -11,6 +11,13 @@ pub struct IgnoreMarkers {
 }
 
 impl IgnoreMarkers {
+    pub fn new() -> Self {
+        Self {
+            markers: Vec::new(),
+            marker_ends: Vec::new(),
+        }
+    }
+
     pub fn builder() -> IgnoreMarkersBuilder {
         IgnoreMarkersBuilder::new()
     }

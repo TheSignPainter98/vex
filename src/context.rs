@@ -613,7 +613,7 @@ pub struct LanguageData(Arc<LanguageDataInner>);
 struct LanguageDataInner {
     language: Language,
     ts_language: TSLanguage,
-    ignore_query: Query,
+    ignore_query: Option<Query>,
     query_cache: QueryCache,
 }
 
@@ -627,31 +627,33 @@ impl LanguageData {
         };
         let ignore_query = {
             let raw_ignore_query = match &language {
-                Language::Go => indoc! {r#"
+                Language::Go => Some(indoc! {r#"
                     (
                         (comment) @marker (#match? @marker "^/[/*] *vex:ignore")
                         .
                         (_)? @ignore
                     )
-                "#},
-                Language::Python => indoc! {r#"
+                "#}),
+                Language::Python => Some(indoc! {r#"
                     (
                         (comment) @marker (#match? @marker "^# *vex:ignore")
                         .
                         (_)? @ignore
                     )
-                "#},
-                Language::Rust => indoc! {r#"
+                "#}),
+                Language::Rust => Some(indoc! {r#"
                     (
                         (line_comment) @marker (#match? @marker "^// *vex:ignore")
                         .
                         (_)? @ignore
                     )
-                "#},
-                Language::External(_) => todo!(),
+                "#}),
+                Language::External(_) => None,
             };
-            Query::new(&ts_language, raw_ignore_query)
-                .expect("internal error: ignore query invalid")
+            raw_ignore_query.map(|raw_ignore_query| {
+                Query::new(&ts_language, raw_ignore_query)
+                    .expect("internal error: ignore query invalid")
+            })
         };
         let query_cache = QueryCache::new();
         let inner = LanguageDataInner {
@@ -671,8 +673,8 @@ impl LanguageData {
         &self.0.ts_language
     }
 
-    pub fn ignore_query(&self) -> &Query {
-        &self.0.ignore_query
+    pub fn ignore_query(&self) -> Option<&Query> {
+        self.0.ignore_query.as_ref()
     }
 
     pub fn get_or_create_query(&self, raw_query: &StringValue<'_>) -> Result<Arc<Query>> {

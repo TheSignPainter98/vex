@@ -211,9 +211,13 @@ impl ParsedSourceFile {
     }
 
     pub fn ignore_markers(&self) -> Result<IgnoreMarkers> {
+        let ignore_query = match self.language_data.ignore_query() {
+            Some(ignore_query) => ignore_query,
+            None => return Ok(IgnoreMarkers::new()),
+        };
+
         let mut builder = IgnoreMarkers::builder();
 
-        let ignore_query = self.language_data.ignore_query();
         let marker_index = ignore_query
             .capture_index_for_name("marker")
             .expect("internal error: ignore query contains no 'marker' capture")
