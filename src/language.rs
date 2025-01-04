@@ -1,114 +1,49 @@
-use std::{fmt::Display, iter, str::FromStr, sync::OnceLock};
+use std::{fmt::Display, str::FromStr, sync::Arc};
 
 use allocative::Allocative;
-use clap::Subcommand;
 use dupe::Dupe;
-use enum_map::{Enum, EnumMap};
-use indoc::indoc;
-use lazy_static::lazy_static;
 use serde::{Deserialize as Deserialise, Serialize as Serialise};
-use strum::{EnumIter, IntoEnumIterator};
-use tree_sitter::{Language, Query};
 
 use crate::{error::Error, result::Result};
 
 #[derive(
-    Copy,
-    Clone,
-    Debug,
-    Dupe,
-    EnumIter,
-    Subcommand,
-    Enum,
-    Allocative,
-    PartialEq,
-    Eq,
-    Hash,
-    Deserialise,
-    Serialise,
+    Clone, Debug, Dupe, Allocative, PartialOrd, Ord, PartialEq, Eq, Hash, Deserialise, Serialise,
 )]
 #[serde(rename_all = "kebab-case")]
-pub enum SupportedLanguage {
+pub enum Language {
     Go,
     Python,
     Rust,
+    #[serde(untagged)]
+    External(Arc<str>),
 }
 
-impl SupportedLanguage {
-    pub fn name(&self) -> &'static str {
+impl Language {
+    pub fn name(&self) -> &str {
         match self {
             Self::Go => "go",
             Self::Python => "python",
             Self::Rust => "rust",
+            Self::External(l) => l,
         }
-    }
-
-    pub fn ts_language(&self) -> &Language {
-        lazy_static! {
-            static ref LANGUAGES: EnumMap<SupportedLanguage, OnceLock<Language>> =
-                SupportedLanguage::iter()
-                    .zip(iter::repeat_with(OnceLock::new))
-                    .collect();
-        };
-
-        LANGUAGES[*self].get_or_init(|| match self {
-            Self::Go => tree_sitter_go::language(),
-            Self::Python => tree_sitter_python::language(),
-            Self::Rust => tree_sitter_rust::language(),
-        })
-    }
-
-    pub fn ignore_query(&self) -> &Query {
-        lazy_static! {
-            static ref IGNORE_QUERIES: EnumMap<SupportedLanguage, OnceLock<Query>> =
-                SupportedLanguage::iter()
-                    .zip(iter::repeat_with(OnceLock::new))
-                    .collect();
-        }
-
-        IGNORE_QUERIES[*self].get_or_init(|| {
-            let raw = match self {
-                Self::Go => indoc! {r#"
-                    (
-                        (comment) @marker (#match? @marker "^/[/*] *vex:ignore")
-                        .
-                        (_)? @ignore
-                    )
-                "#},
-                Self::Python => indoc! {r#"
-                    (
-                        (comment) @marker (#match? @marker "^# *vex:ignore")
-                        .
-                        (_)? @ignore
-                    )
-                "#},
-                Self::Rust => indoc! {r#"
-                    (
-                        (line_comment) @marker (#match? @marker "^// *vex:ignore")
-                        .
-                        (_)? @ignore
-                    )
-                "#},
-            };
-            Query::new(self.ts_language(), raw).expect("internal error: ignore query invalid")
-        })
     }
 }
 
-impl FromStr for SupportedLanguage {
+impl FromStr for Language {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self> {
-        match s {
-            "go" => Ok(Self::Go),
-            "python" => Ok(Self::Python),
-            "rust" => Ok(Self::Rust),
-            _ => Err(Error::UnsupportedLanguage(s.to_string())),
-        }
+        let ret = match s {
+            "go" => Self::Go,
+            "python" => Self::Python,
+            "rust" => Self::Rust,
+            _ => Self::External(s.into()),
+        };
+        Ok(ret)
     }
 }
 
-impl Display for SupportedLanguage {
+impl Display for Language {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.name().fmt(f)
     }
@@ -118,15 +53,25 @@ impl Display for SupportedLanguage {
 mod tests {
     use std::ops::Range;
 
-    use strum::IntoEnumIterator;
+    use indoc::indoc;
 
-    use crate::{source_file::ParsedSourceFile, source_path::SourcePath};
+    use crate::{
+        context::{Context, Manifest},
+        source_file::ParsedSourceFile,
+        source_path::SourcePath,
+    };
 
     use super::*;
 
     #[test]
     fn str_conversion_roundtrip() -> anyhow::Result<()> {
-        for lang in SupportedLanguage::iter() {
+        let languages = [
+            Language::Go,
+            Language::Python,
+            Language::Rust,
+            Language::External("lua".into()),
+        ];
+        for lang in languages {
             assert_eq!(lang, lang.name().parse()?);
         }
         Ok(())
@@ -135,7 +80,7 @@ mod tests {
     #[test]
     #[allow(clippy::single_range_in_vec_init)]
     fn ignore_queries() {
-        Test::language(SupportedLanguage::Go)
+        Test::language(Language::Go)
             .with_source(indoc! {r#"
                 package main
 
@@ -151,7 +96,7 @@ mod tests {
                 }
             "#})
             .ignores_ranges(&[32..102]);
-        Test::language(SupportedLanguage::Python)
+        Test::language(Language::Python)
             .with_source(indoc! {r#"
                 def main():
                     _ = _ # Placeholder line to avoid bug in Python grammar causing two consecutive body fields to be created.
@@ -165,7 +110,7 @@ mod tests {
                     z = 1;
             "#})
             .ignores_ranges(&[127..190]);
-        Test::language(SupportedLanguage::Rust)
+        Test::language(Language::Rust)
             .with_source(indoc! {r#"
                 fn main() {
                     // vex:ignore *
@@ -183,12 +128,12 @@ mod tests {
         // Test structs
         #[must_use]
         struct Test {
-            language: SupportedLanguage,
+            language: Language,
             source: Option<&'static str>,
         }
 
         impl Test {
-            fn language(language: SupportedLanguage) -> Self {
+            fn language(language: Language) -> Self {
                 Self {
                     language,
                     source: None,
@@ -203,10 +148,11 @@ mod tests {
             fn ignores_ranges(self, ranges: &[Range<usize>]) {
                 self.setup();
 
+                let ctx = Context::new_with_manifest("test-path".into(), Manifest::default());
                 let source_file = ParsedSourceFile::new_with_content(
                     SourcePath::new_in("test.file".into(), "".into()),
                     self.source.unwrap(),
-                    self.language,
+                    ctx.language_data(&self.language).unwrap().unwrap().dupe(),
                 )
                 .unwrap();
                 let ignore_markers = source_file.ignore_markers().unwrap();

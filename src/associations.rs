@@ -2,9 +2,9 @@ use dupe::Dupe;
 
 use crate::{
     error::Error,
+    language::Language,
     result::Result,
     source_path::SourcePath,
-    supported_language::SupportedLanguage,
     trigger::{FilePattern, RawFilePattern},
 };
 
@@ -15,9 +15,9 @@ impl Associations {
     pub fn base() -> Self {
         Self(
             [
-                ("*.go", SupportedLanguage::Go),
-                ("*.py", SupportedLanguage::Python),
-                ("*.rs", SupportedLanguage::Rust),
+                ("*.go", Language::Go),
+                ("*.py", Language::Python),
+                ("*.rs", Language::Rust),
             ]
             .into_iter()
             .map(|(pattern, language)| {
@@ -32,7 +32,7 @@ impl Associations {
         )
     }
 
-    pub fn insert(&mut self, file_patterns: Vec<FilePattern>, language: SupportedLanguage) {
+    pub fn insert(&mut self, file_patterns: Vec<FilePattern>, language: Language) {
         self.0.push(Association {
             file_patterns,
             in_base: false,
@@ -40,7 +40,7 @@ impl Associations {
         })
     }
 
-    pub fn get_language(&self, source_path: &SourcePath) -> Result<Option<SupportedLanguage>> {
+    pub fn get_language(&self, source_path: &SourcePath) -> Result<Option<&Language>> {
         let mut language_matches = self.0.iter().rev().filter_map(|association| {
             let Association {
                 file_patterns,
@@ -51,7 +51,7 @@ impl Associations {
                 .iter()
                 .any(|pattern| pattern.matches(&source_path.pretty_path))
             {
-                Some((*language, in_base))
+                Some((language, in_base))
             } else {
                 None
             }
@@ -64,8 +64,8 @@ impl Associations {
                 let path = source_path.pretty_path.dupe();
                 return Err(Error::AmbiguousLanguage {
                     path,
-                    language,
-                    other_language,
+                    language: language.dupe(),
+                    other_language: other_language.dupe(),
                 });
             }
         }
@@ -77,7 +77,7 @@ impl Associations {
 struct Association {
     file_patterns: Vec<FilePattern>,
     in_base: bool,
-    language: SupportedLanguage,
+    language: Language,
 }
 
 #[cfg(test)]
@@ -90,9 +90,9 @@ mod tests {
 
     #[test]
     fn base() {
-        Test::file("foo/bar.go").has_association(SupportedLanguage::Go);
-        Test::file("foo/bar.py").has_association(SupportedLanguage::Python);
-        Test::file("foo/bar.rs").has_association(SupportedLanguage::Rust);
+        Test::file("foo/bar.go").has_association(Language::Go);
+        Test::file("foo/bar.py").has_association(Language::Python);
+        Test::file("foo/bar.rs").has_association(Language::Rust);
         // *.star=python is an extra association, not a base one.
         Test::file("foo/bar.star").has_no_association();
 
@@ -106,10 +106,10 @@ mod tests {
                 Self { file }
             }
 
-            fn has_association(self, expected_language: SupportedLanguage) {
+            fn has_association(self, expected_language: Language) {
                 self.setup();
                 assert_eq!(
-                    expected_language,
+                    &expected_language,
                     Associations::base()
                         .get_language(&SourcePath::new_in(self.file.into(), "".into()))
                         .unwrap()
@@ -138,8 +138,8 @@ mod tests {
         let associations = {
             let mut associations = Associations::base();
             let pattern = RawFilePattern::new("*.shrödinger").compile().unwrap();
-            associations.insert(vec![pattern.clone()], SupportedLanguage::Rust);
-            associations.insert(vec![pattern], SupportedLanguage::Go);
+            associations.insert(vec![pattern.clone()], Language::Rust);
+            associations.insert(vec![pattern], Language::Go);
             associations
         };
         associations
@@ -152,7 +152,7 @@ mod tests {
         let associations = {
             let mut associations = Associations::base();
             let pattern = RawFilePattern::new("*.c").compile().unwrap();
-            associations.insert(vec![pattern], SupportedLanguage::Python);
+            associations.insert(vec![pattern], Language::Python);
             associations
         };
         assert_eq!(
@@ -160,7 +160,7 @@ mod tests {
                 .get_language(&SourcePath::new_in("actually_python.c".into(), "".into()))
                 .unwrap()
                 .unwrap(),
-            SupportedLanguage::Python,
+            &Language::Python,
         );
     }
 
@@ -170,11 +170,11 @@ mod tests {
             let mut associations = Associations::base();
             associations.insert(
                 vec![RawFilePattern::new("*.rust-file").compile().unwrap()],
-                SupportedLanguage::Rust,
+                Language::Rust,
             );
             associations.insert(
                 vec![RawFilePattern::new("rust-files/*").compile().unwrap()],
-                SupportedLanguage::Rust,
+                Language::Rust,
             );
             associations
         };
@@ -186,7 +186,7 @@ mod tests {
                 ))
                 .unwrap()
                 .unwrap(),
-            SupportedLanguage::Rust,
+            &Language::Rust,
         );
     }
 
@@ -205,6 +205,6 @@ mod tests {
             .unwrap()
             .unwrap();
         // Default manifest must add a *.star=python association.
-        assert_eq!(SupportedLanguage::Python, language);
+        assert_eq!(language, &Language::Python);
     }
 }

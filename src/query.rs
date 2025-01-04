@@ -1,10 +1,8 @@
 use std::ops::Deref;
 
-use tree_sitter::Query as TSQuery;
+use tree_sitter::{Language as TSLanguage, Query as TSQuery};
 
-use crate::{
-    error::Error, result::Result, suggestion::suggest, supported_language::SupportedLanguage,
-};
+use crate::{error::Error, result::Result, suggestion::suggest};
 
 #[derive(Debug)]
 pub struct Query(TSQuery);
@@ -21,7 +19,7 @@ impl Query {
         "not-any-of",
     ];
 
-    pub fn new(language: SupportedLanguage, query: &str) -> Result<Self> {
+    pub fn new(ts_language: &TSLanguage, query: &str) -> Result<Self> {
         let has_content = |query: &str| {
             query
                 .chars()
@@ -43,8 +41,7 @@ impl Query {
             return Err(Error::EmptyQuery);
         }
         let sanitised_query = format!("({query}\n)"); // TODO(kcza): remove me!
-        let query = TSQuery::new(language.ts_language(), &sanitised_query)?;
-
+        let query = TSQuery::new(ts_language, &sanitised_query)?;
         if query.pattern_count() == 0 {
             return Err(Error::EmptyQuery);
         }

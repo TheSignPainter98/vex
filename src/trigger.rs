@@ -198,7 +198,7 @@ mod tests {
                         pass
                 "#},
             )
-            .returns_error("unsupported language 'brainfuck'")
+            .returns_error("cannot parse brainfuck")
     }
 
     #[test]

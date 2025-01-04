@@ -3,7 +3,7 @@ name = "vex"
 version = "0.1.0"
 authors = ["kcza"]
 edition = "2021"
-rust-version = "1.75.0"
+rust-version = "1.81.0"
 description = "A blazingly-fast, hackable linter"
 readme = "README.md"
 homepage = "https://kcza.net/vex/"
@@ -22,7 +22,6 @@ const_format = "0.2.32"
 derive-new = "0.6.0"
 derive_more = "0.99.17"
 dupe = "0.9.0"
-enum-map = "2.7.3"
 glob = "0.3.1"
 indoc = "2.0.4"
 joinery = "3.1.0"
@@ -49,6 +48,7 @@ uniquote = "4.0.0"
 textwrap = { version = "0.16.1", default-features = false }
 walkdir = "2"
 rayon = "1.10.0"
+bumpalo = "3.16.0"
 
 [dev-dependencies]
 insta = { version = "1.36.1", features = ["yaml"] }

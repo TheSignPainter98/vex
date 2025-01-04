@@ -1,27 +1,34 @@
 use camino::{Utf8Path, Utf8PathBuf};
+use dupe::Dupe;
 use indoc::indoc;
 use lazy_static::lazy_static;
 use log::log_enabled;
 use regex::Regex;
 use serde::de::Visitor;
 use serde::{Deserialize, Serialize};
+use starlark::values::StringValue;
+use tree_sitter::Language as TSLanguage;
 
 use std::borrow::Borrow;
 use std::collections::{BTreeMap, HashMap};
 use std::io::{BufWriter, ErrorKind, Read, Write};
 use std::ops::Deref;
+use std::sync::Arc;
 use std::{
     env,
     fs::{self, File},
 };
 use std::{fmt, slice};
 
+use crate::arena_map::ArenaMap;
 use crate::associations::Associations;
 use crate::error::{Error, IOAction, InvalidIDReason};
 use crate::id::Id;
+use crate::language::Language;
+use crate::query::Query;
 use crate::result::Result;
+use crate::scriptlets::query_cache::QueryCache;
 use crate::source_path::PrettyPath;
-use crate::supported_language::SupportedLanguage;
 use crate::trigger::RawFilePattern;
 use crate::warn;
 
@@ -29,6 +36,7 @@ use crate::warn;
 pub struct Context {
     pub project_root: PrettyPath,
     pub manifest: Manifest,
+    languages: ArenaMap<Language, Option<LanguageData>>,
 }
 
 pub const EXAMPLE_VEX_FILE: &str = "example.star";
@@ -51,9 +59,11 @@ impl Context {
             }
         }
 
+        let languages = ArenaMap::new();
         Ok(Context {
             project_root,
             manifest,
+            languages,
         })
     }
 
@@ -61,6 +71,7 @@ impl Context {
         Self {
             project_root: PrettyPath::new(project_root),
             manifest,
+            languages: ArenaMap::new(),
         }
     }
 
@@ -68,10 +79,13 @@ impl Context {
     pub fn acquire_in(project_root: &Utf8Path) -> Result<Self> {
         let (project_root, raw_data) = Manifest::acquire_content_in(project_root)?;
         let project_root = PrettyPath::new(&project_root);
-        let data = toml_edit::de::from_str(&raw_data)?;
+        let manifest = toml_edit::de::from_str(&raw_data)?;
+
+        let languages = ArenaMap::new();
         Ok(Context {
             project_root,
-            manifest: data,
+            manifest,
+            languages,
         })
     }
 
@@ -149,13 +163,19 @@ impl Context {
                     .cloned()
                     .map(|pattern| pattern.compile())
                     .collect::<Result<Vec<_>>>();
-                (patterns, *language)
+                (patterns, language.dupe())
             })
             .try_for_each(|(patterns, language)| {
                 ret.insert(patterns?, language);
                 Ok::<_, Error>(())
             })?;
         Ok(ret)
+    }
+
+    pub fn language_data(&self, language: &Language) -> Result<Option<&LanguageData>> {
+        self.languages
+            .get_or_init(language, || LanguageData::load(language.dupe()))
+            .map(Option::as_ref)
     }
 
     pub fn vex_dir(&self) -> Utf8PathBuf {
@@ -503,13 +523,13 @@ impl Default for GroupsConfig {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
-pub struct LanguagesConfig(HashMap<SupportedLanguage, LanguageOptions>);
+pub struct LanguagesConfig(HashMap<Language, LanguageOptions>);
 
 impl Default for LanguagesConfig {
     fn default() -> Self {
         Self(
             [(
-                SupportedLanguage::Python,
+                Language::Python,
                 LanguageOptions {
                     file_associations: vec![RawFilePattern::new("*.star".into())],
                     language_server: None,
@@ -522,7 +542,7 @@ impl Default for LanguagesConfig {
 }
 
 impl Deref for LanguagesConfig {
-    type Target = HashMap<SupportedLanguage, LanguageOptions>;
+    type Target = HashMap<Language, LanguageOptions>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -583,6 +603,90 @@ impl Deref for IgnoreData {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+#[derive(Clone, Debug, Dupe)]
+pub struct LanguageData(Arc<LanguageDataInner>);
+
+#[derive(Debug)]
+struct LanguageDataInner {
+    language: Language,
+    ts_language: TSLanguage,
+    ignore_query: Query,
+    query_cache: QueryCache,
+}
+
+impl LanguageData {
+    fn load(language: Language) -> Result<Option<Self>> {
+        let ts_language = match language {
+            Language::Go => tree_sitter_go::language(),
+            Language::Python => tree_sitter_python::language(),
+            Language::Rust => tree_sitter_rust::language(),
+            Language::External(_) => return Ok(None),
+        };
+        let ignore_query = {
+            let raw_ignore_query = match &language {
+                Language::Go => indoc! {r#"
+                    (
+                        (comment) @marker (#match? @marker "^/[/*] *vex:ignore")
+                        .
+                        (_)? @ignore
+                    )
+                "#},
+                Language::Python => indoc! {r#"
+                    (
+                        (comment) @marker (#match? @marker "^# *vex:ignore")
+                        .
+                        (_)? @ignore
+                    )
+                "#},
+                Language::Rust => indoc! {r#"
+                    (
+                        (line_comment) @marker (#match? @marker "^// *vex:ignore")
+                        .
+                        (_)? @ignore
+                    )
+                "#},
+                Language::External(_) => todo!(),
+            };
+            Query::new(&ts_language, raw_ignore_query)
+                .expect("internal error: ignore query invalid")
+        };
+        let query_cache = QueryCache::new();
+        let inner = LanguageDataInner {
+            language,
+            ts_language,
+            ignore_query,
+            query_cache,
+        };
+        Ok(Some(Self(Arc::new(inner))))
+    }
+
+    pub fn language(&self) -> &Language {
+        &self.0.language
+    }
+
+    pub fn ts_language(&self) -> &TSLanguage {
+        &self.0.ts_language
+    }
+
+    pub fn ignore_query(&self) -> &Query {
+        &self.0.ignore_query
+    }
+
+    pub fn get_or_create_query(&self, raw_query: &StringValue<'_>) -> Result<Arc<Query>> {
+        let query_hash = raw_query.get_hashed().hash(); // This hash value is only 32 bits long.
+
+        if let Some(cached_query) = self.0.query_cache.get(&self.0.language, query_hash) {
+            return Ok(cached_query);
+        }
+
+        let query = Arc::new(Query::new(&self.0.ts_language, raw_query)?);
+        self.0
+            .query_cache
+            .put(self.0.language.dupe(), query_hash, query.dupe());
+        Ok(query)
     }
 }
 
@@ -663,9 +767,9 @@ mod tests {
         };
         PreinitingStore::new(&source::sources_in_dir(&ctx.vex_dir())?)
             .unwrap()
-            .preinit(preinit_options)
+            .preinit(&ctx, preinit_options)
             .unwrap()
-            .init(init_options)
+            .init(&ctx, init_options)
             .unwrap();
 
         // Already inited, no-force
@@ -690,9 +794,9 @@ mod tests {
         };
         PreinitingStore::new(&source::sources_in_dir(&ctx.vex_dir())?)
             .unwrap()
-            .preinit(preinit_options)
+            .preinit(&ctx, preinit_options)
             .unwrap()
-            .init(init_options)
+            .init(&ctx, init_options)
             .unwrap();
 
         Ok(())
@@ -729,8 +833,8 @@ mod tests {
             verbosity: Verbosity::default(),
         };
         let store = PreinitingStore::new(&source::sources_in_dir(&ctx.vex_dir())?)?
-            .preinit(preinit_options)?
-            .init(init_options)?;
+            .preinit(&ctx, preinit_options)?
+            .init(&ctx, init_options)?;
         let ProjectRunData { irritations, .. } = scan::scan_project(
             &ctx,
             &store,
@@ -810,6 +914,10 @@ mod tests {
             [languages.python]
             use-for = ["*.star", "*.py2"]
             language-server = [ "custom-language-server", "with-arg" ]
+
+            [languages.some-custom-language]
+            use-for = ["*.custom"]
+            language-server = "custom-ls"
         "#};
         let parsed_manifest: Manifest = toml_edit::de::from_str(manifest_content).unwrap();
 
@@ -848,19 +956,35 @@ mod tests {
             BTreeMap::from_iter([("group-id-1".into(), false), ("group-id-2".into(), true)])
         );
         assert_eq!(
-            parsed_manifest.languages[&SupportedLanguage::Python]
+            parsed_manifest.languages[&Language::Python]
                 .file_associations
                 .len(),
             2
         );
         assert_eq!(
-            parsed_manifest.languages[&SupportedLanguage::Python]
+            parsed_manifest.languages[&Language::Python]
                 .language_server
                 .as_ref()
                 .unwrap()
                 .parts()
                 .collect::<Vec<_>>(),
             ["custom-language-server", "with-arg"],
+        );
+        let custom_language = Language::External(Arc::from("some-custom-language"));
+        assert_eq!(
+            parsed_manifest.languages[&custom_language]
+                .file_associations
+                .len(),
+            1
+        );
+        assert_eq!(
+            parsed_manifest.languages[&custom_language]
+                .language_server
+                .as_ref()
+                .unwrap()
+                .parts()
+                .collect::<Vec<_>>(),
+            ["custom-ls"],
         );
     }
 
@@ -877,7 +1001,7 @@ mod tests {
         let parsed_manifest: Manifest = toml_edit::de::from_str(manifest_content).unwrap();
 
         assert_eq!(
-            parsed_manifest.languages[&SupportedLanguage::Python]
+            parsed_manifest.languages[&Language::Python]
                 .language_server
                 .as_ref()
                 .unwrap()

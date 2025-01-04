@@ -1,8 +1,9 @@
-use std::{fmt::Display, sync::Arc};
+use std::fmt::Display;
 
 use allocative::Allocative;
 use camino::Utf8Path;
 use derive_new::new;
+use dupe::Dupe;
 use starlark::{
     environment::{Methods, MethodsBuilder, MethodsStatic},
     eval::Evaluator,
@@ -18,7 +19,7 @@ use crate::{
     error::Error,
     id::{GroupId, Id, LintId},
     irritation::IrritationRenderer,
-    query::Query,
+    language::Language,
     result::Result,
     scriptlets::{
         action::Action,
@@ -31,7 +32,6 @@ use crate::{
         Node,
     },
     source_path::PrettyPath,
-    supported_language::SupportedLanguage,
 };
 
 #[derive(Debug, PartialEq, Eq, new, ProvidesStaticType, NoSerialize, Allocative)]
@@ -137,9 +137,7 @@ impl AppObject {
                 return Ok(None);
             }
 
-            let language = eval
-                .heap()
-                .alloc(language.parse::<SupportedLanguage>()?.to_string());
+            let language = eval.heap().alloc(language.parse::<Language>()?.to_string());
             Ok(Some(Lsp { language }))
         }
 
@@ -159,16 +157,19 @@ impl AppObject {
                 ],
             )?;
 
+            let temp_data = TempData::get_from(eval);
+            let ctx = temp_data.ctx;
             let ret_data = UnfrozenRetainedData::get_from(eval.module());
-            let language = language.parse::<SupportedLanguage>()?;
-            let query = {
-                let temp_data = TempData::get_from(eval);
-                if let Some(query_cache) = temp_data.query_cache {
-                    query_cache.get_or_create(language, query)?
-                } else {
-                    Arc::new(Query::new(language, &query)?)
-                }
-            };
+
+            let language = language.parse::<Language>()?;
+            if ctx.language_data(&language)?.is_none() {
+                return Err(Error::NoParserForLanguage(language).into());
+            }
+
+            let query = ctx
+                .language_data(&language)?
+                .ok_or_else(|| Error::NoParserForLanguage(language.dupe()))?
+                .get_or_create_query(&query)?;
             let on_match = UnfrozenObserver::new(on_match);
             ret_data.declare_intent(UnfrozenIntent::Find {
                 language,

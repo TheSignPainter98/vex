@@ -4,6 +4,7 @@
 #[macro_use]
 extern crate pretty_assertions;
 
+mod arena_map;
 mod associations;
 mod cli;
 mod context;
@@ -12,6 +13,7 @@ mod error;
 mod id;
 mod ignore_markers;
 mod irritation;
+mod language;
 mod logger;
 mod plural;
 mod query;
@@ -21,7 +23,6 @@ mod scriptlets;
 mod source_file;
 mod source_path;
 mod suggestion;
-mod supported_language;
 mod test;
 mod trigger;
 mod verbosity;
@@ -38,10 +39,9 @@ use log::{debug, info, log_enabled};
 use rayon::ThreadPoolBuilder;
 use scriptlets::ScriptArgsValueMap;
 use starlark::values::FrozenHeap;
-use strum::IntoEnumIterator;
 
 use crate::{
-    cli::{Args, CheckCmd, Command, InitCmd, ListCmd, ToList},
+    cli::{Args, CheckCmd, Command, InitCmd},
     context::{Context, Manifest, EXAMPLE_VEX_FILE},
     error::{Error, IOAction},
     id::{GroupId, LintId},
@@ -50,7 +50,6 @@ use crate::{
     scan::ProjectRunData,
     scriptlets::{source, InitOptions, PreinitOptions, PreinitingStore},
     source_path::PrettyPath,
-    supported_language::SupportedLanguage,
     verbosity::Verbosity,
     warning_filter::{ExclusionSet, WarningFilter},
 };
@@ -83,7 +82,6 @@ fn run() -> Result<ExitCode> {
     match args.command {
         Command::Check(cmd_args) => check(cmd_args),
         Command::Dump(dump_args) => dump::dump(dump_args),
-        Command::List(list_args) => list(list_args),
         Command::Init(init_args) => init(init_args),
         Command::Test => test::test(),
     }?;
@@ -109,13 +107,6 @@ fn print_banner() {
     };
 }
 
-fn list(list_args: ListCmd) -> Result<()> {
-    match list_args.what {
-        ToList::Languages => SupportedLanguage::iter().for_each(|lang| println!("{}", lang)),
-    }
-    Ok(())
-}
-
 fn check(cmd_args: CheckCmd) -> Result<()> {
     let ctx = Context::acquire()?;
     let verbosity = logger::verbosity();
@@ -133,8 +124,8 @@ fn check(cmd_args: CheckCmd) -> Result<()> {
             verbosity,
         };
         PreinitingStore::new(&source::sources_in_dir(&ctx.vex_dir())?)?
-            .preinit(preinit_opts)?
-            .init(init_opts)?
+            .preinit(&ctx, preinit_opts)?
+            .init(&ctx, init_opts)?
     };
 
     // Configure global `rayon` thread pool.

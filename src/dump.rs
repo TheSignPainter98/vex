@@ -1,11 +1,12 @@
 use std::env;
 
 use camino::Utf8PathBuf;
+use dupe::Dupe;
 
 use crate::{
     associations::Associations,
     cli::DumpCmd,
-    context::Context,
+    context::{Context, Manifest},
     error::{Error, IOAction},
     result::Result,
     scriptlets::{NodePrinter, WhitespaceStyle},
@@ -14,6 +15,20 @@ use crate::{
 };
 
 pub fn dump(cmd: DumpCmd) -> Result<()> {
+    let ctx = match Context::acquire() {
+        Ok(ctx) => ctx,
+        Err(_) => {
+            let current_dir =
+                Utf8PathBuf::try_from(env::current_dir().map_err(|cause| Error::IO {
+                    path: PrettyPath::from("."),
+                    action: IOAction::Read,
+                    cause,
+                })?)?;
+            let manifest = Manifest::default();
+            Context::new_with_manifest(&current_dir, manifest)
+        }
+    };
+
     let cwd = Utf8PathBuf::try_from(env::current_dir().map_err(|e| Error::IO {
         path: PrettyPath::new(&cmd.path),
         action: IOAction::Read,
@@ -21,15 +36,17 @@ pub fn dump(cmd: DumpCmd) -> Result<()> {
     })?)?;
     let src_path = SourcePath::new_in(&cmd.path, &cwd);
     let language = match cmd.language {
-        Some(l) => Some(l),
+        Some(l) => l,
         None => Context::acquire()
             .ok()
             .map(|ctx| ctx.associations())
             .transpose()?
             .unwrap_or_else(Associations::base)
-            .get_language(&src_path)?,
+            .get_language(&src_path)?
+            .ok_or_else(|| Error::NoParserForFile(src_path.pretty_path.dupe()))?
+            .dupe(),
     };
-    let src_file = SourceFile::new(src_path, language).parse()?;
+    let src_file = SourceFile::new(src_path, Some(language.dupe())).parse(&ctx)?;
 
     let capacity_estimate = 20 * src_file.tree.root_node().descendant_count();
     let mut buf = String::with_capacity(capacity_estimate);
@@ -57,8 +74,8 @@ mod tests {
     use tempfile::TempDir;
 
     use crate::{
-        cli::Args, source_file::ParsedSourceFile, source_path::PrettyPath,
-        supported_language::SupportedLanguage,
+        cli::Args, context::Manifest, language::Language, source_file::ParsedSourceFile,
+        source_path::PrettyPath,
     };
 
     use super::*;
@@ -178,10 +195,12 @@ mod tests {
 
     #[test]
     fn format() {
+        let ctx = Context::new_with_manifest("test-path".into(), Manifest::default());
+
         let test_file = ParsedSourceFile::new_with_content(
             SourcePath::new_in("test.rs".into(), "".into()),
             "const X: usize = 1 + 2;",
-            SupportedLanguage::Rust,
+            ctx.language_data(&Language::Rust).unwrap().unwrap().dupe(),
         )
         .unwrap();
 

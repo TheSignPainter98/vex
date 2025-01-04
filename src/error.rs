@@ -5,10 +5,10 @@ use joinery::JoinableIterator;
 use strum::IntoEnumIterator;
 
 use crate::{
+    language::Language,
     query::Query,
     scriptlets::{action::Action, event::EventKind, LoadPath, Location},
     source_path::PrettyPath,
-    supported_language::SupportedLanguage,
 };
 
 // TODO(kcza): box this!
@@ -22,11 +22,11 @@ pub enum Error {
     )]
     AlreadyInited { found_root: PrettyPath },
 
-    #[error("cannot discern language of {path} as multiple patterns match (could be {language} or {other_language})")]
+    #[error("cannot discern language of {path}: multiple patterns match (could be {language} or {other_language})")]
     AmbiguousLanguage {
         path: PrettyPath,
-        language: SupportedLanguage,
-        other_language: SupportedLanguage,
+        language: Language,
+        other_language: Language,
     },
 
     #[error(transparent)]
@@ -83,7 +83,10 @@ pub enum Error {
     ManifestNotFound,
 
     #[error("cannot discern language of {0}")]
-    NoKnownLanguage(PrettyPath),
+    NoParserForFile(PrettyPath),
+
+    #[error("cannot parse {0}: parser not provided")]
+    NoParserForLanguage(Language),
 
     #[error("cannot find module '{0}'")]
     NoSuchModule(PrettyPath),
@@ -146,13 +149,10 @@ pub enum Error {
         suggestion: Option<&'static str>,
     },
 
-    #[error("unsupported language '{0}'")]
-    UnsupportedLanguage(String),
-
     #[error("{path}:{location}: cannot parse {language}")]
     UnparseableAsLanguage {
         path: PrettyPath,
-        language: SupportedLanguage,
+        language: Language,
         location: Location,
     },
 

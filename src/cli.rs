@@ -6,10 +6,10 @@ use clap::{
         styling::{AnsiColor, Effects},
         StringValueParser, Styles, TypedValueParser,
     },
-    ArgAction, Parser, Subcommand, ValueEnum,
+    ArgAction, Parser, Subcommand,
 };
 
-use crate::{supported_language::SupportedLanguage, Result};
+use crate::{language::Language, Result};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -78,9 +78,6 @@ pub enum Command {
     /// Create new vex project with this directory as the root
     Init(InitCmd),
 
-    /// Print lists of things vex knows about
-    List(ListCmd),
-
     /// Test available lints
     Test,
 }
@@ -107,18 +104,6 @@ impl Command {
             _ => None,
         }
     }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Parser)]
-pub struct ListCmd {
-    /// What to print
-    #[arg(value_name = "what")]
-    pub what: ToList,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, ValueEnum)]
-pub enum ToList {
-    Languages,
 }
 
 #[derive(Debug, Default, PartialEq, Eq, Parser)]
@@ -297,7 +282,7 @@ pub struct DumpCmd {
 
     /// Override language detection
     #[arg(long = "as", value_name = "language")]
-    pub language: Option<SupportedLanguage>,
+    pub language: Option<Language>,
 }
 
 #[derive(Debug, Default, PartialEq, Eq, Parser)]
@@ -407,22 +392,6 @@ mod tests {
         assert!(Args::try_parse_from(["vex", "-v", "-q", CMD]).is_err());
     }
 
-    mod list {
-        use super::*;
-
-        #[test]
-        fn languages() {
-            assert_eq!(
-                Args::try_parse_from(["vex", "list", "languages"])
-                    .unwrap()
-                    .into_command(),
-                Command::List(ListCmd {
-                    what: ToList::Languages
-                }),
-            );
-        }
-    }
-
     mod check {
         use super::*;
 
@@ -461,6 +430,8 @@ mod tests {
     mod dump {
         use super::*;
 
+        use std::sync::Arc;
+
         #[test]
         fn requires_path() {
             Args::try_parse_from(["vex", "dump"]).unwrap_err();
@@ -483,10 +454,21 @@ mod tests {
         }
 
         #[test]
-        fn language() {
+        fn builtin_language() {
             let args = Args::try_parse_from(["vex", "dump", "asdf.foo", "--as", "rust"]).unwrap();
             let dump_cmd = args.into_command().into_dump_cmd().unwrap();
-            assert_eq!(SupportedLanguage::Rust, dump_cmd.language.unwrap());
+            assert_eq!(Language::Rust, dump_cmd.language.unwrap());
+        }
+
+        #[test]
+        fn external_language() {
+            let args = Args::try_parse_from(["vex", "dump", "asdf.foo", "--as", "custom-language"])
+                .unwrap();
+            let dump_cmd = args.into_command().into_dump_cmd().unwrap();
+            assert_eq!(
+                Language::External(Arc::from("custom-language")),
+                dump_cmd.language.unwrap()
+            );
         }
     }
 
