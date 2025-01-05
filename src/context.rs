@@ -1,6 +1,6 @@
 use camino::{Utf8Path, Utf8PathBuf};
 use dupe::Dupe;
-use indoc::indoc;
+use indoc::{indoc, writedoc};
 use lazy_static::lazy_static;
 use log::log_enabled;
 use regex::Regex;
@@ -10,9 +10,10 @@ use starlark::values::StringValue;
 use tree_sitter::Language as TSLanguage;
 use tree_sitter_loader::{CompileConfig, Loader};
 
-use std::borrow::Borrow;
-use std::collections::{BTreeMap, HashMap};
-use std::io::{BufWriter, ErrorKind, Read, Write};
+use std::borrow::{Borrow, Cow};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::fmt::Write as _;
+use std::io::{BufWriter, ErrorKind, Read, Write as _};
 use std::ops::Deref;
 use std::sync::Arc;
 use std::{
@@ -541,6 +542,7 @@ impl Default for LanguagesConfig {
                     file_associations: vec![RawFilePattern::new("*.star".into())],
                     language_server: None,
                     parser_dir: None,
+                    ignore_query: None, // Guess.
                 },
             )]
             .into_iter()
@@ -557,7 +559,7 @@ impl Deref for LanguagesConfig {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct LanguageOptions {
     #[serde(rename = "use-for", default)]
@@ -566,6 +568,8 @@ pub struct LanguageOptions {
     language_server: Option<LanguageServerCommand>,
 
     parser_dir: Option<Utf8PathBuf>,
+
+    ignore_query: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
@@ -629,12 +633,7 @@ struct LanguageDataInner {
 
 impl LanguageData {
     pub(crate) fn load(language: Language, project_root: &Utf8Path) -> Result<Option<Self>> {
-        let opts = LanguageOptions {
-            file_associations: Vec::new(),
-            language_server: None,
-            parser_dir: None,
-        };
-        Self::load_with_options(language, &opts, project_root)
+        Self::load_with_options(language, &LanguageOptions::default(), project_root)
     }
 
     pub(crate) fn load_with_options(
@@ -645,45 +644,56 @@ impl LanguageData {
         let (ts_language, raw_ignore_query) = match language {
             Language::Go => {
                 let ts_language = TSLanguage::from(tree_sitter_go::LANGUAGE);
-                let raw_ignore_query = Some(indoc! {r#"
+                let raw_ignore_query = Some(Cow::from(indoc! {r#"
                     (
                         (comment) @marker (#match? @marker "^/[/*] *vex:ignore")
                         .
                         (_)? @ignore
                     )
-                "#});
+                "#}));
                 (ts_language, raw_ignore_query)
             }
             Language::Python => {
                 let ts_language = TSLanguage::from(tree_sitter_python::LANGUAGE);
-                let raw_ignore_query = Some(indoc! {r#"
+                let raw_ignore_query = Some(Cow::from(indoc! {r#"
                     (
                         (comment) @marker (#match? @marker "^# *vex:ignore")
                         .
                         (_)? @ignore
                     )
-                "#});
+                "#}));
                 (ts_language, raw_ignore_query)
             }
             Language::Rust => {
                 let ts_language = TSLanguage::from(tree_sitter_rust::LANGUAGE);
-                let raw_ignore_query = Some(indoc! {r#"
+                let raw_ignore_query = Some(Cow::from(indoc! {r#"
                     (
                         (line_comment) @marker (#match? @marker "^// *vex:ignore")
                         .
                         (_)? @ignore
                     )
-                "#});
+                "#}));
                 (ts_language, raw_ignore_query)
             }
-            Language::External(_) => {
+            Language::External(ref language_name) => {
+                let LanguageOptions { parser_dir, .. } = language_options;
+                let parser_dir = parser_dir.as_ref().ok_or_else(|| Error::ExternalLanguage {
+                    language: language.dupe(),
+                    cause: ExternalLanguageError::MissingParserDir,
+                })?;
+
                 let ts_language =
                     Self::load_ts_language(&language, language_options, project_root)?;
-                (ts_language, None)
+                let raw_ignore_query = language_options
+                    .ignore_query
+                    .as_ref()
+                    .map(Cow::from)
+                    .or_else(|| Self::guess_raw_ignore_query(&ts_language).map(Cow::from));
+                (ts_language, raw_ignore_query)
             }
         };
         let ignore_query = raw_ignore_query.map(|raw_ignore_query| {
-            Query::new(&ts_language, raw_ignore_query)
+            Query::new(&ts_language, &raw_ignore_query)
                 .expect("internal error: ignore query invalid")
         });
         let query_cache = QueryCacheForLanguage::new();
@@ -716,6 +726,47 @@ impl LanguageData {
         loader
             .load_language_at_path_with_name(compile_config)
             .map_err(Error::from)
+    }
+
+    fn guess_raw_ignore_query(ts_language: &TSLanguage) -> Option<String> {
+        let mut comment_node_kinds = BTreeSet::new();
+        for id in 0..(ts_language.node_kind_count() as u16) {
+            if !ts_language.node_kind_is_visible(id) || !ts_language.node_kind_is_named(id) {
+                continue;
+            }
+            let node_kind = match ts_language.node_kind_for_id(id) {
+                Some(nk) => nk,
+                None => continue,
+            };
+            if !node_kind.ends_with("comment") {
+                continue;
+            }
+
+            comment_node_kinds.insert(node_kind);
+        }
+
+        if comment_node_kinds.is_empty() {
+            return None;
+        }
+
+        let guess = {
+            let mut guess = String::new();
+            for comment_node_kind in comment_node_kinds {
+                writedoc!(
+                    &mut guess,
+                    r#"
+                        (
+                            ({comment_node_kind}) @marker (#match? @marker "vex:ignore")
+                            .
+                            (_)? @ignore
+                        )
+                    "#
+                )
+                .expect("internal error: cannot write to String");
+            }
+            guess
+        };
+        Some(guess)
     }
 
     pub fn language(&self) -> &Language {
