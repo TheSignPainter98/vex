@@ -729,7 +729,9 @@ impl LanguageData {
     }
 
     fn guess_raw_ignore_query(ts_language: &TSLanguage) -> Option<String> {
-        let mut comment_node_kinds = BTreeSet::new();
+        const KNOWN_COMMENT_MARKERS: [&str; 2] = ["comment", "line_comment"];
+
+        let mut comment_node_kinds = Vec::with_capacity(KNOWN_COMMENT_MARKERS.len());
         for id in 0..(ts_language.node_kind_count() as u16) {
             if !ts_language.node_kind_is_visible(id) || !ts_language.node_kind_is_named(id) {
                 continue;
@@ -738,11 +740,14 @@ impl LanguageData {
                 Some(nk) => nk,
                 None => continue,
             };
-            if !node_kind.ends_with("comment") {
+
+            if !KNOWN_COMMENT_MARKERS.contains(&node_kind) {
                 continue;
             }
-
-            comment_node_kinds.insert(node_kind);
+            if comment_node_kinds.contains(&node_kind) {
+                continue;
+            }
+            comment_node_kinds.push(node_kind);
         }
 
         if comment_node_kinds.is_empty() {
