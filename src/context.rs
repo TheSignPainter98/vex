@@ -2,6 +2,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use dupe::Dupe;
 use indoc::indoc;
 use lazy_static::lazy_static;
+use libloading::{Library, Symbol};
 use log::log_enabled;
 use regex::Regex;
 use serde::de::Visitor;
@@ -22,7 +23,7 @@ use std::{fmt, slice};
 
 use crate::arena_map::ArenaMap;
 use crate::associations::Associations;
-use crate::error::{Error, IOAction, InvalidIDReason};
+use crate::error::{Error, ExternalLanguageError, IOAction, InvalidIDReason};
 use crate::id::Id;
 use crate::language::Language;
 use crate::query::Query;
@@ -533,6 +534,7 @@ impl Default for LanguagesConfig {
                 LanguageOptions {
                     file_associations: vec![RawFilePattern::new("*.star".into())],
                     language_server: None,
+                    parser_dir: None,
                 },
             )]
             .into_iter()
@@ -556,6 +558,8 @@ pub struct LanguageOptions {
     file_associations: Vec<RawFilePattern<String>>,
 
     language_server: Option<LanguageServerCommand>,
+
+    parser_dir: Option<Utf8PathBuf>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
@@ -618,43 +622,82 @@ struct LanguageDataInner {
 }
 
 impl LanguageData {
-    fn load(language: Language) -> Result<Option<Self>> {
-        let ts_language = match language {
-            Language::Go => tree_sitter_go::language(),
-            Language::Python => tree_sitter_python::language(),
-            Language::Rust => tree_sitter_rust::language(),
-            Language::External(_) => return Ok(None),
+    pub(crate) fn load(language: Language) -> Result<Option<Self>> {
+        let opts = LanguageOptions {
+            file_associations: Vec::new(),
+            language_server: None,
+            parser_dir: None,
         };
-        let ignore_query = {
-            let raw_ignore_query = match &language {
-                Language::Go => Some(indoc! {r#"
+        Self::load_with_options(language, opts)
+    }
+
+    pub(crate) fn load_with_options(
+        language: Language,
+        language_options: LanguageOptions,
+    ) -> Result<Option<Self>> {
+        let (ts_language, raw_ignore_query) = match language {
+            Language::Go => {
+                let ts_language = tree_sitter_go::language();
+                let raw_ignore_query = Some(indoc! {r#"
                     (
                         (comment) @marker (#match? @marker "^/[/*] *vex:ignore")
                         .
                         (_)? @ignore
                     )
-                "#}),
-                Language::Python => Some(indoc! {r#"
+                "#});
+                (ts_language, raw_ignore_query)
+            }
+            Language::Python => {
+                let ts_language = tree_sitter_python::language();
+                let raw_ignore_query = Some(indoc! {r#"
                     (
                         (comment) @marker (#match? @marker "^# *vex:ignore")
                         .
                         (_)? @ignore
                     )
-                "#}),
-                Language::Rust => Some(indoc! {r#"
+                "#});
+                (ts_language, raw_ignore_query)
+            }
+            Language::Rust => {
+                let ts_language = tree_sitter_rust::language();
+                let raw_ignore_query = Some(indoc! {r#"
                     (
                         (line_comment) @marker (#match? @marker "^// *vex:ignore")
                         .
                         (_)? @ignore
                     )
-                "#}),
-                Language::External(_) => None,
-            };
-            raw_ignore_query.map(|raw_ignore_query| {
-                Query::new(&ts_language, raw_ignore_query)
-                    .expect("internal error: ignore query invalid")
-            })
+                "#});
+                (ts_language, raw_ignore_query)
+            }
+            Language::External(_) => {
+                let language_name = language.name(); // Avoid partial move.
+
+                let LanguageOptions { parser_dir, .. } = language_options;
+                let parser_dir = parser_dir.ok_or_else(|| Error::ExternalLanguage {
+                    language: language.dupe(),
+                    cause: ExternalLanguageError::MissingParserDir,
+                })?;
+
+                let ts_language = {
+                    let parser_lib_path = parser_dir.join(format!("{language_name}.so"));
+                    let lib = unsafe { Library::new(parser_lib_path)? };
+                    let ts_language_fn: Symbol<unsafe extern "C" fn() -> TSLanguage> = unsafe {
+                        lib.get(
+                            format!("tree_sitter_{}", language_name.replace('-', "_")).as_bytes(),
+                        )?
+                    };
+                    let ts_language = unsafe { ts_language_fn() };
+                    std::mem::forget(lib);
+                    ts_language
+                };
+
+                (ts_language, None)
+            }
         };
+        let ignore_query = raw_ignore_query.map(|raw_ignore_query| {
+            Query::new(&ts_language, raw_ignore_query)
+                .expect("internal error: ignore query invalid")
+        });
         let query_cache = QueryCache::new();
         let inner = LanguageDataInner {
             language,

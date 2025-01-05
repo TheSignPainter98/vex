@@ -49,6 +49,7 @@ textwrap = { version = "0.16.1", default-features = false }
 walkdir = "2"
 rayon = "1.10.0"
 bumpalo = "3.16.0"
+libloading = "0.8.6"
 
 [dev-dependencies]
 insta = { version = "1.36.1", features = ["yaml"] }

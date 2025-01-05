@@ -35,6 +35,12 @@ pub enum Error {
     #[error("query is empty")]
     EmptyQuery,
 
+    #[error("cannot load language {language}: {cause}")]
+    ExternalLanguage {
+        language: Language,
+        cause: ExternalLanguageError,
+    },
+
     #[error(transparent)]
     Fmt(#[from] fmt::Error),
 
@@ -78,6 +84,9 @@ pub enum Error {
 
     #[error(transparent)]
     Language(#[from] tree_sitter::LanguageError),
+
+    #[error(transparent)]
+    LibLoading(#[from] libloading::Error),
 
     #[error("cannot find manifest, try running `vex init` in the project’s root")]
     ManifestNotFound,
@@ -173,6 +182,12 @@ impl From<starlark::Error> for Error {
     fn from(err: starlark::Error) -> Self {
         err.into_anyhow().into()
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ExternalLanguageError {
+    #[error("manifest does not define parser-dir")]
+    MissingParserDir,
 }
 
 #[derive(Debug, Display)]
