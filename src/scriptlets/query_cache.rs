@@ -7,14 +7,14 @@ use allocative::Allocative;
 use dupe::Dupe;
 use starlark::{collections::StarlarkHashValue, values::Trace};
 
-use crate::{language::Language, query::Query};
+use crate::query::Query;
 
 #[derive(Debug, Allocative)]
-pub struct QueryCache {
-    cache: RwLock<HashMap<(Language, StarlarkHashValue), CachedQuery>>,
+pub struct QueryCacheForLanguage {
+    cache: RwLock<HashMap<StarlarkHashValue, CachedQuery>>,
 }
 
-impl QueryCache {
+impl QueryCacheForLanguage {
     pub fn new() -> Self {
         Self {
             cache: RwLock::new(HashMap::new()),
@@ -27,27 +27,27 @@ impl QueryCache {
         }
     }
 
-    pub fn put(&self, language: Language, query_hash: StarlarkHashValue, query: Arc<Query>) {
+    pub fn put(&self, query_hash: StarlarkHashValue, query: Arc<Query>) {
         self.cache
             .write()
             .unwrap()
-            .insert((language.dupe(), query_hash), CachedQuery(query.dupe()));
+            .insert(query_hash, CachedQuery(query.dupe()));
     }
 
-    pub fn get(&self, language: &Language, query_hash: StarlarkHashValue) -> Option<Arc<Query>> {
+    pub fn get(&self, query_hash: StarlarkHashValue) -> Option<Arc<Query>> {
         self.cache
             .read()
             .unwrap()
-            .get(&(language.dupe(), query_hash))
+            .get(&query_hash)
             .map(|q| q.0.dupe())
     }
 }
 
-unsafe impl<'v> Trace<'v> for &'v QueryCache {
+unsafe impl<'v> Trace<'v> for &'v QueryCacheForLanguage {
     fn trace(&mut self, _tracer: &starlark::values::Tracer<'v>) {}
 }
 
-impl Default for QueryCache {
+impl Default for QueryCacheForLanguage {
     fn default() -> Self {
         Self::new()
     }
@@ -63,6 +63,7 @@ mod tests {
     use starlark::values::Heap;
 
     use crate::context::{Context, Manifest};
+    use crate::language::Language;
 
     use super::*;
 
