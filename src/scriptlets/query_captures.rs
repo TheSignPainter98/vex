@@ -207,7 +207,7 @@ mod tests {
     use camino::Utf8Path;
     use indoc::{formatdoc, indoc};
     use starlark::values::Heap;
-    use tree_sitter::{Parser, Query, QueryCursor, Language as TSLanguage};
+    use tree_sitter::{Language as TSLanguage, Parser, Query, QueryCursor};
 
     use crate::{
         context::{Context, Manifest},

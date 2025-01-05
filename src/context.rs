@@ -676,23 +676,7 @@ impl LanguageData {
                 (ts_language, raw_ignore_query)
             }
             Language::External(_) => {
-                let language_name = language.name(); // Avoid partial move.
-
-                let LanguageOptions { parser_dir, .. } = language_options;
-                let parser_dir = parser_dir.as_ref().ok_or_else(|| Error::ExternalLanguage {
-                    language: language.dupe(),
-                    cause: ExternalLanguageError::MissingParserDir,
-                })?;
-
-                let ts_language = {
-                    let loader = Loader::new()?;
-                    let src_path = parser_dir.join("src");
-                    loader.load_language_at_path_with_name(CompileConfig {
-                        name: language_name.to_owned(),
-                        ..CompileConfig::new(src_path.as_std_path(), None, None)
-                    })?
-                };
-
+                let ts_language = Self::load_ts_language(&language, language_options)?;
                 (ts_language, None)
             }
         };
@@ -708,6 +692,26 @@ impl LanguageData {
             query_cache,
         };
         Ok(Some(Self(Arc::new(inner))))
+    }
+
+    fn load_ts_language(
+        language: &Language,
+        language_options: &LanguageOptions,
+    ) -> Result<TSLanguage> {
+        let LanguageOptions { parser_dir, .. } = language_options;
+        let parser_dir = parser_dir.as_ref().ok_or_else(|| Error::ExternalLanguage {
+            language: language.dupe(),
+            cause: ExternalLanguageError::MissingParserDir,
+        })?;
+
+        let loader = Loader::new()?;
+        let src_path = parser_dir.join("src");
+        loader
+            .load_language_at_path_with_name(CompileConfig {
+                name: language.name().to_owned(),
+                ..CompileConfig::new(src_path.as_std_path(), None, None)
+            })
+            .map_err(Error::from)
     }
 
     pub fn language(&self) -> &Language {
