@@ -706,11 +706,12 @@ impl LanguageData {
 
         let loader = Loader::new()?;
         let src_path = parser_dir.join("src");
+        let compile_config = CompileConfig {
+            name: language.name().to_owned(),
+            ..CompileConfig::new(src_path.as_std_path(), None, None)
+        };
         loader
-            .load_language_at_path_with_name(CompileConfig {
-                name: language.name().to_owned(),
-                ..CompileConfig::new(src_path.as_std_path(), None, None)
-            })
+            .load_language_at_path_with_name(compile_config)
             .map_err(Error::from)
     }
 
