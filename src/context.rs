@@ -2,13 +2,13 @@ use camino::{Utf8Path, Utf8PathBuf};
 use dupe::Dupe;
 use indoc::indoc;
 use lazy_static::lazy_static;
-use libloading::{Library, Symbol};
 use log::log_enabled;
 use regex::Regex;
 use serde::de::Visitor;
 use serde::{Deserialize, Serialize};
 use starlark::values::StringValue;
 use tree_sitter::Language as TSLanguage;
+use tree_sitter_loader::{CompileConfig, Loader};
 
 use std::borrow::Borrow;
 use std::collections::{BTreeMap, HashMap};
@@ -175,7 +175,13 @@ impl Context {
 
     pub fn language_data(&self, language: &Language) -> Result<Option<&LanguageData>> {
         self.languages
-            .get_or_init(language, || LanguageData::load(language.dupe()))
+            .get_or_init(language, || {
+                if let Some(opts) = self.manifest.languages.get(language) {
+                    LanguageData::load_with_options(language.dupe(), opts)
+                } else {
+                    LanguageData::load(language.dupe())
+                }
+            })
             .map(Option::as_ref)
     }
 
@@ -628,16 +634,16 @@ impl LanguageData {
             language_server: None,
             parser_dir: None,
         };
-        Self::load_with_options(language, opts)
+        Self::load_with_options(language, &opts)
     }
 
     pub(crate) fn load_with_options(
         language: Language,
-        language_options: LanguageOptions,
+        language_options: &LanguageOptions,
     ) -> Result<Option<Self>> {
         let (ts_language, raw_ignore_query) = match language {
             Language::Go => {
-                let ts_language = tree_sitter_go::language();
+                let ts_language = TSLanguage::from(tree_sitter_go::LANGUAGE);
                 let raw_ignore_query = Some(indoc! {r#"
                     (
                         (comment) @marker (#match? @marker "^/[/*] *vex:ignore")
@@ -648,7 +654,7 @@ impl LanguageData {
                 (ts_language, raw_ignore_query)
             }
             Language::Python => {
-                let ts_language = tree_sitter_python::language();
+                let ts_language = TSLanguage::from(tree_sitter_python::LANGUAGE);
                 let raw_ignore_query = Some(indoc! {r#"
                     (
                         (comment) @marker (#match? @marker "^# *vex:ignore")
@@ -659,7 +665,7 @@ impl LanguageData {
                 (ts_language, raw_ignore_query)
             }
             Language::Rust => {
-                let ts_language = tree_sitter_rust::language();
+                let ts_language = TSLanguage::from(tree_sitter_rust::LANGUAGE);
                 let raw_ignore_query = Some(indoc! {r#"
                     (
                         (line_comment) @marker (#match? @marker "^// *vex:ignore")
@@ -673,22 +679,18 @@ impl LanguageData {
                 let language_name = language.name(); // Avoid partial move.
 
                 let LanguageOptions { parser_dir, .. } = language_options;
-                let parser_dir = parser_dir.ok_or_else(|| Error::ExternalLanguage {
+                let parser_dir = parser_dir.as_ref().ok_or_else(|| Error::ExternalLanguage {
                     language: language.dupe(),
                     cause: ExternalLanguageError::MissingParserDir,
                 })?;
 
                 let ts_language = {
-                    let parser_lib_path = parser_dir.join(format!("{language_name}.so"));
-                    let lib = unsafe { Library::new(parser_lib_path)? };
-                    let ts_language_fn: Symbol<unsafe extern "C" fn() -> TSLanguage> = unsafe {
-                        lib.get(
-                            format!("tree_sitter_{}", language_name.replace('-', "_")).as_bytes(),
-                        )?
-                    };
-                    let ts_language = unsafe { ts_language_fn() };
-                    std::mem::forget(lib);
-                    ts_language
+                    let loader = Loader::new()?;
+                    let src_path = parser_dir.join("src");
+                    loader.load_language_at_path_with_name(CompileConfig {
+                        name: language_name.to_owned(),
+                        ..CompileConfig::new(src_path.as_std_path(), None, None)
+                    })?
                 };
 
                 (ts_language, None)

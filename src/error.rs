@@ -85,9 +85,6 @@ pub enum Error {
     #[error(transparent)]
     Language(#[from] tree_sitter::LanguageError),
 
-    #[error(transparent)]
-    LibLoading(#[from] libloading::Error),
-
     #[error("cannot find manifest, try running `vex init` in the project’s root")]
     ManifestNotFound,
 

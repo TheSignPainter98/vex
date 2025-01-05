@@ -207,7 +207,7 @@ mod tests {
     use camino::Utf8Path;
     use indoc::{formatdoc, indoc};
     use starlark::values::Heap;
-    use tree_sitter::{Parser, Query, QueryCursor};
+    use tree_sitter::{Parser, Query, QueryCursor, Language as TSLanguage};
 
     use crate::{
         context::{Context, Manifest},
@@ -606,7 +606,7 @@ mod tests {
         )
         .unwrap();
 
-        let language = tree_sitter_rust::language();
+        let language = TSLanguage::from(tree_sitter_rust::LANGUAGE);
         let query_source = indoc! {r"
             (binary_expression) @absent_singleton ; zero-quantified
             (trait_item)+ @absent_list            ; one-or-more, unused
@@ -698,7 +698,7 @@ mod tests {
         )
         .unwrap();
 
-        let language = tree_sitter_rust::language();
+        let language = TSLanguage::from(tree_sitter_rust::LANGUAGE);
         let query_source = indoc! {r"
             (line_comment)+ @duplicated_pattern_name
             (let_declaration) @duplicated_pattern_name
@@ -770,7 +770,7 @@ mod tests {
         )
         .unwrap();
 
-        let language = tree_sitter_rust::language();
+        let language = TSLanguage::from(tree_sitter_rust::LANGUAGE);
         let query_source = indoc! {r"
             (
                 (line_comment)+ @duplicated_capture_name
