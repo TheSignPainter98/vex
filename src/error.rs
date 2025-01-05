@@ -183,7 +183,7 @@ impl From<starlark::Error> for Error {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ExternalLanguageError {
-    #[error("manifest does not define `parser-dir`")]
+    #[error("manifest language info missing `parser-dir` field")]
     MissingParserDir,
 }
 
