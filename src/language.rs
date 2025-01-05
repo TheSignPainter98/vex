@@ -83,10 +83,10 @@ mod tests {
 
     #[test]
     fn is_builtin() {
-        Assert::language(Language::Go).is_builtin();
-        Assert::language(Language::Python).is_builtin();
-        Assert::language(Language::Rust).is_builtin();
-        Assert::language(Language::External(Arc::from("lua"))).is_not_builtin();
+        Assert::language(Language::Go).considered_builtin();
+        Assert::language(Language::Python).considered_builtin();
+        Assert::language(Language::Rust).considered_builtin();
+        Assert::language(Language::External(Arc::from("lua"))).considered_not_builtin();
 
         // test types.
         struct Assert {
@@ -98,11 +98,11 @@ mod tests {
                 Self { language }
             }
 
-            pub fn is_builtin(self) {
+            pub fn considered_builtin(self) {
                 assert!(self.language.is_builtin());
             }
 
-            pub fn is_not_builtin(self) {
+            pub fn considered_not_builtin(self) {
                 assert!(!self.language.is_builtin());
             }
         }
