@@ -99,7 +99,7 @@ pub fn scan_project(
             Some(language) => Some((file, language)),
             None => {
                 if log_enabled!(log::Level::Info) {
-                    info!("skipping {}", file.path());
+                    info!("skipping {}: cannot discern language", file.path());
                 }
                 None
             }
@@ -226,6 +226,9 @@ fn scan_file(ctx: &Context, file: &SourceFile, opts: VexFileOptions<'_>) -> Resu
         .all(|(l, _, _)| l != language)
     {
         // The user did not request a scan of this type of file.
+        if log_enabled!(log::Level::Info) {
+            info!("skipping {}: no queries for this file type", file.path());
+        }
         return Ok(FileRunData {
             irritations,
             num_bytes_scanned: 0,
