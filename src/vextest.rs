@@ -1,7 +1,3 @@
-#[cfg(target_os = "linux")]
-use std::os::unix;
-#[cfg(target_os = "windows")]
-use std::os::windows;
 use std::{
     borrow::Cow,
     collections::BTreeMap,
@@ -9,6 +5,11 @@ use std::{
     fs::{self, File},
     io::Write,
 };
+
+#[cfg(unix)]
+use std::os::unix;
+#[cfg(windows)]
+use std::os::windows;
 
 use camino::{Utf8Component, Utf8PathBuf};
 use indoc::indoc;
@@ -188,18 +189,20 @@ impl<'s> VexTest<'s> {
                 fs::create_dir_all(parent).unwrap();
             }
 
-            #[cfg(target_os = "linux")]
+            #[cfg(unix)]
             {
                 unix::fs::symlink(parser_dir, link_file).unwrap();
                 continue;
             }
-            #[cfg(target_os = "windows")]
+            #[cfg(windows)]
             {
                 windows::fs::symlink_dir(parser_dir, link_file).unwrap();
                 continue;
             }
             #[allow(unreachable_code)]
             {
+                let _ = parser_dir;
+                let _ = link_file;
                 panic!("target OS not supported: {}", env::consts::OS);
             }
         }
