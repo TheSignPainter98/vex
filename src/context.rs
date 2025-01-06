@@ -28,7 +28,7 @@ use crate::id::Id;
 use crate::language::Language;
 use crate::query::Query;
 use crate::result::Result;
-use crate::scriptlets::query_cache::QueryCache;
+use crate::scriptlets::query_cache::QueryCacheForLanguage;
 use crate::source_path::PrettyPath;
 use crate::trigger::RawFilePattern;
 use crate::warn;
@@ -624,7 +624,7 @@ struct LanguageDataInner {
     language: Language,
     ts_language: TSLanguage,
     ignore_query: Option<Query>,
-    query_cache: QueryCache,
+    query_cache: QueryCacheForLanguage,
 }
 
 impl LanguageData {
@@ -686,7 +686,7 @@ impl LanguageData {
             Query::new(&ts_language, raw_ignore_query)
                 .expect("internal error: ignore query invalid")
         });
-        let query_cache = QueryCache::new();
+        let query_cache = QueryCacheForLanguage::new();
         let inner = LanguageDataInner {
             language,
             ts_language,
@@ -733,14 +733,12 @@ impl LanguageData {
     pub fn get_or_create_query(&self, raw_query: &StringValue<'_>) -> Result<Arc<Query>> {
         let query_hash = raw_query.get_hashed().hash(); // This hash value is only 32 bits long.
 
-        if let Some(cached_query) = self.0.query_cache.get(&self.0.language, query_hash) {
+        if let Some(cached_query) = self.0.query_cache.get(query_hash) {
             return Ok(cached_query);
         }
 
         let query = Arc::new(Query::new(&self.0.ts_language, raw_query)?);
-        self.0
-            .query_cache
-            .put(self.0.language.dupe(), query_hash, query.dupe());
+        self.0.query_cache.put(query_hash, query.dupe());
         Ok(query)
     }
 }
