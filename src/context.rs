@@ -177,9 +177,9 @@ impl Context {
         self.languages
             .get_or_init(language, || {
                 if let Some(opts) = self.manifest.languages.get(language) {
-                    LanguageData::load_with_options(language.dupe(), opts)
+                    LanguageData::load_with_options(language.dupe(), opts, &self.project_root)
                 } else {
-                    LanguageData::load(language.dupe())
+                    LanguageData::load(language.dupe(), &self.project_root)
                 }
             })
             .map(Option::as_ref)
@@ -628,18 +628,19 @@ struct LanguageDataInner {
 }
 
 impl LanguageData {
-    pub(crate) fn load(language: Language) -> Result<Option<Self>> {
+    pub(crate) fn load(language: Language, project_root: &Utf8Path) -> Result<Option<Self>> {
         let opts = LanguageOptions {
             file_associations: Vec::new(),
             language_server: None,
             parser_dir: None,
         };
-        Self::load_with_options(language, &opts)
+        Self::load_with_options(language, &opts, project_root)
     }
 
     pub(crate) fn load_with_options(
         language: Language,
         language_options: &LanguageOptions,
+        project_root: &Utf8Path,
     ) -> Result<Option<Self>> {
         let (ts_language, raw_ignore_query) = match language {
             Language::Go => {
@@ -676,7 +677,8 @@ impl LanguageData {
                 (ts_language, raw_ignore_query)
             }
             Language::External(_) => {
-                let ts_language = Self::load_ts_language(&language, language_options)?;
+                let ts_language =
+                    Self::load_ts_language(&language, language_options, project_root)?;
                 (ts_language, None)
             }
         };
@@ -697,6 +699,7 @@ impl LanguageData {
     fn load_ts_language(
         language: &Language,
         language_options: &LanguageOptions,
+        project_root: &Utf8Path,
     ) -> Result<TSLanguage> {
         let LanguageOptions { parser_dir, .. } = language_options;
         let parser_dir = parser_dir.as_ref().ok_or_else(|| Error::ExternalLanguage {
@@ -705,7 +708,7 @@ impl LanguageData {
         })?;
 
         let loader = Loader::new()?;
-        let src_path = parser_dir.join("src");
+        let src_path = project_root.join(parser_dir).join("src");
         let compile_config = CompileConfig {
             name: language.name().to_owned(),
             ..CompileConfig::new(src_path.as_std_path(), None, None)
@@ -754,6 +757,7 @@ mod tests {
         scan::{self, ProjectRunData},
         scriptlets::{source, InitOptions, PreinitOptions, PreinitingStore, ScriptArgsValueMap},
         verbosity::Verbosity,
+        vextest::VexTest,
         warning_filter::WarningFilter,
     };
 
@@ -1115,5 +1119,43 @@ mod tests {
             err.to_string().contains(EXPECTED_ERR),
             "incorrect error: should contain {EXPECTED_ERR} but got {err}"
         );
+    }
+
+    #[test]
+    fn load_custom_parser() {
+        const PARSER_LINK: &str = "vexes/tree-sitter-lua";
+
+        VexTest::new("lua")
+            .with_manifest(formatdoc! {r#"
+                [vex]
+                version = "1"
+
+                [languages.lua]
+                use-for = ['*.lua']
+                parser-dir = '{PARSER_LINK}/'
+            "#})
+            .with_parser_dir_link("test-data/tree-sitter-lua", PARSER_LINK)
+            .with_scriptlet(
+                "vexes/test.star",
+                indoc! {r#"
+                    def init():
+                        vex.observe('open_project', on_open_project)
+
+                    def on_open_project(event):
+                        vex.search(
+                            'lua',
+                            '''
+                                (function_call) @func
+                            ''',
+                            on_match,
+                        )
+
+                    def on_match(event):
+                        func = event.captures['func']
+                        vex.warn('test-id', 'found a function', at=func)
+
+                "#},
+            )
+            .assert_irritation_free();
     }
 }
