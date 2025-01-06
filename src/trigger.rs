@@ -179,8 +179,11 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_language() {
-        VexTest::new("unsupported-language")
+    fn undefined_language() {
+        // NOTE: 'undefined' here refers to the fact that no parser for brainfuck has been provided
+        // in this test. This is independent of a user using their own brainfuck parser---they are
+        // still free to do this. They are also still free to seek help.
+        VexTest::new("undefined-language")
             .with_scriptlet(
                 "vexes/test.star",
                 indoc! {r#"
@@ -198,7 +201,7 @@ mod tests {
                         pass
                 "#},
             )
-            .returns_error("cannot parse brainfuck")
+            .returns_error("cannot load language brainfuck")
     }
 
     #[test]

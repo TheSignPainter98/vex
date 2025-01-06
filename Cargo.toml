@@ -40,15 +40,16 @@ strum = { version = "0.25.0", features = ["derive"] }
 tempfile = "3.9.0"
 thiserror = "1.0.51"
 toml_edit = { version = "0.21.0", features = ["serde"] }
-tree-sitter = "0.21.0"
-tree-sitter-go = "0.21"
-tree-sitter-python = "0.21"
-tree-sitter-rust = "0.21"
+tree-sitter = "0.23"
+tree-sitter-go = "0.23"
+tree-sitter-python = "0.23"
+tree-sitter-rust = "0.23"
 uniquote = "4.0.0"
 textwrap = { version = "0.16.1", default-features = false }
 walkdir = "2"
 rayon = "1.10.0"
 bumpalo = "3.16.0"
+tree-sitter-loader = "0.23"
 
 [dev-dependencies]
 insta = { version = "1.36.1", features = ["yaml"] }

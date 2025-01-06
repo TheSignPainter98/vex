@@ -27,6 +27,10 @@ impl Language {
             Self::External(l) => l,
         }
     }
+
+    pub fn is_builtin(&self) -> bool {
+        !matches!(self, Self::External(_))
+    }
 }
 
 impl FromStr for Language {
@@ -75,6 +79,33 @@ mod tests {
             assert_eq!(lang, lang.name().parse()?);
         }
         Ok(())
+    }
+
+    #[test]
+    fn is_builtin() {
+        Assert::language(Language::Go).considered_builtin();
+        Assert::language(Language::Python).considered_builtin();
+        Assert::language(Language::Rust).considered_builtin();
+        Assert::language(Language::External(Arc::from("lua"))).considered_not_builtin();
+
+        // test types.
+        struct Assert {
+            language: Language,
+        }
+
+        impl Assert {
+            pub fn language(language: Language) -> Self {
+                Self { language }
+            }
+
+            pub fn considered_builtin(self) {
+                assert!(self.language.is_builtin());
+            }
+
+            pub fn considered_not_builtin(self) {
+                assert!(!self.language.is_builtin());
+            }
+        }
     }
 
     #[test]

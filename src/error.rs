@@ -35,6 +35,12 @@ pub enum Error {
     #[error("query is empty")]
     EmptyQuery,
 
+    #[error("cannot load language {language}: {cause}")]
+    ExternalLanguage {
+        language: Language,
+        cause: ExternalLanguageError,
+    },
+
     #[error(transparent)]
     Fmt(#[from] fmt::Error),
 
@@ -173,6 +179,12 @@ impl From<starlark::Error> for Error {
     fn from(err: starlark::Error) -> Self {
         err.into_anyhow().into()
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ExternalLanguageError {
+    #[error("manifest language info missing `parser-dir` field")]
+    MissingParserDir,
 }
 
 #[derive(Debug, Display)]

@@ -8,6 +8,7 @@ use serde::de::Visitor;
 use serde::{Deserialize, Serialize};
 use starlark::values::StringValue;
 use tree_sitter::Language as TSLanguage;
+use tree_sitter_loader::{CompileConfig, Loader};
 
 use std::borrow::Borrow;
 use std::collections::{BTreeMap, HashMap};
@@ -22,7 +23,7 @@ use std::{fmt, slice};
 
 use crate::arena_map::ArenaMap;
 use crate::associations::Associations;
-use crate::error::{Error, IOAction, InvalidIDReason};
+use crate::error::{Error, ExternalLanguageError, IOAction, InvalidIDReason};
 use crate::id::Id;
 use crate::language::Language;
 use crate::query::Query;
@@ -174,7 +175,13 @@ impl Context {
 
     pub fn language_data(&self, language: &Language) -> Result<Option<&LanguageData>> {
         self.languages
-            .get_or_init(language, || LanguageData::load(language.dupe()))
+            .get_or_init(language, || {
+                if let Some(opts) = self.manifest.languages.get(language) {
+                    LanguageData::load_with_options(language.dupe(), opts, &self.project_root)
+                } else {
+                    LanguageData::load(language.dupe(), &self.project_root)
+                }
+            })
             .map(Option::as_ref)
     }
 
@@ -533,6 +540,7 @@ impl Default for LanguagesConfig {
                 LanguageOptions {
                     file_associations: vec![RawFilePattern::new("*.star".into())],
                     language_server: None,
+                    parser_dir: None,
                 },
             )]
             .into_iter()
@@ -556,6 +564,8 @@ pub struct LanguageOptions {
     file_associations: Vec<RawFilePattern<String>>,
 
     language_server: Option<LanguageServerCommand>,
+
+    parser_dir: Option<Utf8PathBuf>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
@@ -618,43 +628,64 @@ struct LanguageDataInner {
 }
 
 impl LanguageData {
-    fn load(language: Language) -> Result<Option<Self>> {
-        let ts_language = match language {
-            Language::Go => tree_sitter_go::language(),
-            Language::Python => tree_sitter_python::language(),
-            Language::Rust => tree_sitter_rust::language(),
-            Language::External(_) => return Ok(None),
+    pub(crate) fn load(language: Language, project_root: &Utf8Path) -> Result<Option<Self>> {
+        let opts = LanguageOptions {
+            file_associations: Vec::new(),
+            language_server: None,
+            parser_dir: None,
         };
-        let ignore_query = {
-            let raw_ignore_query = match &language {
-                Language::Go => Some(indoc! {r#"
+        Self::load_with_options(language, &opts, project_root)
+    }
+
+    pub(crate) fn load_with_options(
+        language: Language,
+        language_options: &LanguageOptions,
+        project_root: &Utf8Path,
+    ) -> Result<Option<Self>> {
+        let (ts_language, raw_ignore_query) = match language {
+            Language::Go => {
+                let ts_language = TSLanguage::from(tree_sitter_go::LANGUAGE);
+                let raw_ignore_query = Some(indoc! {r#"
                     (
                         (comment) @marker (#match? @marker "^/[/*] *vex:ignore")
                         .
                         (_)? @ignore
                     )
-                "#}),
-                Language::Python => Some(indoc! {r#"
+                "#});
+                (ts_language, raw_ignore_query)
+            }
+            Language::Python => {
+                let ts_language = TSLanguage::from(tree_sitter_python::LANGUAGE);
+                let raw_ignore_query = Some(indoc! {r#"
                     (
                         (comment) @marker (#match? @marker "^# *vex:ignore")
                         .
                         (_)? @ignore
                     )
-                "#}),
-                Language::Rust => Some(indoc! {r#"
+                "#});
+                (ts_language, raw_ignore_query)
+            }
+            Language::Rust => {
+                let ts_language = TSLanguage::from(tree_sitter_rust::LANGUAGE);
+                let raw_ignore_query = Some(indoc! {r#"
                     (
                         (line_comment) @marker (#match? @marker "^// *vex:ignore")
                         .
                         (_)? @ignore
                     )
-                "#}),
-                Language::External(_) => None,
-            };
-            raw_ignore_query.map(|raw_ignore_query| {
-                Query::new(&ts_language, raw_ignore_query)
-                    .expect("internal error: ignore query invalid")
-            })
+                "#});
+                (ts_language, raw_ignore_query)
+            }
+            Language::External(_) => {
+                let ts_language =
+                    Self::load_ts_language(&language, language_options, project_root)?;
+                (ts_language, None)
+            }
         };
+        let ignore_query = raw_ignore_query.map(|raw_ignore_query| {
+            Query::new(&ts_language, raw_ignore_query)
+                .expect("internal error: ignore query invalid")
+        });
         let query_cache = QueryCache::new();
         let inner = LanguageDataInner {
             language,
@@ -663,6 +694,28 @@ impl LanguageData {
             query_cache,
         };
         Ok(Some(Self(Arc::new(inner))))
+    }
+
+    fn load_ts_language(
+        language: &Language,
+        language_options: &LanguageOptions,
+        project_root: &Utf8Path,
+    ) -> Result<TSLanguage> {
+        let LanguageOptions { parser_dir, .. } = language_options;
+        let parser_dir = parser_dir.as_ref().ok_or_else(|| Error::ExternalLanguage {
+            language: language.dupe(),
+            cause: ExternalLanguageError::MissingParserDir,
+        })?;
+
+        let loader = Loader::new()?;
+        let src_path = project_root.join(parser_dir).join("src");
+        let compile_config = CompileConfig {
+            name: language.name().to_owned(),
+            ..CompileConfig::new(src_path.as_std_path(), None, None)
+        };
+        loader
+            .load_language_at_path_with_name(compile_config)
+            .map_err(Error::from)
     }
 
     pub fn language(&self) -> &Language {
@@ -704,6 +757,7 @@ mod tests {
         scan::{self, ProjectRunData},
         scriptlets::{source, InitOptions, PreinitOptions, PreinitingStore, ScriptArgsValueMap},
         verbosity::Verbosity,
+        vextest::VexTest,
         warning_filter::WarningFilter,
     };
 
@@ -1065,5 +1119,43 @@ mod tests {
             err.to_string().contains(EXPECTED_ERR),
             "incorrect error: should contain {EXPECTED_ERR} but got {err}"
         );
+    }
+
+    #[test]
+    fn load_custom_parser() {
+        const PARSER_LINK: &str = "vexes/tree-sitter-lua";
+
+        VexTest::new("lua")
+            .with_manifest(formatdoc! {r#"
+                [vex]
+                version = "1"
+
+                [languages.lua]
+                use-for = ['*.lua']
+                parser-dir = '{PARSER_LINK}/'
+            "#})
+            .with_parser_dir_link("test-data/tree-sitter-lua", PARSER_LINK)
+            .with_scriptlet(
+                "vexes/test.star",
+                indoc! {r#"
+                    def init():
+                        vex.observe('open_project', on_open_project)
+
+                    def on_open_project(event):
+                        vex.search(
+                            'lua',
+                            '''
+                                (function_call) @func
+                            ''',
+                            on_match,
+                        )
+
+                    def on_match(event):
+                        func = event.captures['func']
+                        vex.warn('test-id', 'found a function', at=func)
+
+                "#},
+            )
+            .assert_irritation_free();
     }
 }

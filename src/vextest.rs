@@ -1,9 +1,15 @@
 use std::{
     borrow::Cow,
     collections::BTreeMap,
+    env,
     fs::{self, File},
     io::Write,
 };
+
+#[cfg(unix)]
+use std::os::unix;
+#[cfg(windows)]
+use std::os::windows;
 
 use camino::{Utf8Component, Utf8PathBuf};
 use indoc::indoc;
@@ -34,6 +40,12 @@ pub struct VexTest<'s> {
     fire_test_events: bool,
     scriptlets: Vec<TestSource<Utf8PathBuf, Cow<'s, str>>>,
     source_files: BTreeMap<Utf8PathBuf, Cow<'s, str>>,
+    parser_dir_links: Vec<ParserDirLink>,
+}
+
+struct ParserDirLink {
+    parser_dir: Utf8PathBuf,
+    link_file: Utf8PathBuf,
 }
 
 impl<'s> VexTest<'s> {
@@ -104,7 +116,6 @@ impl<'s> VexTest<'s> {
         });
     }
 
-    #[allow(unused)]
     pub fn with_source_file(
         mut self,
         path: impl Into<Utf8PathBuf>,
@@ -116,6 +127,18 @@ impl<'s> VexTest<'s> {
                 .is_none(),
             "duplicate source file declaration"
         );
+        self
+    }
+
+    pub fn with_parser_dir_link(
+        mut self,
+        parser_dir: impl Into<Utf8PathBuf>,
+        link_file: impl Into<Utf8PathBuf>,
+    ) -> Self {
+        self.parser_dir_links.push(ParserDirLink {
+            parser_dir: parser_dir.into(),
+            link_file: link_file.into(),
+        });
         self
     }
 
@@ -152,6 +175,36 @@ impl<'s> VexTest<'s> {
                 .unwrap()
                 .write_all(manifest_content.as_bytes())
                 .unwrap();
+        }
+
+        for parser_dir_link in self.parser_dir_links {
+            let ParserDirLink {
+                parser_dir,
+                link_file,
+            } = parser_dir_link;
+            let parser_dir = parser_dir.canonicalize_utf8().unwrap();
+            let link_file = root_path.join(link_file);
+
+            if let Some(parent) = link_file.parent() {
+                fs::create_dir_all(parent).unwrap();
+            }
+
+            #[cfg(unix)]
+            {
+                unix::fs::symlink(parser_dir, link_file).unwrap();
+                continue;
+            }
+            #[cfg(windows)]
+            {
+                windows::fs::symlink_dir(parser_dir, link_file).unwrap();
+                continue;
+            }
+            #[allow(unreachable_code)]
+            {
+                let _ = parser_dir;
+                let _ = link_file;
+                panic!("target OS not supported: {}", env::consts::OS);
+            }
         }
 
         let ctx = Context::acquire_in(&root_path).unwrap();
