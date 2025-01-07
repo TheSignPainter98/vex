@@ -1212,40 +1212,71 @@ mod tests {
     }
 
     #[test]
-    fn bad_ignore_query() {
-        const PARSER_LINK: &str = "vexes/tree-sitter-lua";
-        VexTest::new("lua")
-            .with_manifest(formatdoc! {r#"
-                [vex]
-                version = "1"
+    fn invalid_ignore_query() {
+        Assert::query("empty", "").causes_error("query is empty");
+        Assert::query("malformed", ")").causes_error("syntax");
+        Assert::query("missing-marker", "(_) @ignore")
+            .causes_error("missing capture group 'marker'");
+        Assert::query("missing-ignore", "(_) @marker")
+            .causes_error("missing capture group 'ignore'");
+        Assert::query("does-not-capture-marker", "(comment) @marker . (_) @ignore")
+            .causes_error("query did not capture 'vex:ignore' marker");
 
-                [languages.lua]
-                use-for = ['*.lua']
-                parser-dir = '{PARSER_LINK}/'
-                ignore-query = ''
-            "#})
-            .with_parser_dir_link("test-data/tree-sitter-lua", PARSER_LINK)
-            .with_scriptlet(
-                "vexes/test.star",
-                indoc! {r#"
-                    def init():
-                        vex.observe('open_project', on_open_project)
+        // test structs.
+        struct Assert {
+            name: &'static str,
+            query: &'static str,
+        }
 
-                    def on_open_project(event):
-                        vex.search(
-                            'lua',
-                            '''
-                                (function_call) @func
-                            ''',
-                            on_match,
-                        )
+        impl Assert {
+            fn query(name: &'static str, query: &'static str) -> Self {
+                Self { name, query }
+            }
 
-                    def on_match(event):
-                        func = event.captures['func']
-                        vex.warn('test-id', 'found a function', at=func)
+            fn causes_error(self, error: &'static str) {
+                let Self { name, query } = self;
 
-                "#},
-            )
-            .returns_error("invalid ignore query");
+                const PARSER_LINK: &str = "vexes/tree-sitter-lua";
+                VexTest::new(name)
+                    .with_manifest(formatdoc! {r#"
+                        [vex]
+                        version = "1"
+
+                        [languages.lua]
+                        use-for = ['*.lua']
+                        parser-dir = '{PARSER_LINK}/'
+                        ignore-query = '{query}'
+                    "#})
+                    .with_parser_dir_link("test-data/tree-sitter-lua", PARSER_LINK)
+                    .with_scriptlet(
+                        "vexes/test.star",
+                        indoc! {r#"
+                            def init():
+                                vex.observe('open_project', on_open_project)
+
+                            def on_open_project(event):
+                                vex.search(
+                                    'lua',
+                                    '''
+                                        (number) @func
+                                    ''',
+                                    on_match,
+                                )
+
+                            def on_match(event):
+                                fail('uh oh')
+
+                        "#},
+                    )
+                    .with_source_file(
+                        "src/main.lua",
+                        indoc! {r#"
+                            -- invalid marker
+                            print('hello, world')
+                        "#},
+                    )
+                    .returns_error(error);
+            }
+        }
     }
 }

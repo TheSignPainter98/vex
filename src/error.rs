@@ -294,15 +294,15 @@ pub enum InvalidIgnoreQueryReason {
     #[display(fmt = "query captured nothing")]
     CapturedNothing,
 
-    #[display(fmt = "query did not capture 'vex:ignore'")]
-    CapturedTextExcludesIgnoreMarker,
+    #[display(fmt = "query did not capture 'vex:ignore' marker at {path}:{location}")]
+    CapturedTextExcludesIgnoreMarker {
+        path: PrettyPath,
+        location: Location,
+    },
 
     #[display(fmt = "{_0}")]
     General(Box<Error>),
 
-    #[display(fmt = "missing capture '{_0}' group")]
+    #[display(fmt = "missing capture group '{_0}'")]
     MissingCaptureGroup(&'static str),
-
-    #[display(fmt = "vex:ignore not present in match at {location}")]
-    NoIgnoreMarkerFound { location: Location },
 }

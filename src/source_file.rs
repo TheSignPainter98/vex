@@ -216,6 +216,12 @@ impl ParsedSourceFile {
             None => return Ok(IgnoreMarkers::new()),
         };
 
+        ignore_query
+            .capture_index_for_name("ignore")
+            .ok_or(Error::InvalidIgnoreQuery(
+                InvalidIgnoreQueryReason::MissingCaptureGroup("ignore"),
+            ))?;
+
         let mut builder = IgnoreMarkers::builder();
 
         let marker_index =
@@ -261,13 +267,14 @@ impl ParsedSourceFile {
 
                     let node = qcaps[marker_index].node;
                     let raw_text = node.utf8_text(self.content.as_bytes()).unwrap();
-                    let ids_start_index =
-                        raw_text
-                            .find(IGNORE_MARKER)
-                            .ok_or(Error::InvalidIgnoreQuery(
-                                InvalidIgnoreQueryReason::CapturedTextExcludesIgnoreMarker,
-                            ))?
-                            + IGNORE_MARKER.len();
+                    let ids_start_index = raw_text.find(IGNORE_MARKER).ok_or_else(|| {
+                        Error::InvalidIgnoreQuery(
+                            InvalidIgnoreQueryReason::CapturedTextExcludesIgnoreMarker {
+                                path: self.path.pretty_path.dupe(),
+                                location: Location::of(&node),
+                            },
+                        )
+                    })? + IGNORE_MARKER.len();
                     let raw_parts = raw_text[ids_start_index..]
                         .split(',')
                         .map(|raw_part| raw_part.trim());
