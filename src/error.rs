@@ -69,6 +69,9 @@ pub enum Error {
         reason: InvalidLoadReason,
     },
 
+    #[error("invalid ignore query: {0}")]
+    InvalidIgnoreQuery(InvalidIgnoreQueryReason),
+
     #[error("test invalid: {0}")]
     InvalidTest(String),
 
@@ -284,4 +287,22 @@ pub enum InvalidLoadReason {
 
     #[display(fmt = "load path invalid, see docs")] // TODO(kcza): link to spec once public.
     NonSpecific,
+}
+
+#[derive(Debug, Display)]
+pub enum InvalidIgnoreQueryReason {
+    #[display(fmt = "query captured nothing")]
+    CapturedNothing,
+
+    #[display(fmt = "query did not capture 'vex:ignore'")]
+    CapturedTextExcludesIgnoreMarker,
+
+    #[display(fmt = "{_0}")]
+    General(Box<Error>),
+
+    #[display(fmt = "missing capture '{_0}' group")]
+    MissingCaptureGroup(&'static str),
+
+    #[display(fmt = "vex:ignore not present in match at {location}")]
+    NoIgnoreMarkerFound { location: Location },
 }

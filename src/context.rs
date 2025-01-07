@@ -24,7 +24,9 @@ use std::{fmt, slice};
 
 use crate::arena_map::ArenaMap;
 use crate::associations::Associations;
-use crate::error::{Error, ExternalLanguageError, IOAction, InvalidIDReason};
+use crate::error::{
+    Error, ExternalLanguageError, IOAction, InvalidIDReason, InvalidIgnoreQueryReason,
+};
 use crate::id::Id;
 use crate::language::Language;
 use crate::query::Query;
@@ -686,10 +688,13 @@ impl LanguageData {
                 (ts_language, raw_ignore_query)
             }
         };
-        let ignore_query = raw_ignore_query.map(|raw_ignore_query| {
-            Query::new(&ts_language, &raw_ignore_query)
-                .expect("internal error: ignore query invalid")
-        });
+        let ignore_query = raw_ignore_query
+            .map(|raw_ignore_query| {
+                Query::new(&ts_language, &raw_ignore_query).map_err(|err| {
+                    Error::InvalidIgnoreQuery(InvalidIgnoreQueryReason::General(Box::new(err)))
+                })
+            })
+            .transpose()?;
         let query_cache = QueryCacheForLanguage::new();
         let inner = LanguageDataInner {
             language,
@@ -1204,5 +1209,43 @@ mod tests {
                 "#},
             )
             .assert_irritation_free();
+    }
+
+    #[test]
+    fn bad_ignore_query() {
+        const PARSER_LINK: &str = "vexes/tree-sitter-lua";
+        VexTest::new("lua")
+            .with_manifest(formatdoc! {r#"
+                [vex]
+                version = "1"
+
+                [languages.lua]
+                use-for = ['*.lua']
+                parser-dir = '{PARSER_LINK}/'
+                ignore-query = ''
+            "#})
+            .with_parser_dir_link("test-data/tree-sitter-lua", PARSER_LINK)
+            .with_scriptlet(
+                "vexes/test.star",
+                indoc! {r#"
+                    def init():
+                        vex.observe('open_project', on_open_project)
+
+                    def on_open_project(event):
+                        vex.search(
+                            'lua',
+                            '''
+                                (function_call) @func
+                            ''',
+                            on_match,
+                        )
+
+                    def on_match(event):
+                        func = event.captures['func']
+                        vex.warn('test-id', 'found a function', at=func)
+
+                "#},
+            )
+            .returns_error("invalid ignore query");
     }
 }
