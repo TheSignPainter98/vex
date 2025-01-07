@@ -11,7 +11,7 @@ use tree_sitter::Language as TSLanguage;
 use tree_sitter_loader::{CompileConfig, Loader};
 
 use std::borrow::{Borrow, Cow};
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::Write as _;
 use std::io::{BufWriter, ErrorKind, Read, Write as _};
 use std::ops::Deref;
@@ -675,13 +675,7 @@ impl LanguageData {
                 "#}));
                 (ts_language, raw_ignore_query)
             }
-            Language::External(ref language_name) => {
-                let LanguageOptions { parser_dir, .. } = language_options;
-                let parser_dir = parser_dir.as_ref().ok_or_else(|| Error::ExternalLanguage {
-                    language: language.dupe(),
-                    cause: ExternalLanguageError::MissingParserDir,
-                })?;
-
+            Language::External(_) => {
                 let ts_language =
                     Self::load_ts_language(&language, language_options, project_root)?;
                 let raw_ignore_query = language_options
@@ -1178,7 +1172,6 @@ mod tests {
     #[test]
     fn load_custom_parser() {
         const PARSER_LINK: &str = "vexes/tree-sitter-lua";
-
         VexTest::new("lua")
             .with_manifest(formatdoc! {r#"
                 [vex]
