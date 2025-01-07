@@ -724,7 +724,19 @@ impl LanguageData {
         };
         loader
             .load_language_at_path_with_name(compile_config)
-            .map_err(Error::from)
+            .map_err(|cause| {
+                if cause
+                    .to_string()
+                    .contains("Failed to compare source and binary timestamps")
+                {
+                    Error::InaccessibleParserFiles {
+                        language: language.dupe(),
+                        cause,
+                    }
+                } else {
+                    Error::from(cause)
+                }
+            })
     }
 
     fn guess_raw_ignore_query(ts_language: &TSLanguage) -> Option<String> {
@@ -1199,7 +1211,7 @@ mod tests {
 
                 [languages.lua]
                 use-for = ['*.lua']
-                parser-dir = '{PARSER_LINK}/'
+                parser-dir = '{PARSER_LINK}'
             "#})
             .with_parser_dir_link("test-data/tree-sitter-lua", PARSER_LINK)
             .with_scriptlet(
@@ -1221,9 +1233,43 @@ mod tests {
                         func = event.captures['func']
                         vex.warn('test-id', 'found a function', at=func)
 
+                        fail('oh no')
                 "#},
             )
             .assert_irritation_free();
+    }
+
+    #[test]
+    fn load_missing_parser() {
+        VexTest::new("lua")
+            .with_manifest(indoc! {r#"
+                [vex]
+                version = "1"
+
+                [languages.lua]
+                use-for = ['*.lua']
+                parser-dir = 'i/do/not/exist'
+            "#})
+            .with_scriptlet(
+                "vexes/test.star",
+                indoc! {r#"
+                    def init():
+                        vex.observe('open_project', on_open_project)
+
+                    def on_open_project(event):
+                        vex.search(
+                            'lua',
+                            '''
+                                (function_call) @func
+                            ''',
+                            on_match,
+                        )
+
+                    def on_match(event):
+                        fail('oh no')
+                "#},
+            )
+            .returns_error("cannot load lua parser");
     }
 
     #[test]

@@ -47,6 +47,12 @@ pub enum Error {
     #[error(transparent)]
     FromPathBuf(#[from] camino::FromPathBufError),
 
+    #[error("cannot load {language} parser: {cause}")]
+    InaccessibleParserFiles {
+        language: Language,
+        cause: anyhow::Error,
+    },
+
     #[error("invalid ID '{raw_id}': {reason}")]
     InvalidID {
         raw_id: String,
