@@ -1023,10 +1023,12 @@ mod tests {
             [languages.python]
             use-for = ["*.star", "*.py2"]
             language-server = [ "custom-language-server", "with-arg" ]
+            ignore-query = '(_) . (_)'
 
             [languages.some-custom-language]
             use-for = ["*.custom"]
             language-server = "custom-ls"
+            ignore-query = '(_) . (_)'
         "#};
         let parsed_manifest: Manifest = toml_edit::de::from_str(manifest_content).unwrap();
 
@@ -1079,6 +1081,13 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["custom-language-server", "with-arg"],
         );
+        assert_eq!(
+            parsed_manifest.languages[&Language::Python]
+                .ignore_query
+                .as_ref()
+                .unwrap(),
+            "(_) . (_)"
+        );
         let custom_language = Language::External(Arc::from("some-custom-language"));
         assert_eq!(
             parsed_manifest.languages[&custom_language]
@@ -1094,6 +1103,13 @@ mod tests {
                 .parts()
                 .collect::<Vec<_>>(),
             ["custom-ls"],
+        );
+        assert_eq!(
+            parsed_manifest.languages[&custom_language]
+                .ignore_query
+                .as_ref()
+                .unwrap(),
+            "(_) . (_)"
         );
     }
 
