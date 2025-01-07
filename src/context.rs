@@ -728,9 +728,9 @@ impl LanguageData {
     }
 
     fn guess_raw_ignore_query(ts_language: &TSLanguage) -> Option<String> {
-        const KNOWN_COMMENT_MARKERS: [&str; 2] = ["comment", "line_comment"];
+        const KNOWN_COMMENT_NODES: [&str; 2] = ["comment", "line_comment"];
 
-        let mut comment_node_kinds = Vec::with_capacity(KNOWN_COMMENT_MARKERS.len());
+        let mut defined_comment_nodes = KNOWN_COMMENT_NODES.map(|_| false);
         for id in 0..(ts_language.node_kind_count() as u16) {
             if !ts_language.node_kind_is_visible(id) || !ts_language.node_kind_is_named(id) {
                 continue;
@@ -740,22 +740,21 @@ impl LanguageData {
                 None => continue,
             };
 
-            if !KNOWN_COMMENT_MARKERS.contains(&node_kind) {
-                continue;
+            if let Some(node_idx) = KNOWN_COMMENT_NODES
+                .iter()
+                .position(|marker| marker == &node_kind)
+            {
+                defined_comment_nodes[node_idx] = true
             }
-            if comment_node_kinds.contains(&node_kind) {
-                continue;
-            }
-            comment_node_kinds.push(node_kind);
         }
 
-        if comment_node_kinds.is_empty() {
+        if defined_comment_nodes.iter().all(|defined| !defined) {
             return None;
         }
 
         let guess = {
             let mut guess = String::new();
-            for comment_node_kind in comment_node_kinds {
+            for comment_node_kind in defined_comment_nodes {
                 writedoc!(
                     &mut guess,
                     r#"
