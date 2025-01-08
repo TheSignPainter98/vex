@@ -1204,7 +1204,7 @@ mod tests {
     #[test]
     fn load_custom_parser() {
         const PARSER_LINK: &str = "vexes/tree-sitter-lua";
-        VexTest::new("lua")
+        let run_data = VexTest::new("lua")
             .with_manifest(formatdoc! {r#"
                 [vex]
                 version = "1"
@@ -1232,11 +1232,17 @@ mod tests {
                     def on_match(event):
                         func = event.captures['func']
                         vex.warn('test-id', 'found a function', at=func)
-
-                        fail('oh no')
                 "#},
             )
-            .assert_irritation_free();
+            .with_source_file(
+                "main.lua",
+                indoc! {r#"
+                    print('hello')
+                "#},
+            )
+            .try_run()
+            .unwrap();
+        assert_eq!(run_data.irritations.len(), 1);
     }
 
     #[test]
@@ -1262,10 +1268,8 @@ mod tests {
                             '''
                                 (function_call) @func
                             ''',
-                            on_match,
+                            lambda x: x,
                         )
-
-                    def on_match(event):
                         fail('oh no')
                 "#},
             )
