@@ -179,10 +179,17 @@ impl Context {
     pub fn language_data(&self, language: &Language) -> Result<Option<&LanguageData>> {
         self.languages
             .get_or_init(language, || {
+                if language.is_builtin() {
+                    return LanguageData::load(language.dupe(), &self.project_root);
+                }
+
                 if let Some(opts) = self.manifest.languages.get(language) {
                     LanguageData::load_with_options(language.dupe(), opts, &self.project_root)
                 } else {
-                    LanguageData::load(language.dupe(), &self.project_root)
+                    Err(Error::ExternalLanguage {
+                        language: language.dupe(),
+                        cause: ExternalLanguageError::NoConfig(language.dupe()),
+                    })
                 }
             })
             .map(Option::as_ref)
@@ -724,18 +731,9 @@ impl LanguageData {
         };
         loader
             .load_language_at_path_with_name(compile_config)
-            .map_err(|cause| {
-                if cause
-                    .to_string()
-                    .contains("Failed to compare source and binary timestamps")
-                {
-                    Error::InaccessibleParserFiles {
-                        language: language.dupe(),
-                        cause,
-                    }
-                } else {
-                    Error::from(cause)
-                }
+            .map_err(|cause| Error::InaccessibleParserFiles {
+                language: language.dupe(),
+                cause,
             })
     }
 
@@ -1252,8 +1250,8 @@ mod tests {
                 [vex]
                 version = "1"
 
-                [languages.lua]
-                use-for = ['*.lua']
+                [languages.brainfuck]
+                use-for = ['*.bf']
                 parser-dir = 'i/do/not/exist'
             "#})
             .with_scriptlet(
@@ -1264,16 +1262,22 @@ mod tests {
 
                     def on_open_project(event):
                         vex.search(
-                            'lua',
+                            'brainfuck',
                             '''
                                 (function_call) @func
                             ''',
-                            lambda x: x,
+                            lambda _: fail('on_match called'),
                         )
-                        fail('oh no')
+                        fail('vex.search returned successfully')
                 "#},
             )
-            .returns_error("cannot load lua parser");
+            .with_source_file(
+                "main.lua",
+                indoc! {r#"
+                    print('hello')
+                "#},
+            )
+            .returns_error("cannot load brainfuck parser");
     }
 
     #[test]

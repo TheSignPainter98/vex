@@ -31,6 +31,10 @@ impl Language {
     pub fn is_builtin(&self) -> bool {
         !matches!(self, Self::External(_))
     }
+
+    pub fn is_external(&self) -> bool {
+        matches!(self, Self::External(_))
+    }
 }
 
 impl FromStr for Language {
@@ -100,10 +104,12 @@ mod tests {
 
             pub fn considered_builtin(self) {
                 assert!(self.language.is_builtin());
+                assert!(!self.language.is_external());
             }
 
             pub fn considered_not_builtin(self) {
                 assert!(!self.language.is_builtin());
+                assert!(self.language.is_external());
             }
         }
     }
