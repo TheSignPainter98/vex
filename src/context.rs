@@ -1245,7 +1245,7 @@ mod tests {
 
     #[test]
     fn load_missing_parser() {
-        VexTest::new("lua")
+        VexTest::new("brainfuck")
             .with_manifest(indoc! {r#"
                 [vex]
                 version = "1"
