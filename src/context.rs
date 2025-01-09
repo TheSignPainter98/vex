@@ -1,6 +1,6 @@
 use camino::{Utf8Path, Utf8PathBuf};
 use dupe::Dupe;
-use indoc::indoc;
+use indoc::{indoc, writedoc};
 use lazy_static::lazy_static;
 use log::log_enabled;
 use regex::Regex;
@@ -10,9 +10,10 @@ use starlark::values::StringValue;
 use tree_sitter::Language as TSLanguage;
 use tree_sitter_loader::{CompileConfig, Loader};
 
-use std::borrow::Borrow;
+use std::borrow::{Borrow, Cow};
 use std::collections::{BTreeMap, HashMap};
-use std::io::{BufWriter, ErrorKind, Read, Write};
+use std::fmt::Write as _;
+use std::io::{BufWriter, ErrorKind, Read, Write as _};
 use std::ops::Deref;
 use std::sync::Arc;
 use std::{
@@ -23,7 +24,9 @@ use std::{fmt, slice};
 
 use crate::arena_map::ArenaMap;
 use crate::associations::Associations;
-use crate::error::{Error, ExternalLanguageError, IOAction, InvalidIDReason};
+use crate::error::{
+    Error, ExternalLanguageError, IOAction, InvalidIDReason, InvalidIgnoreQueryReason,
+};
 use crate::id::Id;
 use crate::language::Language;
 use crate::query::Query;
@@ -176,10 +179,17 @@ impl Context {
     pub fn language_data(&self, language: &Language) -> Result<Option<&LanguageData>> {
         self.languages
             .get_or_init(language, || {
+                if language.is_builtin() {
+                    return LanguageData::load(language.dupe(), &self.project_root);
+                }
+
                 if let Some(opts) = self.manifest.languages.get(language) {
                     LanguageData::load_with_options(language.dupe(), opts, &self.project_root)
                 } else {
-                    LanguageData::load(language.dupe(), &self.project_root)
+                    Err(Error::ExternalLanguage {
+                        language: language.dupe(),
+                        cause: ExternalLanguageError::NoConfig(language.dupe()),
+                    })
                 }
             })
             .map(Option::as_ref)
@@ -541,6 +551,7 @@ impl Default for LanguagesConfig {
                     file_associations: vec![RawFilePattern::new("*.star".into())],
                     language_server: None,
                     parser_dir: None,
+                    ignore_query: None, // Guess.
                 },
             )]
             .into_iter()
@@ -557,7 +568,7 @@ impl Deref for LanguagesConfig {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct LanguageOptions {
     #[serde(rename = "use-for", default)]
@@ -566,6 +577,8 @@ pub struct LanguageOptions {
     language_server: Option<LanguageServerCommand>,
 
     parser_dir: Option<Utf8PathBuf>,
+
+    ignore_query: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
@@ -629,12 +642,7 @@ struct LanguageDataInner {
 
 impl LanguageData {
     pub(crate) fn load(language: Language, project_root: &Utf8Path) -> Result<Option<Self>> {
-        let opts = LanguageOptions {
-            file_associations: Vec::new(),
-            language_server: None,
-            parser_dir: None,
-        };
-        Self::load_with_options(language, &opts, project_root)
+        Self::load_with_options(language, &LanguageOptions::default(), project_root)
     }
 
     pub(crate) fn load_with_options(
@@ -645,47 +653,55 @@ impl LanguageData {
         let (ts_language, raw_ignore_query) = match language {
             Language::Go => {
                 let ts_language = TSLanguage::from(tree_sitter_go::LANGUAGE);
-                let raw_ignore_query = Some(indoc! {r#"
+                let raw_ignore_query = Some(Cow::from(indoc! {r#"
                     (
                         (comment) @marker (#match? @marker "^/[/*] *vex:ignore")
                         .
                         (_)? @ignore
                     )
-                "#});
+                "#}));
                 (ts_language, raw_ignore_query)
             }
             Language::Python => {
                 let ts_language = TSLanguage::from(tree_sitter_python::LANGUAGE);
-                let raw_ignore_query = Some(indoc! {r#"
+                let raw_ignore_query = Some(Cow::from(indoc! {r#"
                     (
                         (comment) @marker (#match? @marker "^# *vex:ignore")
                         .
                         (_)? @ignore
                     )
-                "#});
+                "#}));
                 (ts_language, raw_ignore_query)
             }
             Language::Rust => {
                 let ts_language = TSLanguage::from(tree_sitter_rust::LANGUAGE);
-                let raw_ignore_query = Some(indoc! {r#"
+                let raw_ignore_query = Some(Cow::from(indoc! {r#"
                     (
                         (line_comment) @marker (#match? @marker "^// *vex:ignore")
                         .
                         (_)? @ignore
                     )
-                "#});
+                "#}));
                 (ts_language, raw_ignore_query)
             }
             Language::External(_) => {
                 let ts_language =
                     Self::load_ts_language(&language, language_options, project_root)?;
-                (ts_language, None)
+                let raw_ignore_query = language_options
+                    .ignore_query
+                    .as_ref()
+                    .map(Cow::from)
+                    .or_else(|| Self::guess_raw_ignore_query(&ts_language).map(Cow::from));
+                (ts_language, raw_ignore_query)
             }
         };
-        let ignore_query = raw_ignore_query.map(|raw_ignore_query| {
-            Query::new(&ts_language, raw_ignore_query)
-                .expect("internal error: ignore query invalid")
-        });
+        let ignore_query = raw_ignore_query
+            .map(|raw_ignore_query| {
+                Query::new(&ts_language, &raw_ignore_query).map_err(|err| {
+                    Error::InvalidIgnoreQuery(InvalidIgnoreQueryReason::General(Box::new(err)))
+                })
+            })
+            .transpose()?;
         let query_cache = QueryCacheForLanguage::new();
         let inner = LanguageDataInner {
             language,
@@ -715,7 +731,55 @@ impl LanguageData {
         };
         loader
             .load_language_at_path_with_name(compile_config)
-            .map_err(Error::from)
+            .map_err(|cause| Error::InaccessibleParserFiles {
+                language: language.dupe(),
+                cause,
+            })
+    }
+
+    fn guess_raw_ignore_query(ts_language: &TSLanguage) -> Option<String> {
+        const KNOWN_COMMENT_NODES: [&str; 2] = ["comment", "line_comment"];
+
+        let mut defined_comment_nodes = KNOWN_COMMENT_NODES.map(|_| false);
+        for id in 0..(ts_language.node_kind_count() as u16) {
+            if !ts_language.node_kind_is_visible(id) || !ts_language.node_kind_is_named(id) {
+                continue;
+            }
+            let node_kind = match ts_language.node_kind_for_id(id) {
+                Some(nk) => nk,
+                None => continue,
+            };
+
+            if let Some(node_idx) = KNOWN_COMMENT_NODES
+                .iter()
+                .position(|marker| marker == &node_kind)
+            {
+                defined_comment_nodes[node_idx] = true
+            }
+        }
+
+        if defined_comment_nodes.iter().all(|defined| !defined) {
+            return None;
+        }
+
+        let guess = {
+            let mut guess = String::new();
+            for comment_node_kind in defined_comment_nodes {
+                writedoc!(
+                    &mut guess,
+                    r#"
+                        (
+                            ({comment_node_kind}) @marker (#match? @marker "vex:ignore")
+                            .
+                            (_)? @ignore
+                        )
+                    "#
+                )
+                .expect("internal error: cannot write to String");
+            }
+            guess
+        };
+        Some(guess)
     }
 
     pub fn language(&self) -> &Language {
@@ -968,10 +1032,12 @@ mod tests {
             [languages.python]
             use-for = ["*.star", "*.py2"]
             language-server = [ "custom-language-server", "with-arg" ]
+            ignore-query = '(_) . (_)'
 
             [languages.some-custom-language]
             use-for = ["*.custom"]
             language-server = "custom-ls"
+            ignore-query = '(_) . (_)'
         "#};
         let parsed_manifest: Manifest = toml_edit::de::from_str(manifest_content).unwrap();
 
@@ -1024,6 +1090,13 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["custom-language-server", "with-arg"],
         );
+        assert_eq!(
+            parsed_manifest.languages[&Language::Python]
+                .ignore_query
+                .as_ref()
+                .unwrap(),
+            "(_) . (_)"
+        );
         let custom_language = Language::External(Arc::from("some-custom-language"));
         assert_eq!(
             parsed_manifest.languages[&custom_language]
@@ -1039,6 +1112,13 @@ mod tests {
                 .parts()
                 .collect::<Vec<_>>(),
             ["custom-ls"],
+        );
+        assert_eq!(
+            parsed_manifest.languages[&custom_language]
+                .ignore_query
+                .as_ref()
+                .unwrap(),
+            "(_) . (_)"
         );
     }
 
@@ -1122,15 +1202,14 @@ mod tests {
     #[test]
     fn load_custom_parser() {
         const PARSER_LINK: &str = "vexes/tree-sitter-lua";
-
-        VexTest::new("lua")
+        let run_data = VexTest::new("lua")
             .with_manifest(formatdoc! {r#"
                 [vex]
                 version = "1"
 
                 [languages.lua]
                 use-for = ['*.lua']
-                parser-dir = '{PARSER_LINK}/'
+                parser-dir = '{PARSER_LINK}'
             "#})
             .with_parser_dir_link("test-data/tree-sitter-lua", PARSER_LINK)
             .with_scriptlet(
@@ -1151,9 +1230,122 @@ mod tests {
                     def on_match(event):
                         func = event.captures['func']
                         vex.warn('test-id', 'found a function', at=func)
-
                 "#},
             )
-            .assert_irritation_free();
+            .with_source_file(
+                "main.lua",
+                indoc! {r#"
+                    print('hello')
+                "#},
+            )
+            .try_run()
+            .unwrap();
+        assert_eq!(run_data.irritations.len(), 1);
+    }
+
+    #[test]
+    fn load_missing_parser() {
+        VexTest::new("brainfuck")
+            .with_manifest(indoc! {r#"
+                [vex]
+                version = "1"
+
+                [languages.brainfuck]
+                use-for = ['*.bf']
+                parser-dir = 'i/do/not/exist'
+            "#})
+            .with_scriptlet(
+                "vexes/test.star",
+                indoc! {r#"
+                    def init():
+                        vex.observe('open_project', on_open_project)
+
+                    def on_open_project(event):
+                        vex.search(
+                            'brainfuck',
+                            '''
+                                (function_call) @func
+                            ''',
+                            lambda _: fail('on_match called'),
+                        )
+                        fail('vex.search returned successfully')
+                "#},
+            )
+            .with_source_file(
+                "main.lua",
+                indoc! {r#"
+                    print('hello')
+                "#},
+            )
+            .returns_error("cannot load brainfuck parser");
+    }
+
+    #[test]
+    fn invalid_ignore_query() {
+        Assert::query("empty", "").causes_error("query is empty");
+        Assert::query("malformed", ")").causes_error("syntax");
+        Assert::query("missing-marker", "(_) @ignore")
+            .causes_error("missing capture group 'marker'");
+        Assert::query("missing-ignore", "(_) @marker")
+            .causes_error("missing capture group 'ignore'");
+        Assert::query("does-not-capture-marker", "(comment) @marker . (_) @ignore")
+            .causes_error("query did not capture 'vex:ignore' marker");
+
+        // test structs.
+        struct Assert {
+            name: &'static str,
+            query: &'static str,
+        }
+
+        impl Assert {
+            fn query(name: &'static str, query: &'static str) -> Self {
+                Self { name, query }
+            }
+
+            fn causes_error(self, error: &'static str) {
+                let Self { name, query } = self;
+
+                const PARSER_LINK: &str = "vexes/tree-sitter-lua";
+                VexTest::new(name)
+                    .with_manifest(formatdoc! {r#"
+                        [vex]
+                        version = "1"
+
+                        [languages.lua]
+                        use-for = ['*.lua']
+                        parser-dir = '{PARSER_LINK}/'
+                        ignore-query = '{query}'
+                    "#})
+                    .with_parser_dir_link("test-data/tree-sitter-lua", PARSER_LINK)
+                    .with_scriptlet(
+                        "vexes/test.star",
+                        indoc! {r#"
+                            def init():
+                                vex.observe('open_project', on_open_project)
+
+                            def on_open_project(event):
+                                vex.search(
+                                    'lua',
+                                    '''
+                                        (number) @func
+                                    ''',
+                                    on_match,
+                                )
+
+                            def on_match(event):
+                                fail('uh oh')
+
+                        "#},
+                    )
+                    .with_source_file(
+                        "src/main.lua",
+                        indoc! {r#"
+                            -- invalid marker
+                            print('hello, world')
+                        "#},
+                    )
+                    .returns_error(error);
+            }
+        }
     }
 }

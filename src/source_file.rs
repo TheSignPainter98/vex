@@ -10,7 +10,7 @@ use walkdir::WalkDir;
 use crate::{
     cli::MaxConcurrentFileLimit,
     context::{Context, LanguageData, Manifest},
-    error::{Error, IOAction},
+    error::{Error, IOAction, InvalidIgnoreQueryReason},
     ignore_markers::{IgnoreMarkers, LintIdFilter},
     language::Language,
     result::{RecoverableResult, Result},
@@ -216,12 +216,20 @@ impl ParsedSourceFile {
             None => return Ok(IgnoreMarkers::new()),
         };
 
+        ignore_query
+            .capture_index_for_name("ignore")
+            .ok_or(Error::InvalidIgnoreQuery(
+                InvalidIgnoreQueryReason::MissingCaptureGroup("ignore"),
+            ))?;
+
         let mut builder = IgnoreMarkers::builder();
 
-        let marker_index = ignore_query
-            .capture_index_for_name("marker")
-            .expect("internal error: ignore query contains no 'marker' capture")
-            as usize;
+        let marker_index =
+            ignore_query
+                .capture_index_for_name("marker")
+                .ok_or(Error::InvalidIgnoreQuery(
+                    InvalidIgnoreQueryReason::MissingCaptureGroup("marker"),
+                ))? as usize;
         QueryCursor::new()
             .matches(ignore_query, self.tree.root_node(), self.content.as_bytes())
             .map(|qmatch| qmatch.captures)
@@ -242,12 +250,16 @@ impl ParsedSourceFile {
                         .iter()
                         .map(|qcap| qcap.node.byte_range().start)
                         .min()
-                        .expect("internal error: ignore query captured nothing");
+                        .ok_or(Error::InvalidIgnoreQuery(
+                            InvalidIgnoreQueryReason::CapturedNothing,
+                        ))?;
                     let end = qcaps
                         .iter()
                         .map(|qcap| qcap.node.byte_range().end)
                         .max()
-                        .expect("internal error: ignore query captured nothing");
+                        .ok_or(Error::InvalidIgnoreQuery(
+                            InvalidIgnoreQueryReason::CapturedNothing,
+                        ))?;
                     start..end
                 };
                 let filter = {
@@ -255,10 +267,14 @@ impl ParsedSourceFile {
 
                     let node = qcaps[marker_index].node;
                     let raw_text = node.utf8_text(self.content.as_bytes()).unwrap();
-                    let ids_start_index = raw_text
-                        .find(IGNORE_MARKER)
-                        .expect("vex:ignore not present in ignore marker")
-                        + IGNORE_MARKER.len();
+                    let ids_start_index = raw_text.find(IGNORE_MARKER).ok_or_else(|| {
+                        Error::InvalidIgnoreQuery(
+                            InvalidIgnoreQueryReason::CapturedTextExcludesIgnoreMarker {
+                                path: self.path.pretty_path.dupe(),
+                                location: Location::of(&node),
+                            },
+                        )
+                    })? + IGNORE_MARKER.len();
                     let raw_parts = raw_text[ids_start_index..]
                         .split(',')
                         .map(|raw_part| raw_part.trim());

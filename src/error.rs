@@ -47,6 +47,12 @@ pub enum Error {
     #[error(transparent)]
     FromPathBuf(#[from] camino::FromPathBufError),
 
+    #[error("cannot load {language} parser: {cause}")]
+    InaccessibleParserFiles {
+        language: Language,
+        cause: anyhow::Error,
+    },
+
     #[error("invalid ID '{raw_id}': {reason}")]
     InvalidID {
         raw_id: String,
@@ -68,6 +74,9 @@ pub enum Error {
         module: PrettyPath,
         reason: InvalidLoadReason,
     },
+
+    #[error("invalid ignore query: {0}")]
+    InvalidIgnoreQuery(InvalidIgnoreQueryReason),
 
     #[error("test invalid: {0}")]
     InvalidTest(String),
@@ -183,8 +192,11 @@ impl From<starlark::Error> for Error {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ExternalLanguageError {
-    #[error("manifest language info missing `parser-dir` field")]
+    #[error("manifest info missing `parser-dir` field")]
     MissingParserDir,
+
+    #[error("manifest has no [language.{0}] table")]
+    NoConfig(Language),
 }
 
 #[derive(Debug, Display)]
@@ -284,4 +296,22 @@ pub enum InvalidLoadReason {
 
     #[display(fmt = "load path invalid, see docs")] // TODO(kcza): link to spec once public.
     NonSpecific,
+}
+
+#[derive(Debug, Display)]
+pub enum InvalidIgnoreQueryReason {
+    #[display(fmt = "query captured nothing")]
+    CapturedNothing,
+
+    #[display(fmt = "query did not capture 'vex:ignore' marker at {path}:{location}")]
+    CapturedTextExcludesIgnoreMarker {
+        path: PrettyPath,
+        location: Location,
+    },
+
+    #[display(fmt = "{_0}")]
+    General(Box<Error>),
+
+    #[display(fmt = "missing capture group '{_0}'")]
+    MissingCaptureGroup(&'static str),
 }

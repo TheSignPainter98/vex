@@ -4,12 +4,13 @@ use std::{
     env,
     fs::{self, File},
     io::Write,
+    path,
 };
 
 #[cfg(unix)]
 use std::os::unix;
 #[cfg(windows)]
-use std::os::windows;
+use std::process::Command;
 
 use camino::{Utf8Component, Utf8PathBuf};
 use indoc::indoc;
@@ -182,7 +183,7 @@ impl<'s> VexTest<'s> {
                 parser_dir,
                 link_file,
             } = parser_dir_link;
-            let parser_dir = parser_dir.canonicalize_utf8().unwrap();
+            let parser_dir = Utf8PathBuf::try_from(path::absolute(parser_dir).unwrap()).unwrap();
             let link_file = root_path.join(link_file);
 
             if let Some(parent) = link_file.parent() {
@@ -196,7 +197,22 @@ impl<'s> VexTest<'s> {
             }
             #[cfg(windows)]
             {
-                windows::fs::symlink_dir(parser_dir, link_file).unwrap();
+                // Ugly workaround because on Windows, symlinks require admin permissions to create. Amazing.
+                let parser_dir: Utf8PathBuf = parser_dir.components().collect(); // Sanitise separators.
+                let link_file: Utf8PathBuf = link_file.components().collect(); // Sanitise separators.
+                let stderr = Command::new("cmd")
+                    .arg("/C")
+                    .arg("mklink")
+                    .arg("/J")
+                    .arg(link_file)
+                    .arg(parser_dir)
+                    .output()
+                    .unwrap()
+                    .stderr;
+                let stderr = String::from_utf8_lossy(&stderr);
+                if !stderr.trim().is_empty() {
+                    eprint!("{stderr:?}");
+                }
                 continue;
             }
             #[allow(unreachable_code)]
