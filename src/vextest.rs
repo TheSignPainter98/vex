@@ -10,8 +10,6 @@ use std::{
 #[cfg(unix)]
 use std::os::unix;
 #[cfg(windows)]
-use std::os::windows;
-#[cfg(windows)]
 use std::process::Command;
 
 use camino::{Utf8Component, Utf8PathBuf};
